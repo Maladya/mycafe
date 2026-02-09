@@ -26,7 +26,7 @@ export default function Daftar() {
 
           <button
             className="bg-blue-900 text-white w-75 btn ms-2"
-            onClick={() => (window.location.href = "/admin/dashboard")}
+            onClick={() => (window.location.href = "/")}
           >
             Daftar
           </button>

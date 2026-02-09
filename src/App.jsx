@@ -20,7 +20,10 @@ function App() {
             placeholder="Masukan Password"
           />
 
-          <button className="bg-blue-900 text-white w-75 btn ms-2">
+          <button
+            className="bg-blue-900 text-white w-75 btn ms-2"
+            onClick={() => (window.location.href = "/admin/dashboard")}
+          >
             Manuk
           </button>
           <h3 className="text-xs ms-19">

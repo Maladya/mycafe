@@ -1,166 +1,165 @@
+import { useEffect, useRef } from "react";
+import SideBar from "../Layout/Layouts";
+import Chart from "chart.js/auto";
+
 export default function Dashboard() {
-  return (  
-    <div className="dashboard h-scree">
-      <div className="flex min-h-screen">
-        <div className="w-1/4 flex min-h-screen flex-col items-center h-full">
-          <h1 className="text-center text-sm mt-15 mb-2 ">Admin Panel</h1>
-          <div className="border-1 border-gray-400 b mt-1 rounded-sm h-15">
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-9 rounded-4xl "
-                src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRDMgKRG2DbqpXvwrc1CHCqHWoG2P1IoUysPA&s"
-                alt=""
-              />
-              <div className="flex flex-col ms-2">
-                <h1 className="">Admin</h1>
-                <h1 className="">mahesa@gmail.com</h1>
-              </div>
-            </div>
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-5 ms-7 mt-3 "
-                src="https://img.icons8.com/?size=100&id=83326&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 mt-3">
-                <h1 className="">Dasboard</h1>
-              </div>
-            </div>
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-5 ms-7 mt-3 "
-                src="https://img.icons8.com/?size=100&id=3096&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 mt-3">
-                <h1 className="">Menu</h1>
-              </div>
-            </div>
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-5 ms-7 mt-3 "
-                src="https://img.icons8.com/?size=100&id=24686&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 mt-3">
-                <h1 className="">Table</h1>
-              </div>
-            </div>
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-5 ms-7 mt-3 "
-                src="https://img.icons8.com/?size=100&id=12089&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 mt-3">
-                <h1 className="">Promo</h1>
-              </div>
-            </div>
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-5 ms-7 mt-3 "
-                src="https://img.icons8.com/?size=100&id=77124&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 mt-3">
-                <h1 className="">Payment</h1>
-              </div>
-            </div>
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-5 ms-7 mt-3 "
-                src="https://img.icons8.com/?size=100&id=4257&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 mt-3">
-                <h1 className="">Billing</h1>
-              </div>
-            </div>
-            <div className="flex p-2 w-full items-center ">
-              <img
-                className="w-5 ms-7 mt-3 "
-                src="https://img.icons8.com/?size=100&id=364&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 mt-3">
-                <h1 className="">Setting</h1>
-              </div>
-            </div>
-            <div className="flex ms-11 p-2 w-30 h-10 items-center border mt-8 rounded-2xl">
-              <img
-                className="w-5  ms-4 "
-                src="https://img.icons8.com/?size=100&id=2445&format=png&color=000000"
-                alt=""
-              />
-              <div className="flex ms-1 ">
-                <h1 className="">Keluar</h1>
-              </div>
-            </div>
-          </div>
+  const chartRef1 = useRef(null);
+  const chart1 = useRef(null);
+
+  useEffect(() => {
+    // Destroy previous charts if they exist
+    if (chart1.current) {
+      chart1.current.destroy();
+    }
+
+    // Bar Chart - Penjualan Harian
+    if (chartRef1.current) {
+      const ctx1 = chartRef1.current.getContext("2d");
+      chart1.current = new Chart(ctx1, {
+        type: "bar",
+        data: {
+          labels: [
+            "Senin",
+            "Selasa",
+            "Rabu",
+            "Kamis",
+            "Jumat",
+            "Sabtu",
+            "Minggu",
+          ],
+          datasets: [
+            {
+              label: "Penjualan (Rp)",
+              data: [
+                1500000, 1800000, 1600000, 2100000, 2300000, 2500000, 2000000,
+              ],
+              backgroundColor: "#3b82f6",
+              borderColor: "#1e40af",
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              display: true,
+              position: "top",
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function (value) {
+                  return "Rp " + value.toLocaleString("id-ID");
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    return () => {
+      if (chart1.current) chart1.current.destroy();
+    };
+  }, []);
+  return (
+    <div className="flex min-h-screen bg-gray-100">
+      {/* ===== SIDEBAR ===== */}
+      <SideBar />
+      <div className="flex-1 bg-gray-100 flex flex-col">
+        <div className="h-12 bg-white sticky top-0 z-10 flex items-center justify-center border-b border-gray-200">
+          <h1 className="text-lg font-bold text-primary">MyCafe ☕</h1>
         </div>
-        <div className="w-1/1 sm:hidden md:block bg-gray-200 items-center justify-content-center">
-          <div className=" w-full h-10 bg-white"></div>
-          <div>
-            <h1 className="ms-12 mt-1 text-sm">Admin/Beranda</h1>
-            <h3 className="ms-11 mt-1 text-3xl">Dashboard</h3>
-          </div>
-          <div className="flex row-auto">
-            <div className="card bg-primary text-primary-content w-60 ms-20 mt-10">
-              <div className="card-body">
-                <h1 className="card-title text-sm">Jumlah Menu</h1>
-                <p>
-                  <spam className="text-2xl font-bold">10</spam>
-                </p>
+        <div className="flex-1 overflow-auto p-4">
+          {/* ===== KONTEN DASHBOARD ===== */}
+          <div className="w-full">
+            <div className="mb-4">
+              <h1 className="text-sm text-gray-600">Admin/Beranda</h1>
+              <h3 className="text-3xl font-bold mt-2">Dashboard</h3>
+            </div>
+
+            {/* Cards and Calendar Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              {/* Cards Grid */}
+              <div className="lg:col-span-2 w-150 mt-2 ms-15 ">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  <div className="card bg-primary text-primary-content h-35">
+                    <div className="card-body">
+                      <h1 className="card-title text-sm">Jumlah Menu</h1>
+                      <p className="text-2xl font-bold">10</p>
+                    </div>
+                  </div>
+                  <div className="card bg-primary text-primary-content h-35">
+                    <div className="card-body">
+                      <h1 className="card-title text-sm">Total Transaksi</h1>
+                      <p className="text-2xl font-bold">25</p>
+                    </div>
+                  </div>
+                  <div className="card bg-primary text-primary-content h-35">
+                    <div className="card-body">
+                      <h1 className="card-title text-sm">Jumlah Meja</h1>
+                      <p className="text-2xl font-bold">15</p>
+                    </div>
+                  </div>
+                  <div className="card bg-primary text-primary-content h-35">
+                    <div className="card-body">
+                      <h1 className="card-title text-sm">Promo Aktif</h1>
+                      <p className="text-2xl font-bold">5</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Calendar */}
+              <div className="card bg-white shadow-lg me-15 mt-2">
+                <div className="card-body">
+                  <h2 className="card-title text-lg mb-4">Kalender</h2>
+                  <div className="calendar bg-gray-50 p-4 rounded">
+                    <div className="flex justify-between items-center mb-4">
+                      <button className="btn btn-sm btn-ghost">«</button>
+                      <span className="font-bold">Februari 2026</span>
+                      <button className="btn btn-sm btn-ghost">»</button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-2 text-center text-sm">
+                      <span className="font-bold">Min</span>
+                      <span className="font-bold">Sen</span>
+                      <span className="font-bold">Sel</span>
+                      <span className="font-bold">Rab</span>
+                      <span className="font-bold">Kam</span>
+                      <span className="font-bold">Jum</span>
+                      <span className="font-bold">Sab</span>
+                      {[
+                        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+                      ].map((day) => (
+                        <span
+                          key={day}
+                          className={`p-2 rounded ${day === 4 ? "bg-primary text-white font-bold" : "hover:bg-gray-200"} cursor-pointer`}
+                        >
+                          {day}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="card bg-primary text-primary-content w-60 ms-20 mt-10">
-              <div className="card-body">
-                <h1 className="card-title text-sm">Jumlah Menu</h1>
-                <p>
-                  <spam className="text-2xl font-bold">10</spam>
-                </p>
-              </div>
-            </div>
-            <calendar-date className="cally bg-base-100 border border-base-300 shadow-lg rounded-box">
-              <svg
-                aria-label="Previous"
-                className="fill-current size-4"
-                slot="previous"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  fill="currentColor"
-                  d="M15.75 19.5 8.25 12l7.5-7.5"
-                ></path>
-              </svg>
-              <svg
-                aria-label="Next"
-                className="fill-current size-4"
-                slot="next"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-              >
-                <path fill="currentColor" d="m8.25 4.5 7.5 7.5-7.5 7.5"></path>
-              </svg>
-              <calendar-month></calendar-month>
-            </calendar-date>
-          </div>
-          <div className="flex row-auto">
-            <div className="card bg-primary text-primary-content w-60 ms-20 mt-10">
-              <div className="card-body">
-                <h1 className="card-title text-sm">Jumlah Menu</h1>
-                <p>
-                  <spam className="text-2xl font-bold">10</spam>
-                </p>
-              </div>
-            </div>
-            <div className="card bg-primary text-primary-content w-60 ms-20 mt-10">
-              <div className="card-body">
-                <h1 className="card-title text-sm">Jumlah Menu</h1>
-                <p>
-                  <spam className="text-2xl font-bold">10</spam>
-                </p>
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 gap-6 mb-6">
+              {/* Bar Chart */}
+              <div className="card bg-white shadow-lg">
+                <div className="card-body">
+                  <h3 className="card-title text-lg mb-4">
+                    Penjualan Harian (7 Hari Terakhir)
+                  </h3>
+                  <div className="relative h-135 w-full">
+                    <canvas ref={chartRef1}></canvas>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
