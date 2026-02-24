@@ -1,0 +1,33 @@
+import React from "react";
+
+export default function ConfirmModal({
+  open,
+  title,
+  message,
+  confirmText = "Hapus",
+  cancelText = "Batal",
+  onConfirm,
+  onClose
+}) {
+  if (!open) return null;
+
+  return (
+    <dialog className="modal modal-open">
+      <div className="modal-box">
+        <h3 className="font-bold text-lg">{title}</h3>
+        <p className="py-4">{message}</p>
+        <div className="modal-action">
+          <button className="btn" onClick={onClose}>
+            {cancelText}
+          </button>
+          <button className="btn btn-error" onClick={onConfirm}>
+            {confirmText}
+          </button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop">
+        <button onClick={onClose}>close</button>
+      </form>
+    </dialog>
+  );
+}
