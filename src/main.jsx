@@ -36,13 +36,14 @@ import RingkasanPesananUser from "./User/RingkasanPesanan.jsx";
 
 function ProtectedRoute() {
   const token = localStorage.getItem("token");
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/user" replace />;
   return <Outlet />;
 }
 
 const router = createBrowserRouter([
-  { path: "/", element: <Navigate to="/login" replace /> },
+  { path: "/", element: <Navigate to="/user" replace /> },
 
+  { path: "/user", element: <Home /> },
   { path: "/login",  element: <LoginPage /> },
   { path: "/daftar", element: <Daftar /> },
 
