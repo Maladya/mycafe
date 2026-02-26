@@ -31,7 +31,7 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ email: user, password: pass }),
@@ -47,7 +47,7 @@ export default function LoginPage() {
 
       // ── Ambil token dari data.access_token ────────────────────────────────
       // Struktur response: { success, message, data: { access_token, refresh_token, user, cafe } }
-      const access_token  = data.data?.access_token;
+      const access_token  = data.data.token;
       const refresh_token = data.data?.refresh_token;
       const userData      = data.data?.user;
       const cafeData      = data.data?.cafe;

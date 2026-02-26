@@ -76,7 +76,7 @@ export default function RingkasanPesanan() {
       <div className="sticky top-0 z-40 bg-white shadow-sm border-b border-gray-100">
         <div className="flex items-center px-4 py-3.5">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate(-1)}
             className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
           >
             <ChevronLeft size={20} className="text-gray-700" />

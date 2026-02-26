@@ -2,27 +2,26 @@ import { useState } from "react";
 import { Coffee, AlertCircle, Eye, EyeOff, Building2, Mail, User, Lock, Phone } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.3:3000";
 
 export default function Daftar() {
   const [namaCafe,     setNamaCafe]     = useState("");
   const [email,        setEmail]        = useState("");
   const [username,     setUsername]     = useState("");
   const [password,     setPassword]     = useState("");
-  const [noHp,         setNoHp]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [err,          setErr]          = useState("");
 
   const handleDaftar = async () => {
     setErr("");
-    if (!namaCafe || !email || !username || !password || !noHp) {
+    if (!namaCafe || !email || !username || !password ) {
       setErr("Semua field wajib diisi");
       return;
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -30,13 +29,12 @@ export default function Daftar() {
           email,
           username,
           password,
-          no_hp: noHp,
         }),
       });
       const data = await response.json();
       if (data.success === true) {
         toast.success("Daftar berhasil!");
-        setTimeout(() => { window.location.href = "/"; }, 1000);
+        setTimeout(() => { window.location.href = "/login"; }, 1000);
       } else {
         setErr(data.message || "Pendaftaran gagal");
       }
@@ -179,24 +177,7 @@ export default function Daftar() {
                 </div>
               </div>
 
-              {/* No HP */}
-              <div>
-                <label className="text-gray-300 text-xs font-semibold mb-2 block uppercase tracking-wide">No HP</label>
-                <div className="flex">
-                  <div className="flex items-center bg-white/10 border border-white/20 border-r-0 rounded-l-xl px-3 gap-1.5 flex-shrink-0">
-                    <Phone size={13} className="text-gray-400" />
-                    <span className="text-gray-400 text-sm font-medium">+62</span>
-                  </div>
-                  <input
-                    type="tel"
-                    value={noHp}
-                    onChange={e => setNoHp(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="812xxxxxxx"
-                    className="flex-1 bg-white/10 border border-white/20 rounded-r-xl px-4 py-3 text-white placeholder-gray-500 outline-none focus:border-amber-500 transition-all text-sm"
-                  />
-                </div>
-              </div>
+             
 
               {/* Error */}
               {err && (

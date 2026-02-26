@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search, ShoppingBag, ArrowLeft, Heart, Share2, Plus, Minus,
-  Star, Clock, MapPin, Flame, Leaf, Check
+  Star, Clock, MapPin, Flame, Leaf, Check, ExternalLink, RotateCcw
 } from "lucide-react";
 
 // ── Full menu database ────────────────────────────────────────────────────────
@@ -180,6 +180,25 @@ const categories = [
   ...categorySections,
 ];
 
+// ── Helper: build cart object from order items ────────────────────────────────
+// Tries to match order item name to menuDatabase by name
+function buildCartFromOrder(orderItems) {
+  const newCart = {};
+  const allItems = Object.values(menuDatabase);
+
+  orderItems.forEach((orderItem) => {
+    // Find matching menu item by name
+    const found = allItems.find(
+      (m) => m.name.toLowerCase() === orderItem.name.toLowerCase()
+    );
+    if (found) {
+      newCart[found.id] = (newCart[found.id] || 0) + orderItem.qty;
+    }
+  });
+
+  return newCart;
+}
+
 // ── Mock riwayat data ─────────────────────────────────────────────────────────
 const mockRiwayat = [
   {
@@ -227,7 +246,6 @@ function MenuDetailSheet({ item, onClose, onAddToCart, onOpenItem }) {
 
   const handleAdd = () => {
     setAddedToCart(true);
-    // Pass price of selected variant to cart
     onAddToCart(item.id, qty, currentPrice);
     setTimeout(() => { setAddedToCart(false); onClose(); }, 1200);
   };
@@ -301,8 +319,6 @@ function MenuDetailSheet({ item, onClose, onAddToCart, onOpenItem }) {
             <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{item.name}</h1>
             <p className="text-sm text-gray-400 mt-1 italic mb-4">{item.tagline}</p>
 
-            {/* Rating row */}
-            
             <div className="flex gap-2 mb-5 flex-wrap">
               <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5">
                 <Clock size={13} className="text-orange-500" /><span className="text-xs font-semibold text-orange-700">{item.prepTime}</span>
@@ -321,11 +337,6 @@ function MenuDetailSheet({ item, onClose, onAddToCart, onOpenItem }) {
             </div>
 
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
-
-           
-
-            
-
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
 
             {/* Variants */}
@@ -360,7 +371,7 @@ function MenuDetailSheet({ item, onClose, onAddToCart, onOpenItem }) {
               </div>
             )}
 
-            {/* Related items — clicking opens that item's detail */}
+            {/* Related items */}
             {relatedItems.length > 0 && (
               <>
                 <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
@@ -378,7 +389,6 @@ function MenuDetailSheet({ item, onClose, onAddToCart, onOpenItem }) {
                         </div>
                         <div className="p-3">
                           <p className="font-bold text-gray-900 text-xs line-clamp-1">{rel.name}</p>
-                          
                           <p className="text-amber-600 font-bold text-xs mt-1">Rp{rel.price.toLocaleString()}</p>
                         </div>
                       </div>
@@ -444,7 +454,6 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
             {item.badge === "Promo" && item.discount ? `-${item.discount}` : item.badge}
           </div>
         )}
-       
       </div>
       <div className="p-3">
         <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.name}</p>
@@ -471,7 +480,7 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
 }
 
 // ── Riwayat Pesanan Sheet ─────────────────────────────────────────────────────
-function RiwayatPesananSheet({ onClose }) {
+function RiwayatPesananSheet({ onClose, onNavigateToPesanan, onReorder }) {
   const [activeTab, setActiveTab] = useState("sedang");
   const sedangOrders = mockRiwayat.filter(o => o.status === "sedang");
   const selesaiOrders = mockRiwayat.filter(o => o.status === "selesai");
@@ -541,6 +550,7 @@ function RiwayatPesananSheet({ onClose }) {
             <div className="space-y-4">
               {displayed.map((order) => (
                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  {/* Order Header */}
                   <div className={`px-4 py-3 flex items-center justify-between ${order.status === "sedang" ? "bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100" : "bg-gray-50 border-b border-gray-100"}`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${order.status === "sedang" ? "bg-amber-500" : "bg-green-500"}`}>
@@ -565,6 +575,8 @@ function RiwayatPesananSheet({ onClose }) {
                       )}
                     </div>
                   </div>
+
+                  {/* Order Items */}
                   <div className="px-4 py-3 space-y-3">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3">
@@ -581,6 +593,8 @@ function RiwayatPesananSheet({ onClose }) {
                       </div>
                     ))}
                   </div>
+
+                  {/* Order Footer */}
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
                     <p className="text-xs text-gray-500">{order.items.reduce((s, i) => s + i.qty, 0)} item</p>
                     <div className="flex items-center gap-2">
@@ -588,9 +602,42 @@ function RiwayatPesananSheet({ onClose }) {
                       <p className="font-extrabold text-gray-900 text-sm">Rp{getTotal(order.items).toLocaleString()}</p>
                     </div>
                   </div>
+
+                  {/* ── ACTION BUTTONS ── */}
+
+                  {/* Sedang Diproses → Tombol Lihat Detail Pesanan */}
+                  {order.status === "sedang" && (
+                    <div className="px-4 pb-4 pt-1">
+                      <button
+                        onClick={() => {
+                          // Build cart from this order's items
+                          const orderCart = buildCartFromOrder(order.items);
+                          const cartItems = Object.values(menuDatabase).filter(m => orderCart[m.id]);
+                          onClose();
+                          onNavigateToPesanan({ cart: orderCart, items: cartItems, orderId: order.id });
+                        }}
+                        className="w-full py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                      >
+                        <ExternalLink size={15} />
+                        Lihat Detail Pesanan
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Sudah Selesai → Tombol Pesan Lagi */}
                   {order.status === "selesai" && (
-                    <div className="px-4 pb-3">
-                      <button className="w-full py-2 border-2 border-amber-400 text-amber-600 font-bold text-sm rounded-xl hover:bg-amber-50 transition-all">
+                    <div className="px-4 pb-4 pt-1">
+                      <button
+                        onClick={() => {
+                          // Rebuild exact cart from completed order and go to checkout
+                          const reorderCart = buildCartFromOrder(order.items);
+                          const reorderItems = Object.values(menuDatabase).filter(m => reorderCart[m.id]);
+                          onClose();
+                          onReorder({ cart: reorderCart, items: reorderItems });
+                        }}
+                        className="w-full py-3 border-2 border-amber-400 text-amber-700 font-bold text-sm rounded-2xl hover:bg-amber-50 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                      >
+                        <RotateCcw size={15} />
                         🔄 Pesan Lagi
                       </button>
                     </div>
@@ -664,7 +711,6 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose 
                         {item.badge === "Promo" && item.discount ? `-${item.discount}` : item.badge}
                       </div>
                     )}
-                    
                   </div>
                   <div className="p-3">
                     <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.name}</p>
@@ -718,8 +764,6 @@ export default function Home() {
     return updated;
   });
 
-  // Called from MenuDetailSheet — adds qty of selected variant
-  // We store the chosen price override if variant price differs from base price
   const handleSheetAdd = (id, qty) => {
     setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + qty }));
   };
@@ -727,16 +771,43 @@ export default function Home() {
   const allItems = Object.values(menuDatabase);
   const totalQty = Object.values(cart).reduce((a, b) => a + b, 0);
   const totalPrice = allItems.reduce((sum, item) => sum + (cart[item.id] || 0) * item.price, 0);
-
-  // Items that are actually in cart (for passing to Pesanan)
   const cartItems = allItems.filter((item) => (cart[item.id] || 0) > 0);
 
-  // ── Navigate to Pesanan, passing cart & items ───────────────────────────────
+  // ── Navigate to Pesanan (checkout) ─────────────────────────────────────────
   const handleCheckout = () => {
+    navigate("/pesanan", { state: { cart, items: cartItems } });
+  };
+
+  // ── Navigate to Pesanan from Riwayat "Lihat Detail" (sedang) ──────────────
+  const handleNavigateToPesanan = ({ cart: orderCart, items: orderItems, orderId }) => {
     navigate("/pesanan", {
       state: {
-        cart,
-        items: cartItems,
+        cart: orderCart,
+        items: orderItems,
+        fromRiwayat: true,
+        orderId,
+      },
+    });
+  };
+
+  // ── Reorder from Riwayat "Pesan Lagi" (selesai) ───────────────────────────
+  // Merges reorder cart with current cart then navigates to checkout
+  const handleReorder = ({ cart: reorderCart, items: reorderItems }) => {
+    // Merge reorder items into current cart
+    const mergedCart = { ...cart };
+    Object.entries(reorderCart).forEach(([id, qty]) => {
+      mergedCart[id] = (mergedCart[id] || 0) + qty;
+    });
+
+    // Update local cart state so floating checkout also reflects it
+    setCart(mergedCart);
+
+    const mergedItems = Object.values(menuDatabase).filter(m => mergedCart[m.id]);
+    navigate("/pesanan", {
+      state: {
+        cart: mergedCart,
+        items: mergedItems,
+        isReorder: true,
       },
     });
   };
@@ -750,14 +821,12 @@ export default function Home() {
     }
     const el = sectionRefs.current[catId];
     if (el) {
-      // navbar (64px) + category bar (pt-2 + h2 + icons + pb-3 ≈ 100px) + 8px gap
       const OFFSET = 172;
       const y = el.getBoundingClientRect().top + window.scrollY - OFFSET;
       window.scrollTo({ top: y, behavior: "smooth" });
     }
   };
 
-  // ── Open a related item from inside the sheet ───────────────────────────────
   const handleOpenRelatedItem = (item) => {
     setSelectedItem(item);
   };
@@ -765,7 +834,7 @@ export default function Home() {
   return (
     <div className="relative min-h-screen bg-gray-50">
 
-      {/* ── NAVBAR ── navbar height = py-3 (24px) + h-10 (40px) = 64px ── */}
+      {/* ── NAVBAR ── */}
       <div className="sticky top-0 z-40 bg-white shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
@@ -811,21 +880,18 @@ export default function Home() {
         <div className="relative h-44 overflow-hidden">
           <img src="https://images.unsplash.com/photo-1765894711260-9d881459ddb4?w=800&auto=format" alt="Hero" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-          
         </div>
 
         {/* ── MEJA BANNER ── */}
         <div className="px-4 pt-4 mb-5">
           <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl px-5 py-3.5 flex items-center justify-center shadow-lg shadow-amber-500/25">
             <div className="flex items-center gap-3">
-              
               <p className="text-white font-bold text-base">Meja Nomor 1</p>
-              
             </div>
           </div>
         </div>
 
-        {/* ── CATEGORY BAR (sticky) — top harus = tinggi navbar = 64px ── */}
+        {/* ── CATEGORY BAR (sticky) ── */}
         <div className="sticky top-16 z-30 bg-gray-50 pb-3 pt-2">
           <div className="px-4 mb-2">
             <h2 className="text-base font-bold text-gray-900">Pilihan Kuliner Favoritmu</h2>
@@ -928,7 +994,11 @@ export default function Home() {
 
       {/* ── RIWAYAT SHEET ── */}
       {showRiwayat && (
-        <RiwayatPesananSheet onClose={() => setShowRiwayat(false)} />
+        <RiwayatPesananSheet
+          onClose={() => setShowRiwayat(false)}
+          onNavigateToPesanan={handleNavigateToPesanan}
+          onReorder={handleReorder}
+        />
       )}
 
       {/* ── LIHAT SEMUA POPUP ── */}
