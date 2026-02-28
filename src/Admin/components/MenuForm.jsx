@@ -1,14 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import {
   X, Image, Plus, Check, Trash2, FileText,
-  Hash, Save, Upload, Loader2, Edit3, AlertCircle
+  Hash, Save, Upload, Loader2, Edit3, AlertCircle, Camera
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper headers
-// ─────────────────────────────────────────────────────────────────────────────
 const authHeaders = (json = true) => {
   const token = localStorage.getItem("token");
   return {
@@ -17,12 +14,92 @@ const authHeaders = (json = true) => {
   };
 };
 
+// ── Upload logo kategori → base64 ─────────────────────────────────────────────
+function useLogoUpload() {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError]         = useState("");
+
+  const upload = (file, onDone) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("File harus berupa gambar"); return; }
+    if (file.size > 2 * 1024 * 1024)    { setError("Ukuran logo max 2MB"); return; }
+    setError(""); setUploading(true);
+    const reader = new FileReader();
+    reader.onload  = (e) => { onDone(e.target.result); setUploading(false); };
+    reader.onerror = ()  => { setError("Gagal membaca file"); setUploading(false); };
+    reader.readAsDataURL(file);
+  };
+
+  return { upload, uploading, error, setError };
+}
+
+// ── Logo Upload Preview Button ────────────────────────────────────────────────
+// Menampilkan foto logo + tombol ganti/hapus
+function LogoUploadButton({ logoUrl, onChange, size = "md" }) {
+  const inputRef = useRef();
+  const { upload, uploading, error, setError } = useLogoUpload();
+
+  const dim = size === "sm"
+    ? "w-9 h-9 text-[10px]"
+    : "w-16 h-16 text-xs";
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div
+        className={`relative ${dim} rounded-xl overflow-hidden border-2 cursor-pointer group flex-shrink-0
+          ${logoUrl ? "border-amber-300" : "border-dashed border-gray-300 hover:border-amber-400 bg-gray-50"}`}
+        onClick={() => !uploading && inputRef.current?.click()}
+        title="Klik untuk upload logo"
+      >
+        {logoUrl ? (
+          <>
+            <img src={logoUrl} alt="logo" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display="none"; }}/>
+            {/* Overlay ganti */}
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+              {uploading
+                ? <Loader2 size={size==="sm"?10:14} className="text-white animate-spin"/>
+                : <Camera size={size==="sm"?10:14} className="text-white"/>
+              }
+            </div>
+          </>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            {uploading
+              ? <Loader2 size={size==="sm"?10:16} className="text-amber-500 animate-spin"/>
+              : <Camera size={size==="sm"?10:16} className="text-gray-300"/>
+            }
+          </div>
+        )}
+      </div>
+
+      {/* Tombol hapus logo — hanya jika ada logo */}
+      {logoUrl && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onChange(""); setError(""); }}
+          className="text-[9px] text-red-400 hover:text-red-600 font-semibold transition-all leading-none"
+        >
+          Hapus
+        </button>
+      )}
+
+      {error && <p className="text-[9px] text-red-500 text-center">{error}</p>}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => upload(e.target.files?.[0], onChange)}
+      />
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// MENU FORM MODAL — 2 tab: Info Dasar + Varian
+// MENU FORM MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MenuForm({ item, onSave, onCancel }) {
 
-  // ── Form utama ──────────────────────────────────────────────────────────
   const [form, setForm] = useState(item ? { ...item } : {
     nama_menu: "", tagline: "", deskripsi: "",
     id_kategori: "",
@@ -35,30 +112,31 @@ export default function MenuForm({ item, onSave, onCancel }) {
   const [newVarLabel, setNewVarLabel] = useState("");
   const [newVarPrice, setNewVarPrice] = useState("");
 
-  // ── Upload gambar ───────────────────────────────────────────────────────
-  const [dragOver,     setDragOver]     = useState(false);
-  const [uploading,    setUploading]    = useState(false);
-  const [uploadErr,    setUploadErr]    = useState("");
-  const [previewUrl,   setPreviewUrl]   = useState(item?.image_url ?? "");
+  // Upload gambar menu
+  const [dragOver,   setDragOver]   = useState(false);
+  const [uploading,  setUploading]  = useState(false);
+  const [uploadErr,  setUploadErr]  = useState("");
+  const [previewUrl, setPreviewUrl] = useState(item?.image_url ?? "");
   const fileRef = useRef();
 
-  // ── Kategori ────────────────────────────────────────────────────────────
+  // Kategori
   const [categories,   setCategories]   = useState([]);
   const [catLoading,   setCatLoading]   = useState(false);
   const [catErr,       setCatErr]       = useState("");
   const [catInput,     setCatInput]     = useState("");
+  const [catLogoInput, setCatLogoInput] = useState(""); // logo (base64/url) untuk kategori baru
   const [showCatInput, setShowCatInput] = useState(false);
   const [editCatId,    setEditCatId]    = useState(null);
   const [editCatName,  setEditCatName]  = useState("");
+  const [editCatLogo,  setEditCatLogo]  = useState("");
   const [catSaving,    setCatSaving]    = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  // Helper: ambil id & name dari object atau string kategori
   const catId   = (c) => String(c?.id ?? c?.nama_kategori ?? c?.name ?? "unknown");
   const catName = (c) => String(c?.nama_kategori ?? c?.name ?? c?.id ?? "");
+  const catLogo = (c) => c?.logo ?? c?.icon ?? "";
 
-  // ── Fetch kategori saat buka form ───────────────────────────────────────
+  // Fetch kategori
   useEffect(() => {
     const fetchCategories = async () => {
       setCatLoading(true); setCatErr("");
@@ -66,12 +144,9 @@ export default function MenuForm({ item, onSave, onCancel }) {
         const res  = await fetch(`${API_URL}/api/kategori`, { headers: authHeaders() });
         const data = await res.json();
         if (!res.ok) { setCatErr("Gagal memuat kategori"); return; }
-
         const list = data.data ?? data.categories ?? data.kategori ?? data ?? [];
         const arr  = Array.isArray(list) ? list : [];
         setCategories(arr);
-
-        // Set default hanya jika tambah baru dan belum ada id_kategori
         if (!item?.id_kategori && arr.length > 0) set("id_kategori", catId(arr[0]));
       } catch {
         setCatErr("Gagal terhubung ke server");
@@ -82,40 +157,24 @@ export default function MenuForm({ item, onSave, onCancel }) {
     fetchCategories();
   }, []);
 
-  // ── Upload gambar → base64 (tidak butuh endpoint /api/upload) ────────────
-  const uploadImage = (file) => {
+  // Upload gambar menu → base64
+  const uploadMenuImage = (file) => {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setUploadErr("File harus berupa gambar (JPG, PNG, dll)");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadErr("Ukuran gambar maksimal 5MB");
-      return;
-    }
-
+    if (!file.type.startsWith("image/")) { setUploadErr("File harus berupa gambar"); return; }
+    if (file.size > 5 * 1024 * 1024)    { setUploadErr("Ukuran gambar max 5MB"); return; }
     setUploadErr(""); setUploading(true);
-
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64 = e.target.result; // "data:image/jpeg;base64,..."
-      set("image_url", base64);
-      setPreviewUrl(base64);
-      setUploading(false);
-    };
-    reader.onerror = () => {
-      setUploadErr("Gagal membaca file");
-      setUploading(false);
-    };
+    reader.onload  = (e) => { set("image_url", e.target.result); setPreviewUrl(e.target.result); setUploading(false); };
+    reader.onerror = ()  => { setUploadErr("Gagal membaca file"); setUploading(false); };
     reader.readAsDataURL(file);
   };
 
   const handleDrop = (e) => {
     e.preventDefault(); setDragOver(false);
-    uploadImage(e.dataTransfer.files?.[0]);
+    uploadMenuImage(e.dataTransfer.files?.[0]);
   };
 
-  // ── Tambah kategori ─────────────────────────────────────────────────────
+  // ── Tambah kategori ───────────────────────────────────────────────────────
   const addCategory = async () => {
     const name = catInput.trim();
     if (!name) return;
@@ -123,20 +182,20 @@ export default function MenuForm({ item, onSave, onCancel }) {
     try {
       const res  = await fetch(`${API_URL}/api/kategori`, {
         method: "POST", headers: authHeaders(),
-        body: JSON.stringify({ nama_kategori: name }),
+        body: JSON.stringify({ nama_kategori: name, logo: catLogoInput }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) { setCatErr(data.message ?? "Gagal menambah kategori"); return; }
 
-      const newCat = data.data ?? data.kategori ?? data.category ?? { nama_kategori: name };
+      const newCat = data.data ?? data.kategori ?? data.category ?? { nama_kategori: name, logo: catLogoInput };
       setCategories(p => [...p, newCat]);
       set("id_kategori", catId(newCat));
-      setCatInput(""); setShowCatInput(false);
+      setCatInput(""); setCatLogoInput(""); setShowCatInput(false);
     } catch { setCatErr("Gagal terhubung ke server"); }
     finally { setCatSaving(false); }
   };
 
-  // ── Edit kategori ───────────────────────────────────────────────────────
+  // ── Edit kategori ─────────────────────────────────────────────────────────
   const saveEditCategory = async (c) => {
     const name = editCatName.trim();
     if (!name) return;
@@ -145,18 +204,18 @@ export default function MenuForm({ item, onSave, onCancel }) {
       const id  = catId(c);
       const res = await fetch(`${API_URL}/api/kategori/${id}`, {
         method: "PUT", headers: authHeaders(),
-        body: JSON.stringify({ nama_kategori: name }),
+        body: JSON.stringify({ nama_kategori: name, logo: editCatLogo }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) { setCatErr(data.message ?? "Gagal mengedit kategori"); return; }
 
-      setCategories(p => p.map(x => catId(x) === id ? { ...x, nama_kategori: name } : x));
-      setEditCatId(null); setEditCatName("");
+      setCategories(p => p.map(x => catId(x) === id ? { ...x, nama_kategori: name, logo: editCatLogo } : x));
+      setEditCatId(null); setEditCatName(""); setEditCatLogo("");
     } catch { setCatErr("Gagal terhubung ke server"); }
     finally { setCatSaving(false); }
   };
 
-  // ── Hapus kategori ──────────────────────────────────────────────────────
+  // ── Hapus kategori ────────────────────────────────────────────────────────
   const deleteCategory = async (c) => {
     setCatErr("");
     try {
@@ -173,22 +232,39 @@ export default function MenuForm({ item, onSave, onCancel }) {
     } catch { setCatErr("Gagal terhubung ke server"); }
   };
 
-  // ── Simpan ──────────────────────────────────────────────────────────────
+  // ── Quick update logo langsung dari list ──────────────────────────────────
+  const quickUpdateLogo = async (c, newLogo) => {
+    const id = catId(c);
+    setCategories(p => p.map(x => catId(x) === id ? { ...x, logo: newLogo } : x));
+    try {
+      const res = await fetch(`${API_URL}/api/kategori/${id}`, {
+        method: "PUT", headers: authHeaders(),
+        body: JSON.stringify({ nama_kategori: catName(c), logo: newLogo }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        setCategories(p => p.map(x => catId(x) === id ? c : x));
+        setCatErr(data.message ?? "Gagal update logo");
+      }
+    } catch {
+      setCategories(p => p.map(x => catId(x) === id ? c : x));
+      setCatErr("Gagal terhubung ke server");
+    }
+  };
+
+  // ── Simpan ────────────────────────────────────────────────────────────────
   const handleSave = () => {
     if (!form.nama_menu.trim()) { alert("Nama menu wajib diisi"); return; }
     if (!form.harga)            { alert("Harga wajib diisi"); return; }
-    // FIX: saat edit, image_url sudah ada dari data lama — tidak perlu wajib upload ulang
     if (!form.image_url?.trim()) { setUploadErr("Gambar wajib diisi"); return; }
 
-    const payload = {
+    onSave({
       ...form,
       harga:       Number(form.harga),
       id:          item?.id || undefined,
       id_kategori: form.id_kategori,
       image_url:   form.image_url.trim(),
-    };
-    console.log("Payload dikirim:", payload);
-    onSave(payload);
+    });
   };
 
   const tabs = [
@@ -196,8 +272,10 @@ export default function MenuForm({ item, onSave, onCancel }) {
     { id: "variants", label: "Varian",     icon: <Hash size={13}/> },
   ];
 
-  // URL gambar yang ditampilkan: preview lokal atau URL dari form
   const displayImage = previewUrl || form.image_url;
+
+  // Kategori terpilih saat ini
+  const selectedCat = categories.find(c => catId(c) === form.id_kategori);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
@@ -225,7 +303,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
 
           {tab === "basic" && (
             <>
-              {/* Upload Gambar */}
+              {/* ── Upload Gambar Menu ── */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Gambar Menu</label>
                 <div
@@ -238,12 +316,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                 >
                   {displayImage && !uploading && (
                     <>
-                      <img
-                        src={displayImage}
-                        alt="preview"
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onError={e => { e.currentTarget.style.display = "none"; }}
-                      />
+                      <img src={displayImage} alt="preview" className="absolute inset-0 w-full h-full object-cover" onError={e => { e.currentTarget.style.display="none"; }}/>
                       <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-all flex flex-col items-center justify-center gap-1">
                         <Upload size={20} className="text-white"/>
                         <p className="text-white text-xs font-semibold">Ganti Gambar</p>
@@ -266,29 +339,14 @@ export default function MenuForm({ item, onSave, onCancel }) {
                     </div>
                   )}
                 </div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => uploadImage(e.target.files?.[0])}
-                />
-                {uploadErr && (
-                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                    <X size={11}/>{uploadErr}
-                  </p>
-                )}
-                {/* Input URL manual — hanya tampil saat tidak uploading */}
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => uploadMenuImage(e.target.files?.[0])}/>
+                {uploadErr && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><X size={11}/>{uploadErr}</p>}
                 {!uploading && (
                   <div className="mt-2">
                     <p className="text-[10px] text-gray-400 mb-1">Atau masukkan URL gambar manual:</p>
                     <input
                       value={form.image_url}
-                      onChange={e => {
-                        set("image_url", e.target.value);
-                        setPreviewUrl(e.target.value);
-                        setUploadErr("");
-                      }}
+                      onChange={e => { set("image_url", e.target.value); setPreviewUrl(e.target.value); setUploadErr(""); }}
                       placeholder="https://..."
                       className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-500 transition-all"
                     />
@@ -296,7 +354,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                 )}
               </div>
 
-              {/* Nama */}
+              {/* ── Nama ── */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Nama Menu *</label>
                 <input
@@ -307,7 +365,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                 />
               </div>
 
-              {/* Deskripsi */}
+              {/* ── Deskripsi ── */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Deskripsi</label>
                 <textarea
@@ -319,7 +377,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                 />
               </div>
 
-              {/* ── Kategori ── */}
+              {/* ── KATEGORI ── */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Kategori *</label>
@@ -344,68 +402,140 @@ export default function MenuForm({ item, onSave, onCancel }) {
                     <span className="text-sm text-gray-400">Memuat kategori...</span>
                   </div>
                 ) : (
-                  <select
-                    value={form.id_kategori}
-                    onChange={e => set("id_kategori", e.target.value)}
-                    className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all bg-white"
-                  >
-                    {categories.length === 0 && <option value="">— Belum ada kategori —</option>}
-                    {categories.map(c => (
-                      <option key={catId(c)} value={catId(c)}>{catName(c)}</option>
-                    ))}
-                  </select>
-                )}
-
-                {showCatInput && (
-                  <div className="mt-2 flex gap-1.5">
-                    <input
-                      value={catInput}
-                      onChange={e => setCatInput(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && addCategory()}
-                      placeholder="nama kategori baru..."
-                      className="flex-1 border-2 border-amber-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-amber-500 transition-all"
-                      autoFocus
-                    />
-                    <button onClick={addCategory} disabled={catSaving} className="px-2 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all disabled:opacity-60">
-                      {catSaving ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>}
-                    </button>
-                    <button onClick={() => { setShowCatInput(false); setCatInput(""); setCatErr(""); }} className="px-2 py-1.5 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-all">
-                      <X size={12}/>
-                    </button>
+                  /* ── Dropdown dengan logo kategori terpilih ── */
+                  <div className="flex items-center gap-2">
+                    {/* Preview logo kategori terpilih */}
+                    <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-amber-200 bg-gray-50 flex-shrink-0 flex items-center justify-center">
+                      {selectedCat && catLogo(selectedCat)
+                        ? <img src={catLogo(selectedCat)} alt="logo" className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display="none"; }}/>
+                        : <Image size={14} className="text-gray-300"/>
+                      }
+                    </div>
+                    <select
+                      value={form.id_kategori}
+                      onChange={e => set("id_kategori", e.target.value)}
+                      className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all bg-white"
+                    >
+                      {categories.length === 0 && <option value="">— Belum ada kategori —</option>}
+                      {categories.map(c => (
+                        <option key={catId(c)} value={catId(c)}>{catName(c)}</option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
+                {/* ── Form tambah kategori baru ── */}
+                {showCatInput && (
+                  <div className="mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+                    <p className="text-xs font-bold text-amber-700">Tambah Kategori Baru</p>
+
+                    <div className="flex items-start gap-3">
+                      {/* Upload logo */}
+                      <div className="flex flex-col items-center gap-1">
+                        <LogoUploadButton
+                          logoUrl={catLogoInput}
+                          onChange={setCatLogoInput}
+                          size="md"
+                        />
+                        <span className="text-[9px] text-gray-400 font-semibold text-center">Logo<br/>Kategori</span>
+                      </div>
+
+                      {/* Nama + actions */}
+                      <div className="flex-1 space-y-2">
+                        <input
+                          value={catInput}
+                          onChange={e => setCatInput(e.target.value)}
+                          onKeyDown={e => e.key === "Enter" && addCategory()}
+                          placeholder="Nama kategori baru..."
+                          className="w-full border-2 border-amber-300 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-500 transition-all bg-white"
+                          autoFocus
+                        />
+                        {/* Preview */}
+                        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-1.5 border border-amber-200">
+                          <span className="text-[10px] text-gray-400">Preview:</span>
+                          {catLogoInput
+                            ? <img src={catLogoInput} alt="logo" className="w-5 h-5 rounded-md object-cover"/>
+                            : <div className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center"><Image size={10} className="text-gray-300"/></div>
+                          }
+                          <span className="text-xs font-semibold text-gray-700">{catInput || "Nama Kategori"}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={addCategory}
+                            disabled={catSaving || !catInput.trim()}
+                            className="flex-1 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold hover:bg-amber-600 transition-all disabled:opacity-60 flex items-center justify-center gap-1"
+                          >
+                            {catSaving ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>}
+                            Simpan
+                          </button>
+                          <button
+                            onClick={() => { setShowCatInput(false); setCatInput(""); setCatLogoInput(""); setCatErr(""); }}
+                            className="px-3 py-2 bg-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-300 transition-all"
+                          >
+                            <X size={12}/>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── List kelola kategori ── */}
                 {categories.length > 0 && !catLoading && (
                   <div className="mt-3 space-y-1.5">
                     <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold">Kelola Kategori</p>
                     {categories.map(c => (
                       <div key={catId(c)} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
                         {editCatId === catId(c) ? (
-                          <>
+                          /* ── Mode Edit ── */
+                          <div className="flex-1 flex items-center gap-2">
+                            {/* Upload logo saat edit */}
+                            <LogoUploadButton
+                              logoUrl={editCatLogo}
+                              onChange={setEditCatLogo}
+                              size="sm"
+                            />
                             <input
                               value={editCatName}
                               onChange={e => setEditCatName(e.target.value)}
                               onKeyDown={e => e.key === "Enter" && saveEditCategory(c)}
                               autoFocus
-                              className="flex-1 border-2 border-amber-300 rounded-lg px-2 py-1 text-xs outline-none focus:border-amber-500 transition-all"
+                              className="flex-1 border-2 border-amber-300 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-amber-500 transition-all"
                             />
-                            <button onClick={() => saveEditCategory(c)} disabled={catSaving} className="w-6 h-6 bg-amber-500 text-white rounded-lg flex items-center justify-center hover:bg-amber-600 transition-all disabled:opacity-60">
+                            <button
+                              onClick={() => saveEditCategory(c)}
+                              disabled={catSaving}
+                              className="w-7 h-7 bg-amber-500 text-white rounded-lg flex items-center justify-center hover:bg-amber-600 transition-all disabled:opacity-60 flex-shrink-0"
+                            >
                               {catSaving ? <Loader2 size={10} className="animate-spin"/> : <Check size={10}/>}
                             </button>
-                            <button onClick={() => { setEditCatId(null); setEditCatName(""); setCatErr(""); }} className="w-6 h-6 bg-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-300 transition-all">
+                            <button
+                              onClick={() => { setEditCatId(null); setEditCatName(""); setEditCatLogo(""); setCatErr(""); }}
+                              className="w-7 h-7 bg-gray-200 text-gray-600 rounded-lg flex items-center justify-center hover:bg-gray-300 transition-all flex-shrink-0"
+                            >
                               <X size={10}/>
                             </button>
-                          </>
+                          </div>
                         ) : (
+                          /* ── Mode Tampil ── */
                           <>
+                            {/* Logo kategori — klik untuk ganti langsung */}
+                            <LogoUploadButton
+                              logoUrl={catLogo(c)}
+                              onChange={(newLogo) => quickUpdateLogo(c, newLogo)}
+                              size="sm"
+                            />
                             <span className="flex-1 text-xs font-semibold text-gray-700 capitalize">{catName(c)}</span>
                             <button
-                              onClick={() => { setEditCatId(catId(c)); setEditCatName(catName(c)); setShowCatInput(false); setCatErr(""); }}
+                              onClick={() => { setEditCatId(catId(c)); setEditCatName(catName(c)); setEditCatLogo(catLogo(c)); setShowCatInput(false); setCatErr(""); }}
                               className="w-6 h-6 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center justify-center text-blue-500 transition-all"
                             >
                               <Edit3 size={10}/>
                             </button>
-                            <button onClick={() => deleteCategory(c)} className="w-6 h-6 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center text-red-400 transition-all">
+                            <button
+                              onClick={() => deleteCategory(c)}
+                              className="w-6 h-6 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center text-red-400 transition-all"
+                            >
                               <Trash2 size={10}/>
                             </button>
                           </>
@@ -416,7 +546,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                 )}
               </div>
 
-              {/* Harga */}
+              {/* ── Harga ── */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Harga (Rp) *</label>
                 <input
@@ -428,7 +558,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                 />
               </div>
 
-              {/* Stok */}
+              {/* ── Stok ── */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Status Stok</label>
                 <button
@@ -453,60 +583,34 @@ export default function MenuForm({ item, onSave, onCancel }) {
                     <div className="flex-1 grid grid-cols-2 gap-2">
                       <input
                         value={v.label}
-                        onChange={e => {
-                          const u = [...form.variants];
-                          u[i] = { ...u[i], label: e.target.value };
-                          set("variants", u);
-                        }}
+                        onChange={e => { const u=[...form.variants]; u[i]={...u[i],label:e.target.value}; set("variants",u); }}
                         placeholder="Label (mis. Hot)"
                         className="border-2 border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-amber-500 transition-all"
                       />
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-gray-400 flex-shrink-0">Rp</span>
-                        {/* FIX: pakai "harga" bukan "price" agar konsisten dengan KelolaMenu */}
                         <input
                           type="number"
                           value={v.harga}
-                          onChange={e => {
-                            const u = [...form.variants];
-                            u[i] = { ...u[i], harga: e.target.value };
-                            set("variants", u);
-                          }}
+                          onChange={e => { const u=[...form.variants]; u[i]={...u[i],harga:e.target.value}; set("variants",u); }}
                           placeholder="Harga"
                           className="flex-1 border-2 border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-amber-500 transition-all"
                         />
                       </div>
                     </div>
-                    <button
-                      onClick={() => set("variants", form.variants.filter((_, idx) => idx !== i))}
-                      className="w-8 h-8 bg-red-100 hover:bg-red-200 rounded-lg flex items-center justify-center text-red-500 transition-all flex-shrink-0"
-                    >
+                    <button onClick={() => set("variants", form.variants.filter((_,idx)=>idx!==i))} className="w-8 h-8 bg-red-100 hover:bg-red-200 rounded-lg flex items-center justify-center text-red-500 transition-all flex-shrink-0">
                       <Trash2 size={14}/>
                     </button>
                   </div>
                 ))}
               </div>
-
-              {/* Tambah varian baru */}
               <div className="flex gap-2 pt-1">
-                <input
-                  value={newVarLabel}
-                  onChange={e => setNewVarLabel(e.target.value)}
-                  placeholder="Label varian"
-                  className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"
-                />
-                <input
-                  type="number"
-                  value={newVarPrice}
-                  onChange={e => setNewVarPrice(e.target.value)}
-                  placeholder="Harga"
-                  className="w-28 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"
-                />
+                <input value={newVarLabel} onChange={e=>setNewVarLabel(e.target.value)} placeholder="Label varian" className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"/>
+                <input type="number" value={newVarPrice} onChange={e=>setNewVarPrice(e.target.value)} placeholder="Harga" className="w-28 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"/>
                 <button
                   onClick={() => {
                     if (newVarLabel.trim() && newVarPrice) {
-                      // FIX: simpan sebagai "harga" bukan "price"
-                      set("variants", [...(form.variants || []), { label: newVarLabel.trim(), harga: Number(newVarPrice) }]);
+                      set("variants", [...(form.variants||[]), { label: newVarLabel.trim(), harga: Number(newVarPrice) }]);
                       setNewVarLabel(""); setNewVarPrice("");
                     }
                   }}
@@ -515,7 +619,6 @@ export default function MenuForm({ item, onSave, onCancel }) {
                   <Plus size={16}/>
                 </button>
               </div>
-
               {(!form.variants || form.variants.length === 0) && (
                 <div className="text-center py-8 text-gray-400">
                   <Hash size={32} className="mx-auto mb-2 opacity-30"/>

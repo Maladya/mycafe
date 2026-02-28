@@ -43,7 +43,7 @@ function ProtectedRoute() {
 const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/user" replace /> },
 
-  { path: "/user", element: <Home /> },
+  { path: "/user/table/:tableId", element: <Home /> },
   { path: "/login",  element: <LoginPage /> },
   { path: "/daftar", element: <Daftar /> },
 
