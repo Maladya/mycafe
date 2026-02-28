@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Coffee, AlertCircle, Eye, EyeOff, Building2, Mail, User, Lock, Phone } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.3:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
 export default function Daftar() {
   const [namaCafe,     setNamaCafe]     = useState("");

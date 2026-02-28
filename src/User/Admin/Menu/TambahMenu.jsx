@@ -31,7 +31,7 @@ export default function TambahMenu() {
 
  const handleKategoriBaru = async () => {
     try {
-      const response = await fetch("http://192.168.1.13:3000/kategoris", {
+      const response = await fetch("http://192.168.1.2:3000/kategoris", {
         method: "POST",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -54,7 +54,7 @@ export default function TambahMenu() {
   };
   const fetchKategoriItems = async () => {
     try {
-      const response = await fetch("http://192.168.1.13:3000/kategoris", {
+      const response = await fetch("http://192.168.1.2:3000/kategoris", {
         method: "GET",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -71,7 +71,7 @@ export default function TambahMenu() {
 
   const handleSubKategori = async () => {
     try {
-      const response = await fetch("http://192.168.1.13:3000/sub=kategoris", {
+      const response = await fetch("http://192.168.1.2:3000/sub=kategoris", {
         method: "POST",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -150,7 +150,7 @@ export default function TambahMenu() {
 
   const handleTambahMenu = async () => {
     try {
-      const response = await fetch("http://192.168.1.13:3000/menus", {
+      const response = await fetch("http://192.168.1.2:3000/menus", {
         method: "POST",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,

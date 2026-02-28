@@ -18,7 +18,7 @@ export default function DetailPromo() {
   useEffect(() => {
     const fetchPromo = async () => {
       try {
-        const response = await fetch(`http://192.168.1.13:3000/promos/${id}`, {
+        const response = await fetch(`http://192.168.1.2:3000/promos/${id}`, {
           method: "GET",
           headers: {
             authorization: `Bearer ${localStorage.getItem("access_token")}`,

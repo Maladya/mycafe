@@ -28,7 +28,7 @@ export default function Table() {
 
   const fetchTables = async () => {
     try {
-      const response = await fetch(`http://192.168.1.13:3000/tables`, {
+      const response = await fetch(`http://192.168.1.2:3000/tables`, {
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
@@ -42,7 +42,7 @@ export default function Table() {
 
   const getStatus = async () => {
     try {
-      const response = await fetch(`http://192.168.1.13:3000/tables?status=${activeFilter}`, {
+      const response = await fetch(`http://192.168.1.2:3000/tables?status=${activeFilter}`, {
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
@@ -57,7 +57,7 @@ export default function Table() {
 
     const getStat = async () => {
      try{
-       const response = await fetch(`http://192.168.1.13:3000/tables/stats`, {
+       const response = await fetch(`http://192.168.1.2:3000/tables/stats`, {
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
@@ -85,7 +85,7 @@ export default function Table() {
   const confirmDelete = async () => {
     if (selectedId == null) return;
     try {
-      const response = await fetch(`http://192.168.1.13:3000/tables/${selectedId}`, {
+      const response = await fetch(`http://192.168.1.2:3000/tables/${selectedId}`, {
         method: "DELETE",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,

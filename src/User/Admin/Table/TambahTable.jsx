@@ -28,7 +28,7 @@ export default function TambahTable() {
 
     try {
       // TODO: Replace with your actual API endpoint
-      const response = await fetch(`http://192.168.1.13:3000/tables`, {
+      const response = await fetch(`http://192.168.1.2:3000/tables`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

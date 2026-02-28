@@ -20,7 +20,7 @@ export default function Promo() {
 
   const handleFetchPromos = async () => {
     try {
-      const response = await fetch("http://192.168.1.13:3000/promos", {
+      const response = await fetch("http://192.168.1.2:3000/promos", {
         method: "GET",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -51,7 +51,7 @@ export default function Promo() {
   const confirmDelete = async () => {
     if (selectedId == null) return;
     try {
-      const response = await fetch(`http://192.168.1.13:3000/promos/${selectedId}`, {
+      const response = await fetch(`http://192.168.1.2:3000/promos/${selectedId}`, {
         method: "DELETE",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,

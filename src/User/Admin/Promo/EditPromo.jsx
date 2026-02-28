@@ -30,7 +30,7 @@ export default function EditPromo() {
   const fetchPromoData = async () => {
     setLoadingPromo(true);
     try {
-      const response = await fetch(`http://192.168.1.13:3000/promos/${id}`, {
+      const response = await fetch(`http://192.168.1.2:3000/promos/${id}`, {
         method: "GET",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -60,7 +60,7 @@ export default function EditPromo() {
   const fetchMenuItems = async () => {
     setLoadingMenus(true);
     try {
-      const response = await fetch("http://192.168.1.13:3000/menus", {
+      const response = await fetch("http://192.168.1.2:3000/menus", {
         method: "GET",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -89,7 +89,7 @@ export default function EditPromo() {
 
   const handlePromoUpdate = async () => {
     try {
-      const response = await fetch(`http://192.168.1.13:3000/promos/${id}`, {
+      const response = await fetch(`http://192.168.1.2:3000/promos/${id}`, {
         method: "PUT",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,

@@ -19,7 +19,7 @@ export default function Menu() {
 
   const fetchMenuItems = async () => {
     try {
-      const response = await fetch("http://192.168.1.13:3000/menus", {
+      const response = await fetch("http://192.168.1.2:3000/menus", {
         method: "GET",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -53,7 +53,7 @@ export default function Menu() {
   const confirmDelete = async () => {
     if (selectedId == null) return;
     try {
-      const response = await fetch(`http://192.168.1.13:3000/menus/${selectedId}`, {
+      const response = await fetch(`http://192.168.1.2:3000/menus/${selectedId}`, {
         method: "DELETE",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,

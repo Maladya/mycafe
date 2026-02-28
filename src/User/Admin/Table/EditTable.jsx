@@ -27,7 +27,7 @@ export default function EditTable() {
         setLoading(true);
         const response = await fetch(
           
-          `http://192.168.1.13:3000/tables/${id}`,
+          `http://192.168.1.2:3000/tables/${id}`,
           {
             method: "GET",
             headers: {
@@ -65,7 +65,7 @@ export default function EditTable() {
 
     try {
       const response = await fetch(
-        `http://192.168.1.13:3000/tables/${id}`,
+        `http://192.168.1.2:3000/tables/${id}`,
         {
           method: "PUT",
           headers: {

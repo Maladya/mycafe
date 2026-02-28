@@ -4,7 +4,7 @@ import {
   Hash, Save, Upload, Loader2, Edit3, AlertCircle
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.3:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper headers
@@ -24,7 +24,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
 
   // ── Form utama ──────────────────────────────────────────────────────────
   const [form, setForm] = useState(item ? { ...item } : {
-    nama_menu: "", tagline: "", description: "",
+    nama_menu: "", tagline: "", deskripsi: "",
     id_kategori: "",
     harga: "", status: true, image_url: "",
     rating: 0, totalReviews: 0, sold: 0,
@@ -311,8 +311,8 @@ export default function MenuForm({ item, onSave, onCancel }) {
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Deskripsi</label>
                 <textarea
-                  value={form.description}
-                  onChange={e => set("description", e.target.value)}
+                  value={form.deskripsi}
+                  onChange={e => set("deskripsi", e.target.value)}
                   rows={3}
                   placeholder="Deskripsi lengkap..."
                   className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all resize-none"

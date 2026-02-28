@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.3:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 const PER_PAGE = 6;
 
 // Normalisasi URL gambar — ganti IP lama yang salah ke API_URL yang benar

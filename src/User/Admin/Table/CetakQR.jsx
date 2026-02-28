@@ -22,7 +22,7 @@ export default function CetakQR() {
       
       // TODO: Replace with your actual API
       const response = await fetch(
-        `http://192.168.1.13:3000/tables/${id}/qr`,
+        `http://192.168.1.2:3000/tables/${id}/qr`,
         
         {
           method: "POST",

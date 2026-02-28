@@ -30,7 +30,7 @@ export default function EditMenu() {
 
   const fetchingItems = async () => {
     try {
-      const response = await fetch(`http://192.168.1.13:3000/menus/${id}`, {
+      const response = await fetch(`http://192.168.1.2:3000/menus/${id}`, {
         method: "GET",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -102,7 +102,7 @@ export default function EditMenu() {
       return;
     }
     try {
-      const response = await fetch(`http://192.168.1.13:3000/menus/${id}`, {
+      const response = await fetch(`http://192.168.1.2:3000/menus/${id}`, {
         method: "PUT",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,

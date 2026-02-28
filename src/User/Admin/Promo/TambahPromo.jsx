@@ -26,7 +26,7 @@ export default function TambahPromo() {
   const handlePromoSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch("http://192.168.1.13:3000/promos", {
+      const response = await fetch("http://192.168.1.2:3000/promos", {
         method: "POST",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -46,7 +46,7 @@ export default function TambahPromo() {
   const fetchMenuItems = async () => {
     setLoadingMenus(true);
     try {
-      const response = await fetch("http://192.168.1.13:3000/menus", {
+      const response = await fetch("http://192.168.1.2:3000/menus", {
         method: "GET",
         headers: {
           authorization: `Bearer ${localStorage.getItem("access_token")}`,
