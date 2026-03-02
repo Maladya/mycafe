@@ -4,7 +4,7 @@ import {
   Hash, Save, Upload, Loader2, Edit3, AlertCircle, Camera
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
 
 const authHeaders = (json = true) => {
   const token = localStorage.getItem("token");
@@ -134,8 +134,22 @@ export default function MenuForm({ item, onSave, onCancel }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const catId   = (c) => String(c?.id ?? c?.nama_kategori ?? c?.name ?? "unknown");
   const catName = (c) => String(c?.nama_kategori ?? c?.name ?? c?.id ?? "");
-  const catLogo = (c) => c?.logo ?? c?.icon ?? "";
-
+const catLogo = (c) => {
+  const raw = c?.logo ?? c?.icon ?? "";
+  if (!raw) return "";
+  
+  // Jika URL mengandung IP lain, ganti dengan API_URL yang benar
+  if (raw.startsWith("http") && !raw.startsWith(API_URL)) {
+    try {
+      const url = new URL(raw);
+      const corrected = `${API_URL}${url.pathname}`;
+      return corrected;
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+};
   // Fetch kategori
   useEffect(() => {
     const fetchCategories = async () => {

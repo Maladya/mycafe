@@ -1,7 +1,7 @@
 import { X, QrCode, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
 
 const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,

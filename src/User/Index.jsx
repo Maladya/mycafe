@@ -1,170 +1,192 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search, ShoppingBag, ArrowLeft, Heart, Share2, Plus, Minus,
   Clock, MapPin, Flame, Leaf, Check, ExternalLink, RotateCcw,
-  AlertCircle, RefreshCw
+  AlertCircle, RefreshCw, Image
 } from "lucide-react";
 
-// ── API CONFIG ────────────────────────────────────────────────────────────────
-const BASE_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000/";
-
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = {
   get:   ()      => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
-  set:   (token) => localStorage.setItem(TOKEN_KEY, token),
+  set:   (t)     => localStorage.setItem(TOKEN_KEY, t),
   clear: ()      => localStorage.removeItem(TOKEN_KEY),
 };
+
+const fixImgUrl = (url) => {
+  if (!url?.trim()) return "";
+  if (url.startsWith("data:")) return url;
+  const b64 = url.indexOf("data:image/");
+  if (b64 !== -1) return url.slice(b64);
+  if (url.startsWith("/")) return `${BASE_URL}${url}`;
+  if (url.startsWith("http")) {
+    try {
+      const p = new URL(url), b = new URL(BASE_URL);
+      if (p.host !== b.host) { p.host = b.host; p.protocol = b.protocol; p.port = b.port; }
+      return p.toString();
+    } catch { return url; }
+  }
+  return `${BASE_URL}/${url}`;
+};
+
+function parseTheme(raw) {
+  const DEF = { primary: "#f59e0b", secondary: "#ea580c", bg: "#f9fafb", text: "#111827" };
+  if (!raw) return DEF;
+  try {
+    const p = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return { primary: p.primary ?? DEF.primary, secondary: p.secondary ?? DEF.secondary,
+             bg: p.bg ?? DEF.bg, text: p.text ?? DEF.text };
+  } catch { return DEF; }
+}
+
+function contrast(hex) {
+  try {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return (0.299*r + 0.587*g + 0.114*b)/255 > 0.55 ? "#111827" : "#ffffff";
+  } catch { return "#ffffff"; }
+}
+
+function ha(hex, a) {
+  try {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return `rgba(${r},${g},${b},${a})`;
+  } catch { return hex; }
+}
+
+const THEME_CACHE_KEY = "astakira_theme";
+
+function applyThemeVars(theme) {
+  const onP = contrast(theme.primary);
+  const vars = [
+    `--p:${theme.primary}`,
+    `--s:${theme.secondary}`,
+    `--bg:${theme.bg}`,
+    `--tx:${theme.text}`,
+    `--on-p:${onP}`,
+    `--p-20:${ha(theme.primary, 0.2)}`,
+    `--bg-soft:${ha(theme.primary, 0.07)}`,
+    `--grad:linear-gradient(135deg,${theme.primary},${theme.secondary})`,
+  ].join(";");
+  document.documentElement.setAttribute("style", vars);
+}
+
+// Inject tema dari cache SEBELUM render pertama
+try {
+  const cached = localStorage.getItem(THEME_CACHE_KEY);
+  if (cached) applyThemeVars(JSON.parse(cached));
+} catch {}
 
 const api = {
   get: async (path) => {
     const token = tokenManager.get();
     const headers = { "Content-Type": "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}${path}`, { headers });
-    if (res.status === 401) { tokenManager.clear(); throw new Error("Sesi habis. Muat ulang halaman untuk login kembali."); }
-    if (res.status === 403) { throw new Error("Akses ditolak (403). Token tidak valid atau tidak memiliki izin."); }
+    const res = await fetch(`${BASE_URL}/${path}`, { headers });
+    if (res.status === 401) { tokenManager.clear(); throw new Error("Sesi habis."); }
+    if (res.status === 403) { throw new Error("Akses ditolak (403)."); }
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     return res.json();
   },
 };
 
-// ── CUSTOM HOOK: useApi ───────────────────────────────────────────────────────
 function useApi(fetchFn, deps = []) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
-
   const execute = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchFn();
-      setData(result);
-    } catch (err) {
-      setError(err.message || "Terjadi kesalahan");
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true); setError(null);
+    try { setData(await fetchFn()); }
+    catch (err) { setError(err.message || "Terjadi kesalahan"); }
+    finally { setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
-
   useEffect(() => { execute(); }, [execute]);
   return { data, loading, error, refetch: execute };
 }
 
-// ── HELPER: normalize satu kategori dari API ──────────────────────────────────
-// Prioritas: nama_kategori → label → nama → name → id
 function normalizeCategory(cat) {
   return {
     id:    cat.id,
     label: cat.nama_kategori ?? cat.label ?? cat.nama ?? cat.name ?? String(cat.id),
-    logo:  cat.logo ?? cat.icon ?? cat.foto ?? cat.gambar ?? "",
+    logo:  fixImgUrl(cat.logo ?? cat.icon ?? cat.foto ?? cat.gambar ?? ""),
     items: Array.isArray(cat.items) ? cat.items : [],
   };
 }
 
-// ── HELPER: normalize satu item menu dari API ─────────────────────────────────
 function normalizeMenuItem(item) {
-  // Ambil semua kemungkinan field category_id dari backend
   const rawCatId = item.category_id ?? item.kategori_id ?? item.id_kategori ?? item.cat_id ?? null;
   return {
     id:            item.id,
-    name:          item.name          ?? item.nama_menu  ?? item.nama   ?? "",
-    price:         Number(item.price  ?? item.harga      ?? 0),
+    name:          item.name         ?? item.nama_menu  ?? item.nama   ?? "",
+    price:         Number(item.price ?? item.harga      ?? 0),
     originalPrice: item.originalPrice ?? item.harga_asli ?? item.harga_coret ?? null,
-    image_url:         item.image_url     ?? item.image      ?? item.foto   ?? item.gambar ?? "",
-    category:      item.category      ?? item.nama_kategori ?? item.kategori ?? "",
-    // Simpan categoryId sebagai string untuk perbandingan
+    image_url:     fixImgUrl(item.image_url ?? item.image ?? item.foto ?? item.gambar ?? ""),
+    category:      item.category     ?? item.nama_kategori ?? item.kategori ?? "",
     categoryId:    rawCatId !== null ? String(rawCatId) : "",
-    // Simpan juga raw object kategori kalau backend return relasi
     _raw:          item,
-    badge:         item.badge         ?? item.label       ?? null,
-    discount:      item.discount      ?? item.diskon      ?? null,
-    tagline:       item.tagline       ?? item.deskripsi_singkat ?? item.subtitle ?? "",
-    description:   item.description   ?? item.deskripsi   ?? "",
-    prepTime:      item.prepTime      ?? item.waktu_masak ?? item.estimasi ?? "",
-    calories:      item.calories      ?? item.kalori      ?? 0,
-    isVegan:       item.isVegan       ?? item.vegan       ?? false,
-    volume:        item.volume        ?? item.ukuran      ?? "",
-    ingredients:   item.ingredients   ?? item.bahan       ?? [],
-    variants:      (item.variants     ?? item.varian      ?? []).map(v => ({
+    badge:         item.badge        ?? item.label      ?? null,
+    discount:      item.discount     ?? item.diskon     ?? null,
+    tagline:       item.tagline      ?? item.deskripsi_singkat ?? item.subtitle ?? "",
+    description:   item.description  ?? item.deskripsi  ?? "",
+    prepTime:      item.prepTime     ?? item.waktu_masak ?? item.estimasi ?? "",
+    calories:      item.calories     ?? item.kalori     ?? 0,
+    isVegan:       item.isVegan      ?? item.vegan      ?? false,
+    volume:        item.volume       ?? item.ukuran     ?? "",
+    ingredients:   item.ingredients  ?? item.bahan      ?? [],
+    variants:      (item.variants ?? item.varian ?? []).map(v => ({
       label: v.label ?? v.nama ?? v.ukuran ?? "",
       price: Number(v.price ?? v.harga ?? 0),
-      image: v.image ?? v.foto ?? item.image ?? item.foto ?? "",
+      image: fixImgUrl(v.image ?? v.foto ?? item.image_url ?? item.image ?? item.foto ?? ""),
     })),
     related: item.related ?? item.related_menu ?? [],
   };
 }
 
-// ── HELPER: build menuDatabase ────────────────────────────────────────────────
-function buildMenuDatabase(menuArray = []) {
-  return Object.fromEntries(menuArray.map(item => {
-    const n = normalizeMenuItem(item);
-    return [n.id, n];
-  }));
+function buildMenuDatabase(arr = []) {
+  return Object.fromEntries(arr.map(i => { const n = normalizeMenuItem(i); return [n.id, n]; }));
 }
 
-// ── HELPER: group menu ke dalam setiap kategori ───────────────────────────────
-function buildCategorySections(normalizedCats, menuDatabase) {
-  const allItems = Object.values(menuDatabase);
-
-  // Log ke console untuk debug (bisa dihapus setelah fix)
-  if (allItems.length > 0 && normalizedCats.length > 0) {
-    const raw = allItems[0]?._raw;
-    console.log("[DEBUG] Semua field menu item:", JSON.stringify(raw, null, 2));
-    console.log("[DEBUG] Cat ids:", normalizedCats.map(c => c.id));
-  }
-
-  return normalizedCats.map(cat => {
+function buildCategorySections(cats, db) {
+  const all = Object.values(db);
+  return cats.map(cat => {
     if (cat.items.length > 0) return cat;
-
-    const catIdStr = String(cat.id);
-    const matchedIds = allItems
-      .filter(item => {
-        // Coba semua kemungkinan field
-        const raw = item._raw;
-        return (
-          item.categoryId === catIdStr ||
-          String(raw?.category_id)  === catIdStr ||
-          String(raw?.kategori_id)  === catIdStr ||
-          String(raw?.id_kategori)  === catIdStr ||
-          String(raw?.cat_id)       === catIdStr
-        );
-      })
-      .map(item => item.id);
-
-    return { ...cat, items: matchedIds };
-  }).filter(cat => cat.items.length > 0);
+    const s = String(cat.id);
+    const ids = all.filter(item => {
+      const r = item._raw;
+      return item.categoryId===s || String(r?.category_id)===s || String(r?.kategori_id)===s ||
+             String(r?.id_kategori)===s || String(r?.cat_id)===s;
+    }).map(i => i.id);
+    return { ...cat, items: ids };
+  }).filter(c => c.items.length > 0);
 }
 
-// ── HELPER: cart dari order ───────────────────────────────────────────────────
-function buildCartFromOrder(orderItems, menuDatabase) {
-  const newCart = {};
-  const allItems = Object.values(menuDatabase);
-  orderItems.forEach(orderItem => {
-    const nama = (orderItem.name ?? orderItem.nama ?? "").toLowerCase();
-    const found = allItems.find(m => m.name.toLowerCase() === nama);
-    if (found) newCart[found.id] = (newCart[found.id] || 0) + (orderItem.qty ?? orderItem.jumlah ?? 1);
+function buildCartFromOrder(orderItems, db) {
+  const cart = {}, all = Object.values(db);
+  orderItems.forEach(o => {
+    const nama  = (o.name ?? o.nama ?? "").toLowerCase();
+    const found = all.find(m => m.name.toLowerCase() === nama);
+    if (found) cart[found.id] = (cart[found.id] || 0) + (o.qty ?? o.jumlah ?? 1);
   });
-  return newCart;
+  return cart;
 }
 
-// ── HELPER: deteksi URL gambar ────────────────────────────────────────────────
-const isImgUrl = (s) => !!s && (s.startsWith("http") || s.startsWith("/") || s.startsWith("data:"));
-
-// ── KOMPONEN: Logo Kategori ───────────────────────────────────────────────────
 function CatLogo({ logo, size = 28 }) {
-  if (!logo) return <span style={{ fontSize: size - 4 }}>🍽️</span>;
-  if (isImgUrl(logo)) return (
-    <img src={logo} alt="" style={{ width: size, height: size }}
-      className="object-cover w-full h-full"
-      onError={e => { e.currentTarget.style.display = "none"; }} />
-  );
-  return <span style={{ fontSize: size - 4 }} className="leading-none">{logo}</span>;
+  const [err, setErr] = useState(false);
+  if (!logo || err) return <Image size={size*0.6} style={{ color: "var(--on-p)", opacity:0.9 }} />;
+  return <img src={logo} alt="" style={{ width:size, height:size, objectFit:"cover" }} onError={() => setErr(true)} />;
 }
 
-// ── KOMPONEN: Skeleton ────────────────────────────────────────────────────────
+function MenuImage({ src, alt, className = "w-full h-full object-cover" }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) return (
+    <div className="w-full h-full flex items-center justify-center" style={{ background:"var(--bg-soft)" }}>
+      <Image size={28} style={{ color:"var(--p)", opacity:0.35 }} />
+    </div>
+  );
+  return <img src={src} alt={alt} className={className} onError={() => setErr(true)} />;
+}
+
 function SkeletonCard() {
   return (
     <div className="flex-shrink-0 w-44 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 animate-pulse">
@@ -191,21 +213,21 @@ function SkeletonSection() {
   );
 }
 
-// ── KOMPONEN: Error State ─────────────────────────────────────────────────────
 function ErrorState({ message, onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
       <AlertCircle size={48} className="text-red-400 mb-3" />
       <p className="font-bold text-gray-700 mb-1">Gagal memuat data</p>
       <p className="text-gray-400 text-sm mb-4">{message}</p>
-      <button onClick={onRetry} className="flex items-center gap-2 bg-amber-500 text-white px-5 py-2.5 rounded-2xl font-bold hover:bg-amber-600 transition-all">
+      <button onClick={onRetry}
+        className="flex items-center gap-2 text-white px-5 py-2.5 rounded-2xl font-bold transition-all"
+        style={{ background:"var(--p)" }}>
         <RefreshCw size={15} /> Coba Lagi
       </button>
     </div>
   );
 }
 
-// ── MenuDetail Bottom Sheet ───────────────────────────────────────────────────
 function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem }) {
   const [qty, setQty]                         = useState(1);
   const [selectedVariant, setSelectedVariant] = useState(0);
@@ -216,7 +238,7 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
   const currentPrice = hasVariants ? (item.variants[selectedVariant]?.price ?? item.price) : item.price;
   const totalPrice   = currentPrice * qty;
   const relatedItems = Object.values(menuDatabase).filter(m => item.related?.includes(m.id));
-  const heroImage    = hasVariants ? (item.variants[selectedVariant]?.image_url || item.image_url) : item.image_url;
+  const heroImage    = hasVariants ? (item.variants[selectedVariant]?.image || item.image_url) : item.image_url;
 
   const handleAdd = () => {
     setAddedToCart(true);
@@ -231,19 +253,12 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end animate-fadeIn"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
-      onClick={onClose}
-    >
+      style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)" }} onClick={onClose}>
       <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[2rem] animate-slideUp overflow-hidden"
-        style={{ maxHeight: "92vh" }} onClick={e => e.stopPropagation()}
-      >
-        <div className="overflow-y-auto scrollbar-hide" style={{ maxHeight: "92vh", paddingBottom: "160px" }}>
-          {/* Hero */}
-          <div className="relative h-72 flex-shrink-0">
-            {heroImage
-              ? <img src={heroImage} alt={item.name} className="w-full h-full object-cover transition-all duration-500" />
-              : <div className="w-full h-full bg-gradient-to-br from-amber-200 to-orange-300 flex items-center justify-center"><span className="text-7xl">🍽️</span></div>
-            }
+        style={{ maxHeight:"92vh" }} onClick={e => e.stopPropagation()}>
+        <div className="overflow-y-auto scrollbar-hide" style={{ maxHeight:"92vh", paddingBottom:"160px" }}>
+          <div className="relative h-72 flex-shrink-0" style={{ background:"var(--bg-soft)" }}>
+            <MenuImage src={heroImage} alt={item.name} className="w-full h-full object-cover transition-all duration-500" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/30" />
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
               <button onClick={onClose} className="w-11 h-11 flex items-center justify-center bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl shadow-xl hover:bg-white/30 transition-all">
@@ -260,8 +275,8 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
             </div>
             {item.badge && (
               <div className="absolute top-20 left-4 z-10">
-                <span className={`text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg ${item.badge === "Promo" ? "bg-gradient-to-r from-red-500 to-pink-500" : "bg-gradient-to-r from-purple-500 to-pink-500"}`}>
-                  {item.badge === "Promo" && item.discount ? `-${item.discount}` : item.badge}
+                <span className={`text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg ${item.badge==="Promo" ? "bg-gradient-to-r from-red-500 to-pink-500" : "bg-gradient-to-r from-purple-500 to-pink-500"}`}>
+                  {item.badge==="Promo" && item.discount ? `-${item.discount}` : item.badge}
                 </span>
               </div>
             )}
@@ -269,14 +284,11 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
               <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
                 {item.variants.map((v, i) => (
                   <button key={i} onClick={() => setSelectedVariant(i)}
-                    className={`relative w-14 h-14 rounded-2xl overflow-hidden transition-all duration-200 ${selectedVariant === i ? "scale-110 shadow-xl ring-2 ring-amber-400 ring-offset-1" : "opacity-65 hover:opacity-90"}`}
-                    style={{ border: `${selectedVariant === i ? 3 : 2}px solid ${selectedVariant === i ? "#fbbf24" : "rgba(255,255,255,0.5)"}` }}
-                  >
-                    {v.image
-                      ? <img src={v.image} alt={v.label} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full bg-amber-200 flex items-center justify-center"><span className="text-lg">🍽️</span></div>
-                    }
-                    <div className={`absolute inset-x-0 bottom-0 text-center text-[8px] font-bold leading-tight py-0.5 ${selectedVariant === i ? "bg-amber-500 text-white" : "bg-black/50 text-white/80"}`}>
+                    className={`relative w-14 h-14 rounded-2xl overflow-hidden transition-all duration-200 ${selectedVariant===i ? "scale-110 shadow-xl" : "opacity-65 hover:opacity-90"}`}
+                    style={selectedVariant===i ? { outline:"2px solid var(--p)", outlineOffset:"2px" } : {}}>
+                    <MenuImage src={v.image} alt={v.label} />
+                    <div className="absolute inset-x-0 bottom-0 text-center text-[8px] font-bold leading-tight py-0.5"
+                      style={selectedVariant===i ? { background:"var(--p)", color:"var(--on-p)" } : { background:"rgba(0,0,0,0.5)", color:"rgba(255,255,255,0.8)" }}>
                       {v.label?.split(" ")[0]}
                     </div>
                   </button>
@@ -285,38 +297,18 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
             )}
           </div>
 
-          {/* Content */}
           <div className="px-5 pt-5">
-            {item.category && <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">{item.category}</p>}
+            {item.category && <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color:"var(--p)" }}>{item.category}</p>}
             <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{item.name}</h1>
             {item.tagline && <p className="text-sm text-gray-400 mt-1 italic mb-4">{item.tagline}</p>}
-
             <div className="flex gap-2 mb-5 flex-wrap">
-              {item.prepTime && (
-                <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5">
-                  <Clock size={13} className="text-orange-500" /><span className="text-xs font-semibold text-orange-700">{item.prepTime}</span>
-                </div>
-              )}
-              {item.calories > 0 && (
-                <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-xl px-3 py-1.5">
-                  <Flame size={13} className="text-red-500" /><span className="text-xs font-semibold text-red-700">{item.calories} kal</span>
-                </div>
-              )}
-              {item.isVegan && (
-                <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-xl px-3 py-1.5">
-                  <Leaf size={13} className="text-green-500" /><span className="text-xs font-semibold text-green-700">Vegan</span>
-                </div>
-              )}
-              {item.volume && (
-                <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-xl px-3 py-1.5">
-                  <span className="text-xs font-semibold text-blue-700">🥤 {item.volume}</span>
-                </div>
-              )}
+              {item.prepTime && (<div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5"><Clock size={13} className="text-orange-500" /><span className="text-xs font-semibold text-orange-700">{item.prepTime}</span></div>)}
+              {item.calories > 0 && (<div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-xl px-3 py-1.5"><Flame size={13} className="text-red-500" /><span className="text-xs font-semibold text-red-700">{item.calories} kal</span></div>)}
+              {item.isVegan && (<div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-xl px-3 py-1.5"><Leaf size={13} className="text-green-500" /><span className="text-xs font-semibold text-green-700">Vegan</span></div>)}
+              {item.volume && (<div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-xl px-3 py-1.5"><span className="text-xs font-semibold text-blue-700">🥤 {item.volume}</span></div>)}
             </div>
-
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
             {item.description && <p className="text-sm text-gray-600 leading-relaxed mb-5">{item.description}</p>}
-
             {item.ingredients?.length > 0 && (
               <div className="mb-6">
                 <h2 className="text-base font-bold text-gray-900 mb-2">Bahan</h2>
@@ -325,37 +317,36 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
                 </div>
               </div>
             )}
-
             {hasVariants && item.variants.length > 1 && (
               <div className="mb-6">
                 <h2 className="text-base font-bold text-gray-900 mb-3">Pilih Varian</h2>
                 <div className="flex gap-3">
                   {item.variants.map((v, i) => (
                     <button key={i} onClick={() => setSelectedVariant(i)}
-                      className={`flex-1 rounded-2xl font-bold text-sm border-2 transition-all overflow-hidden ${selectedVariant === i ? "border-amber-500 shadow-lg scale-105" : "border-gray-200 hover:border-amber-400"}`}
-                    >
-                      <div className="relative h-20 overflow-hidden">
-                        {v.image
-                          ? <img src={v.image} alt={v.label} className="w-full h-full object-cover" />
-                          : <div className="w-full h-full bg-amber-100 flex items-center justify-center"><span className="text-2xl">🍽️</span></div>
-                        }
-                        <div className={`absolute inset-0 ${selectedVariant === i ? "bg-amber-500/20" : "bg-black/20"}`} />
-                        {selectedVariant === i && (
-                          <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center shadow">
+                      className={`flex-1 rounded-2xl font-bold text-sm border-2 transition-all overflow-hidden ${selectedVariant===i ? "shadow-lg scale-105" : "border-gray-200"}`}
+                      style={selectedVariant===i ? { borderColor:"var(--p)" } : {}}>
+                      <div className="relative h-20 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
+                        <MenuImage src={v.image} alt={v.label} />
+                        <div className="absolute inset-0 bg-black/10" />
+                        {selectedVariant===i && (
+                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow" style={{ background:"var(--p)" }}>
                             <Check size={11} className="text-white" />
                           </div>
                         )}
                       </div>
-                      <div className={`px-3 py-2 text-center ${selectedVariant === i ? "bg-gradient-to-r from-amber-500 to-orange-500" : "bg-white"}`}>
-                        <div className={`font-bold text-sm ${selectedVariant === i ? "text-white" : "text-gray-700"}`}>{v.label}</div>
-                        <div className={`text-xs mt-0.5 font-semibold ${selectedVariant === i ? "text-white/80" : "text-amber-600"}`}>Rp{v.price.toLocaleString()}</div>
+                      <div className="px-3 py-2 text-center"
+                        style={selectedVariant===i ? { background:"var(--p)", color:"var(--on-p)" } : { background:"white" }}>
+                        <div className="font-bold text-sm" style={selectedVariant!==i ? { color:"#374151" } : {}}>{v.label}</div>
+                        <div className="text-xs mt-0.5 font-semibold"
+                          style={selectedVariant===i ? { color:"var(--on-p)", opacity:0.85 } : { color:"var(--p)" }}>
+                          Rp{v.price.toLocaleString()}
+                        </div>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
             )}
-
             {relatedItems.length > 0 && (
               <>
                 <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
@@ -364,14 +355,13 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
                   <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                     {relatedItems.map(rel => (
                       <div key={rel.id} onClick={() => onOpenItem(rel)}
-                        className="flex-shrink-0 w-36 bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer"
-                      >
-                        <div className="h-24 overflow-hidden bg-gray-100">
-                          {rel.image ? <img src={rel.image} alt={rel.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-3xl">🍽️</span></div>}
+                        className="flex-shrink-0 w-36 bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer">
+                        <div className="h-24 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
+                          <MenuImage src={rel.image_url} alt={rel.name} />
                         </div>
                         <div className="p-3">
                           <p className="font-bold text-gray-900 text-xs line-clamp-1">{rel.name}</p>
-                          <p className="text-amber-600 font-bold text-xs mt-1">Rp{rel.price.toLocaleString()}</p>
+                          <p className="font-bold text-xs mt-1" style={{ color:"var(--p)" }}>Rp{rel.price.toLocaleString()}</p>
                         </div>
                       </div>
                     ))}
@@ -382,7 +372,6 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-5 py-4">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -390,19 +379,21 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
               <p className="text-2xl font-extrabold text-gray-900">Rp{totalPrice.toLocaleString()}</p>
               {item.originalPrice && <p className="text-xs text-gray-400 line-through">Rp{Number(item.originalPrice).toLocaleString()}</p>}
             </div>
-            <div className="flex items-center gap-3 bg-amber-50 border-2 border-amber-200 rounded-2xl px-3 py-2">
-              <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded-xl shadow-sm hover:bg-amber-100 transition-all">
-                <Minus size={16} className="text-amber-700" />
+            <div className="flex items-center gap-3 rounded-2xl px-3 py-2 border-2"
+              style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
+              <button onClick={() => setQty(q => Math.max(1, q-1))} className="w-8 h-8 flex items-center justify-center bg-white rounded-xl shadow-sm transition-all">
+                <Minus size={16} style={{ color:"var(--p)" }} />
               </button>
               <span className="font-extrabold text-gray-900 text-lg w-6 text-center">{qty}</span>
-              <button onClick={() => setQty(q => q + 1)} className="w-8 h-8 flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl shadow-sm hover:shadow-md transition-all">
-                <Plus size={16} className="text-white" />
+              <button onClick={() => setQty(q => q+1)} className="w-8 h-8 flex items-center justify-center rounded-xl shadow-sm hover:shadow-md transition-all"
+                style={{ background:"var(--grad)" }}>
+                <Plus size={16} style={{ color:"var(--on-p)" }} />
               </button>
             </div>
           </div>
           <button onClick={handleAdd}
-            className={`w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-3 ${addedToCart ? "bg-green-500 text-white shadow-lg" : "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg hover:scale-[1.02]"}`}
-          >
+            className="w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:scale-[1.02]"
+            style={addedToCart ? { background:"#22c55e", color:"#fff" } : { background:"var(--grad)", color:"var(--on-p)" }}>
             {addedToCart ? <><Check size={20} /> Ditambahkan!</> : <><ShoppingBag size={20} /> Tambah ke Pesanan</>}
           </button>
         </div>
@@ -411,41 +402,44 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
   );
 }
 
-// ── Menu Card ─────────────────────────────────────────────────────────────────
 function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
   const badgeColor = {
-    "Promo": "bg-gradient-to-r from-red-500 to-pink-500",
-    "Favorit": "bg-gradient-to-r from-amber-500 to-orange-500",
-    "Baru": "bg-gradient-to-r from-green-500 to-emerald-500",
+    "Promo":       "bg-gradient-to-r from-red-500 to-pink-500",
+    "Favorit":     "bg-gradient-to-r from-amber-500 to-orange-500",
+    "Baru":        "bg-gradient-to-r from-green-500 to-emerald-500",
     "Best Seller": "bg-gradient-to-r from-purple-500 to-pink-500",
   };
   return (
     <div className="flex-shrink-0 w-44 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all" onClick={onClick}>
-      <div className="relative h-32 overflow-hidden bg-gray-100">
-        {item.image_url
-          ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center"><span className="text-4xl">🍽️</span></div>
-        }
+      <div className="relative h-32 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
+        <MenuImage src={item.image_url} alt={item.name} />
         {item.badge && (
           <div className={`absolute top-2 left-2 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow ${badgeColor[item.badge] || "bg-gray-500"}`}>
-            {item.badge === "Promo" && item.discount ? `-${item.discount}` : item.badge}
+            {item.badge==="Promo" && item.discount ? `-${item.discount}` : item.badge}
           </div>
         )}
       </div>
       <div className="p-3">
         <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.name}</p>
         <div className="flex items-baseline gap-1.5 mt-1">
-          <p className="text-amber-600 font-extrabold text-sm">Rp{item.price.toLocaleString()}</p>
+          <p className="font-extrabold text-sm" style={{ color:"var(--p)" }}>Rp{item.price.toLocaleString()}</p>
           {item.originalPrice && <p className="text-gray-400 text-[10px] line-through">Rp{Number(item.originalPrice).toLocaleString()}</p>}
         </div>
         <div className="mt-2" onClick={e => e.stopPropagation()}>
           {qty === 0 ? (
-            <button onClick={onAdd} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold py-1.5 rounded-xl hover:shadow-md hover:scale-105 transition-all">+ Tambah</button>
+            <button onClick={onAdd}
+              className="w-full text-xs font-bold py-1.5 rounded-xl hover:shadow-md hover:scale-105 transition-all"
+              style={{ background:"var(--grad)", color:"var(--on-p)" }}>
+              + Tambah
+            </button>
           ) : (
-            <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-2 py-1">
-              <button onClick={onRemove} className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">−</button>
-              <span className="font-bold text-amber-800 text-xs">{qty}</span>
-              <button onClick={onAdd} className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">+</button>
+            <div className="flex items-center justify-between rounded-xl px-2 py-1 border"
+              style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
+              <button onClick={onRemove} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs"
+                style={{ background:"var(--p)" }}>−</button>
+              <span className="font-bold text-xs" style={{ color:"var(--s)" }}>{qty}</span>
+              <button onClick={onAdd} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs"
+                style={{ background:"var(--p)" }}>+</button>
             </div>
           )}
         </div>
@@ -454,15 +448,12 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
   );
 }
 
-// ── Riwayat Pesanan Sheet ─────────────────────────────────────────────────────
-function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, onClose, onNavigateToPesanan, onReorder }) {
+function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
   const [activeTab, setActiveTab] = useState("sedang");
-
   const { data: ordersRaw, loading, error, refetch } = useApi(
     () => api.get(`api/orders?meja=${mejaId}&cafe_id=${cafeId}`).then(r => r.data ?? r),
     [mejaId, cafeId]
   );
-
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
@@ -473,94 +464,72 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, onClose, onNavigate
     status:   o.status,
     waktu:    o.waktu    ?? o.created_at ?? o.tanggal ?? "",
     estimasi: o.estimasi ?? o.eta        ?? "15 mnt",
-    items:    (o.items   ?? o.detail     ?? o.order_items ?? []).map(i => ({
-      name:    i.name    ?? i.nama    ?? i.nama_menu ?? "",
-      variant: i.variant ?? i.varian  ?? "",
+    items: (o.items ?? o.detail ?? o.order_items ?? []).map(i => ({
+      name:    i.name   ?? i.nama    ?? i.nama_menu ?? "",
+      variant: i.variant ?? i.varian ?? "",
       qty:     Number(i.qty ?? i.jumlah ?? 1),
       price:   Number(i.price ?? i.harga ?? 0),
-      image:   i.image   ?? i.foto    ?? i.gambar ?? "",
+      image:   fixImgUrl(i.image ?? i.foto ?? i.gambar ?? ""),
     })),
   }));
 
   const isSedang  = s => ["sedang","proses","pending"].includes(s);
   const isSelesai = s => ["selesai","done","completed"].includes(s);
-
   const sedangOrders  = orders.filter(o => isSedang(o.status));
   const selesaiOrders = orders.filter(o => isSelesai(o.status));
-  const displayed     = activeTab === "sedang" ? sedangOrders : selesaiOrders;
-  const getTotal      = items => items.reduce((s, i) => s + i.price * i.qty, 0);
+  const displayed     = activeTab==="sedang" ? sedangOrders : selesaiOrders;
+  const getTotal      = items => items.reduce((s, i) => s + i.price*i.qty, 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end animate-fadeIn"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
-      onClick={onClose}
-    >
+      style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)" }} onClick={onClose}>
       <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[2rem] animate-slideUp overflow-hidden"
-        style={{ maxHeight: "88vh" }} onClick={e => e.stopPropagation()}
-      >
+        style={{ maxHeight:"88vh" }} onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-1" />
         <div className="flex items-center justify-between px-5 pt-3 pb-4">
           <div>
             <h2 className="text-xl font-extrabold text-gray-900">Riwayat Pesanan</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Meja Nomor {mejaId} · ASTAKIRA</p>
+            <p className="text-xs text-gray-400 mt-0.5">Meja Nomor {mejaId} · {cafeName}</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
             <span className="text-gray-600 font-bold text-xl leading-none">×</span>
           </button>
         </div>
-
         <div className="px-5 mb-4">
           <div className="flex bg-gray-100 rounded-2xl p-1">
             <button onClick={() => setActiveTab("sedang")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "sedang" ? "bg-white text-amber-700 shadow-sm" : "text-gray-500"}`}
-            >
-              <span className={`w-2 h-2 rounded-full ${activeTab === "sedang" ? "bg-amber-500 animate-pulse" : "bg-gray-400"}`} />
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab==="sedang" ? "bg-white shadow-sm" : "text-gray-500"}`}
+              style={activeTab==="sedang" ? { color:"var(--p)" } : {}}>
+              <span className="w-2 h-2 rounded-full" style={{ background: activeTab==="sedang" ? "var(--p)" : "#9ca3af" }} />
               Sedang Diproses
-              {sedangOrders.length > 0 && <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{sedangOrders.length}</span>}
+              {sedangOrders.length > 0 && <span className="text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background:"var(--p)" }}>{sedangOrders.length}</span>}
             </button>
             <button onClick={() => setActiveTab("selesai")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "selesai" ? "bg-white text-gray-700 shadow-sm" : "text-gray-500"}`}
-            >
-              <Check size={13} className={activeTab === "selesai" ? "text-green-500" : "text-gray-400"} />
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab==="selesai" ? "bg-white text-gray-700 shadow-sm" : "text-gray-500"}`}>
+              <Check size={13} className={activeTab==="selesai" ? "text-green-500" : "text-gray-400"} />
               Sudah Selesai
             </button>
           </div>
         </div>
-
-        <div className="overflow-y-auto scrollbar-hide px-5 pb-8" style={{ maxHeight: "calc(88vh - 185px)" }}>
-          {loading && (
-            <div className="space-y-4">
-              {[1,2].map(i => (
-                <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm animate-pulse overflow-hidden">
-                  <div className="h-16 bg-gray-100" />
-                  <div className="p-4 space-y-3">
-                    <div className="flex gap-3">
-                      <div className="w-12 h-12 bg-gray-200 rounded-xl" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 bg-gray-200 rounded w-3/4" />
-                        <div className="h-3 bg-gray-200 rounded w-1/2" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="overflow-y-auto scrollbar-hide px-5 pb-8" style={{ maxHeight:"calc(88vh - 185px)" }}>
+          {loading && <div className="space-y-4">{[1,2].map(i => (<div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm animate-pulse overflow-hidden"><div className="h-16 bg-gray-100" /><div className="p-4 space-y-3"><div className="flex gap-3"><div className="w-12 h-12 bg-gray-200 rounded-xl" /><div className="flex-1 space-y-2"><div className="h-3 bg-gray-200 rounded w-3/4" /><div className="h-3 bg-gray-200 rounded w-1/2" /></div></div></div></div>))}</div>}
           {error && !loading && <ErrorState message={error} onRetry={refetch} />}
           {!loading && !error && displayed.length === 0 && (
             <div className="text-center py-16">
               <div className="text-5xl mb-3">🛍️</div>
               <p className="text-gray-500 font-semibold">Belum ada pesanan</p>
-              <p className="text-gray-400 text-sm mt-1">{activeTab === "sedang" ? "Tidak ada pesanan yang sedang diproses" : "Belum ada pesanan yang selesai"}</p>
+              <p className="text-gray-400 text-sm mt-1">{activeTab==="sedang" ? "Tidak ada pesanan yang sedang diproses" : "Belum ada pesanan yang selesai"}</p>
             </div>
           )}
           {!loading && !error && displayed.length > 0 && (
             <div className="space-y-4">
               {displayed.map(order => (
                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  <div className={`px-4 py-3 flex items-center justify-between ${isSedang(order.status) ? "bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100" : "bg-gray-50 border-b border-gray-100"}`}>
+                  <div className="px-4 py-3 flex items-center justify-between border-b"
+                    style={isSedang(order.status) ? { background:"var(--bg-soft)", borderColor:"var(--p-20)" } : { background:"#f9fafb", borderColor:"#f3f4f6" }}>
                     <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${isSelesai(order.status) ? "bg-green-500" : "bg-amber-500"}`}>
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                        style={{ background: isSelesai(order.status) ? "#22c55e" : "var(--p)" }}>
                         {isSelesai(order.status) ? <Check size={14} className="text-white" /> : <Clock size={14} className="text-white" />}
                       </div>
                       <div>
@@ -569,55 +538,52 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, onClose, onNavigate
                       </div>
                     </div>
                     {isSedang(order.status) ? (
-                      <div className="flex items-center gap-1.5 bg-amber-100 border border-amber-200 rounded-full px-2.5 py-1">
-                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
-                        <span className="text-[10px] font-bold text-amber-700">Est. {order.estimasi}</span>
+                      <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1 border"
+                        style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background:"var(--p)" }} />
+                        <span className="text-[10px] font-bold" style={{ color:"var(--p)" }}>Est. {order.estimasi}</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 bg-green-100 border border-green-200 rounded-full px-2.5 py-1">
-                        <Check size={10} className="text-green-600" />
-                        <span className="text-[10px] font-bold text-green-700">Selesai</span>
+                        <Check size={10} className="text-green-600" /><span className="text-[10px] font-bold text-green-700">Selesai</span>
                       </div>
                     )}
                   </div>
-
                   <div className="px-4 py-3 space-y-3">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100 bg-gray-100">
-                          {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-xl">🍽️</span></div>}
+                        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100" style={{ background:"var(--bg-soft)" }}>
+                          <MenuImage src={item.image} alt={item.name} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.name}</p>
                           <p className="text-xs text-gray-400">{item.variant ? `${item.variant} · ` : ""}{item.qty}×</p>
                         </div>
-                        <p className="text-amber-600 font-extrabold text-sm flex-shrink-0">Rp{(item.price * item.qty).toLocaleString()}</p>
+                        <p className="font-extrabold text-sm flex-shrink-0" style={{ color:"var(--p)" }}>Rp{(item.price*item.qty).toLocaleString()}</p>
                       </div>
                     ))}
                   </div>
-
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                    <p className="text-xs text-gray-500">{order.items.reduce((s, i) => s + i.qty, 0)} item</p>
+                    <p className="text-xs text-gray-500">{order.items.reduce((s,i)=>s+i.qty,0)} item</p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-gray-500">Total:</p>
                       <p className="font-extrabold text-gray-900 text-sm">Rp{getTotal(order.items).toLocaleString()}</p>
                     </div>
                   </div>
-
                   {isSedang(order.status) && (
                     <div className="px-4 pb-4 pt-1">
-                      <button onClick={() => { const c = buildCartFromOrder(order.items, menuDatabase); onClose(); onNavigateToPesanan({ cart: c, items: Object.values(menuDatabase).filter(m => c[m.id]), orderId: order.id }); }}
-                        className="w-full py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
-                      >
+                      <button onClick={() => { const c=buildCartFromOrder(order.items,menuDatabase); onClose(); onNavigateToPesanan({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]), orderId:order.id }); }}
+                        className="w-full py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                        style={{ background:"var(--grad)", color:"var(--on-p)" }}>
                         <ExternalLink size={15} /> Lihat Detail Pesanan
                       </button>
                     </div>
                   )}
                   {isSelesai(order.status) && (
                     <div className="px-4 pb-4 pt-1">
-                      <button onClick={() => { const c = buildCartFromOrder(order.items, menuDatabase); onClose(); onReorder({ cart: c, items: Object.values(menuDatabase).filter(m => c[m.id]) }); }}
-                        className="w-full py-3 border-2 border-amber-400 text-amber-700 font-bold text-sm rounded-2xl hover:bg-amber-50 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-                      >
+                      <button onClick={() => { const c=buildCartFromOrder(order.items,menuDatabase); onClose(); onReorder({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]) }); }}
+                        className="w-full py-3 border-2 font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                        style={{ borderColor:"var(--p)", color:"var(--p)" }}>
                         <RotateCcw size={15} /> 🔄 Pesan Lagi
                       </button>
                     </div>
@@ -632,35 +598,25 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, onClose, onNavigate
   );
 }
 
-// ── Lihat Semua Popup ─────────────────────────────────────────────────────────
 function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose, menuDatabase }) {
   const sectionItems = section.items.map(id => menuDatabase[id]).filter(Boolean);
-
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
-
   const badgeColor = {
-    "Promo": "bg-gradient-to-r from-red-500 to-pink-500",
-    "Favorit": "bg-gradient-to-r from-amber-500 to-orange-500",
-    "Baru": "bg-gradient-to-r from-green-500 to-emerald-500",
-    "Best Seller": "bg-gradient-to-r from-purple-500 to-pink-500",
+    "Promo":"bg-gradient-to-r from-red-500 to-pink-500", "Favorit":"bg-gradient-to-r from-amber-500 to-orange-500",
+    "Baru":"bg-gradient-to-r from-green-500 to-emerald-500", "Best Seller":"bg-gradient-to-r from-purple-500 to-pink-500",
   };
-
   return (
     <div className="fixed inset-0 z-50 flex items-end animate-fadeIn"
-      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
-      onClick={onClose}
-    >
+      style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)" }} onClick={onClose}>
       <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[2rem] animate-slideUp overflow-hidden"
-        style={{ maxHeight: "85vh" }} onClick={e => e.stopPropagation()}
-      >
+        style={{ maxHeight:"85vh" }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm"
-              style={!isImgUrl(section.logo) ? { background: "linear-gradient(135deg, #f59e0b, #ea580c)" } : {}}
-            >
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0"
+              style={{ background:"var(--grad)" }}>
               <CatLogo logo={section.logo} size={28} />
             </div>
             <div>
@@ -672,21 +628,19 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
             <span className="text-gray-600 font-bold text-xl leading-none">×</span>
           </button>
         </div>
-
-        <div className="overflow-y-auto scrollbar-hide px-4 py-4" style={{ maxHeight: "calc(85vh - 80px)" }}>
+        <div className="overflow-y-auto scrollbar-hide px-4 py-4" style={{ maxHeight:"calc(85vh - 80px)" }}>
           <div className="grid grid-cols-2 gap-3">
             {sectionItems.map(item => {
               const qty = cart[item.id] || 0;
               return (
                 <div key={item.id}
                   className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
-                  onClick={() => { onItemClick(item); onClose(); }}
-                >
-                  <div className="relative h-32 overflow-hidden bg-gray-100">
-                    {item.image_url ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><span className="text-3xl">🍽️</span></div>}
+                  onClick={() => { onItemClick(item); onClose(); }}>
+                  <div className="relative h-32 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
+                    <MenuImage src={item.image_url} alt={item.name} />
                     {item.badge && (
                       <div className={`absolute top-2 left-2 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow ${badgeColor[item.badge] || "bg-gray-500"}`}>
-                        {item.badge === "Promo" && item.discount ? `-${item.discount}` : item.badge}
+                        {item.badge==="Promo" && item.discount ? `-${item.discount}` : item.badge}
                       </div>
                     )}
                   </div>
@@ -694,17 +648,20 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
                     <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.name}</p>
                     {item.tagline && <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{item.tagline}</p>}
                     <div className="flex items-baseline gap-1.5 mt-1">
-                      <p className="text-amber-600 font-extrabold text-sm">Rp{item.price.toLocaleString()}</p>
+                      <p className="font-extrabold text-sm" style={{ color:"var(--p)" }}>Rp{item.price.toLocaleString()}</p>
                       {item.originalPrice && <p className="text-gray-400 text-[10px] line-through">Rp{Number(item.originalPrice).toLocaleString()}</p>}
                     </div>
                     <div className="mt-2" onClick={e => e.stopPropagation()}>
                       {qty === 0 ? (
-                        <button onClick={() => onAdd(item.id)} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold py-1.5 rounded-xl hover:shadow-md hover:scale-105 transition-all">+ Tambah</button>
+                        <button onClick={() => onAdd(item.id)}
+                          className="w-full text-xs font-bold py-1.5 rounded-xl hover:shadow-md hover:scale-105 transition-all"
+                          style={{ background:"var(--grad)", color:"var(--on-p)" }}>+ Tambah</button>
                       ) : (
-                        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-2 py-1">
-                          <button onClick={() => onRemove(item.id)} className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">−</button>
-                          <span className="font-bold text-amber-800 text-xs">{qty}</span>
-                          <button onClick={() => onAdd(item.id)} className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">+</button>
+                        <div className="flex items-center justify-between rounded-xl px-2 py-1 border"
+                          style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
+                          <button onClick={() => onRemove(item.id)} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background:"var(--p)" }}>−</button>
+                          <span className="font-bold text-xs" style={{ color:"var(--s)" }}>{qty}</span>
+                          <button onClick={() => onAdd(item.id)} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background:"var(--p)" }}>+</button>
                         </div>
                       )}
                     </div>
@@ -719,11 +676,9 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
   );
 }
 
-// ── Main Home Component ───────────────────────────────────────────────────────
 export default function Home() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
   const MEJA_ID = searchParams.get("table")   ?? "1";
   const CAFE_ID = searchParams.get("cafe_id") ?? "";
 
@@ -734,22 +689,38 @@ export default function Home() {
   const [cart, setCart]                           = useState({});
   const sectionRefs = useRef({});
 
-  const { data: menuRaw, loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
-    () => api.get(`api/menu/user/${CAFE_ID}`).then(r => r.data ?? r),
+  const { data: menuRaw,       loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
+    () => CAFE_ID ? api.get(`api/menu/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
     [CAFE_ID]
   );
-
   const { data: categoriesRaw, loading: catLoading, error: catError, refetch: refetchCat } = useApi(
-    () => api.get(`api/kategori/user/${CAFE_ID}`).then(r => r.data ?? r),
+    () => CAFE_ID ? api.get(`api/kategori/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
+    [CAFE_ID]
+  );
+  const { data: cafeRaw } = useApi(
+    () => CAFE_ID ? api.get(`api/pengaturan/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve(null),
     [CAFE_ID]
   );
 
-  const menuDatabase     = menuRaw ? buildMenuDatabase(menuRaw) : {};
-  // ✅ normalizeCategory ambil nama_kategori sebagai label
-  const normalizedCats   = (categoriesRaw ?? []).map(normalizeCategory);
-  // ✅ buildCategorySections group menu berdasarkan category_id
-  const categorySections = buildCategorySections(normalizedCats, menuDatabase);
-  const categories       = [{ id: "all", label: "Semua", logo: "" }, ...normalizedCats];
+  const cafeProfile = useMemo(() => ({
+    nama:    cafeRaw?.nama_cafe  ?? cafeRaw?.nama    ?? cafeRaw?.name   ?? "ASTAKIRA",
+    alamat:  cafeRaw?.alamat     ?? cafeRaw?.address ?? cafeRaw?.lokasi ?? "",
+    logo:    fixImgUrl(cafeRaw?.logo_cafe ?? cafeRaw?.logo ?? cafeRaw?.foto ?? cafeRaw?.icon ?? ""),
+    tagline: cafeRaw?.tagline    ?? cafeRaw?.deskripsi ?? "",
+  }), [cafeRaw]);
+
+  const theme = useMemo(() => parseTheme(cafeRaw?.tema_colors), [cafeRaw]);
+
+  useEffect(() => {
+    applyThemeVars(theme);
+    try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme)); } catch {}
+    return () => document.documentElement.removeAttribute("style");
+  }, [theme]);
+
+  const menuDatabase     = useMemo(() => menuRaw ? buildMenuDatabase(menuRaw) : {}, [menuRaw]);
+  const normalizedCats   = useMemo(() => (categoriesRaw ?? []).map(normalizeCategory), [categoriesRaw]);
+  const categorySections = useMemo(() => buildCategorySections(normalizedCats, menuDatabase), [normalizedCats, menuDatabase]);
+  const categories       = useMemo(() => [{ id:"all", label:"Semua", logo:"" }, ...normalizedCats], [normalizedCats]);
 
   const allItems   = Object.values(menuDatabase);
   const totalQty   = Object.values(cart).reduce((a, b) => a + b, 0);
@@ -758,56 +729,69 @@ export default function Home() {
   const isLoading  = menuLoading || catLoading;
   const hasError   = (menuError || catError) && !isLoading;
 
-  const addItem    = (id) => setCart(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  const removeItem = (id) => setCart(prev => {
-    const u = { ...prev };
-    if (u[id] > 1) u[id]--; else delete u[id];
-    return u;
-  });
-  const handleSheetAdd       = (id, qty) => setCart(prev => ({ ...prev, [id]: (prev[id] || 0) + qty }));
-  const handleCheckout       = () => navigate("/pesanan", { state: { cart, items: cartItems } });
-  const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) =>
-    navigate("/pesanan", { state: { cart: oc, items: oi, fromRiwayat: true, orderId } });
-  const handleReorder = ({ cart: rc }) => {
+  const addItem    = (id) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+1 }));
+  const removeItem = (id) => setCart(prev => { const u={...prev}; if(u[id]>1) u[id]--; else delete u[id]; return u; });
+  const handleSheetAdd          = (id, qty) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+qty }));
+  const handleCheckout          = () => navigate("/pesanan", { state:{ cart, items:cartItems } });
+  const handleNavigateToPesanan = ({ cart:oc, items:oi, orderId }) => navigate("/pesanan", { state:{ cart:oc, items:oi, fromRiwayat:true, orderId } });
+  const handleReorder = ({ cart:rc }) => {
     const merged = { ...cart };
-    Object.entries(rc).forEach(([id, qty]) => { merged[id] = (merged[id] || 0) + qty; });
+    Object.entries(rc).forEach(([id, qty]) => { merged[id] = (merged[id]||0)+qty; });
     setCart(merged);
-    navigate("/pesanan", { state: { cart: merged, items: Object.values(menuDatabase).filter(m => merged[m.id]), isReorder: true } });
+    navigate("/pesanan", { state:{ cart:merged, items:Object.values(menuDatabase).filter(m=>merged[m.id]), isReorder:true } });
   };
-
   const handleCategoryClick = (catId) => {
     setActiveCategory(catId);
-    if (catId === "all") { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (catId === "all") { window.scrollTo({ top:0, behavior:"smooth" }); return; }
     const el = sectionRefs.current[catId];
-    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 172, behavior: "smooth" });
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 172, behavior:"smooth" });
   };
 
   return (
-    <div className="relative min-h-screen bg-gray-50">
+    <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
 
-      {/* ── NAVBAR ── */}
+      {/* NAVBAR */}
       <div className="sticky top-0 z-40 bg-white shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-md">
-                <span className="text-white font-extrabold text-lg">A</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-md flex-shrink-0"
+                style={{ background:"var(--grad)" }}>
+                {cafeProfile.logo ? (
+                  <img src={cafeProfile.logo} alt={cafeProfile.nama} className="w-full h-full object-cover"
+                    onError={e => {
+                      e.currentTarget.style.display = "none";
+                      e.currentTarget.parentElement.innerHTML =
+                        `<span style="color:var(--on-p);font-weight:800;font-size:1.125rem">${cafeProfile.nama.charAt(0).toUpperCase()}</span>`;
+                    }} />
+                ) : (
+                  <span style={{ color:"var(--on-p)", fontWeight:800, fontSize:"1.125rem" }}>
+                    {cafeProfile.nama.charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
               <div>
-                <p className="font-extrabold text-sm text-gray-900 leading-none">ASTAKIRA</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <MapPin size={10} className="text-amber-500" />
-                  <p className="text-xs text-gray-400">Ciakar, Tasikmalaya</p>
-                </div>
+                <p className="font-extrabold text-sm text-gray-900 leading-none">{cafeProfile.nama}</p>
+                {cafeProfile.alamat && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <MapPin size={10} style={{ color:"var(--p)" }} />
+                    <p className="text-xs text-gray-400 max-w-[160px] truncate">{cafeProfile.alamat}</p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => navigate("/search")} className="w-9 h-9 flex items-center justify-center bg-amber-50 rounded-xl hover:bg-amber-100 transition-all">
-                <Search size={17} className="text-amber-700" />
+              {/* ✅ FIX: navigate ke search dengan query params */}
+              <button onClick={() => navigate(`/search?table=${MEJA_ID}&cafe_id=${CAFE_ID}`)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl transition-all"
+                style={{ background:"var(--bg-soft)" }}>
+                <Search size={17} style={{ color:"var(--p)" }} />
               </button>
-              <button onClick={() => setShowRiwayat(true)} className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl px-3 h-9 shadow-md hover:shadow-lg transition-all">
-                <ShoppingBag size={15} className="text-white" />
-                <span className="text-white text-xs font-bold">Riwayat</span>
+              <button onClick={() => setShowRiwayat(true)}
+                className="flex items-center gap-1.5 rounded-xl px-3 h-9 shadow-md hover:shadow-lg transition-all"
+                style={{ background:"var(--grad)" }}>
+                <ShoppingBag size={15} style={{ color:"var(--on-p)" }} />
+                <span className="text-xs font-bold" style={{ color:"var(--on-p)" }}>Riwayat</span>
               </button>
             </div>
           </div>
@@ -815,28 +799,28 @@ export default function Home() {
       </div>
 
       <div className="max-w-md mx-auto">
-
-        {/* ── HERO ── */}
+        {/* HERO */}
         <div className="relative h-44 overflow-hidden">
           <img src="https://images.unsplash.com/photo-1765894711260-9d881459ddb4?w=800&auto=format" alt="Hero" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
         </div>
 
-        {/* ── MEJA BANNER ── */}
+        {/* MEJA BANNER */}
         <div className="px-4 pt-4 mb-5">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl px-5 py-3.5 flex items-center justify-center shadow-lg shadow-amber-500/25">
-            <p className="text-white font-bold text-base">Meja Nomor {MEJA_ID}</p>
+          <div className="rounded-2xl px-5 py-3.5 flex items-center justify-center shadow-lg"
+            style={{ background:"var(--grad)" }}>
+            <p className="font-bold text-base" style={{ color:"var(--on-p)" }}>Meja Nomor {MEJA_ID}</p>
           </div>
         </div>
 
-        {/* ── CATEGORY BAR ── */}
-        <div className="sticky top-16 z-30 bg-gray-50 pb-3 pt-2">
+        {/* CATEGORY BAR */}
+        <div className="sticky top-16 z-30 pb-3 pt-2" style={{ background:"var(--bg)" }}>
           <div className="px-4 mb-2">
             <h2 className="text-base font-bold text-gray-900">Pilihan Kuliner Favoritmu</h2>
           </div>
           <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-hide px-4 pt-2">
             {catLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
+              ? Array.from({ length:5 }).map((_,i) => (
                   <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1.5 animate-pulse">
                     <div className="w-14 h-14 rounded-2xl bg-gray-200" />
                     <div className="h-2 w-12 bg-gray-200 rounded" />
@@ -844,32 +828,32 @@ export default function Home() {
                 ))
               : categories.map(cat => {
                   const isActive = activeCategory === String(cat.id);
-                  const logo     = cat.logo ?? "";
-                  const isImg    = isImgUrl(logo);
                   return (
                     <button key={cat.id} onClick={() => handleCategoryClick(String(cat.id))}
-                      className="flex-shrink-0 flex flex-col items-center gap-1.5"
-                    >
-                      <div
-                        className={`w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center transition-all duration-200 ${
-                          isActive ? "scale-110 shadow-lg ring-2 ring-amber-400 ring-offset-2" : "bg-white border-2 border-gray-100 shadow-sm"
-                        }`}
-                        style={isActive && !isImg ? { background: "linear-gradient(135deg, #f59e0b, #ea580c)" } : {}}
-                      >
+                      className="flex-shrink-0 flex flex-col items-center gap-1.5">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center transition-all duration-200"
+                        style={{
+                          background:    "var(--grad)",
+                          transform:     isActive ? "scale(1.1)" : "scale(1)",
+                          boxShadow:     isActive ? `0 8px 20px var(--p-20)` : "0 1px 4px rgba(0,0,0,0.08)",
+                          outline:       isActive ? "2px solid var(--p)" : "none",
+                          outlineOffset: "2px",
+                        }}>
                         {cat.id === "all" ? (
-                          <span className="text-2xl leading-none">🍽️</span>
-                        ) : isImg ? (
-                          <img src={logo} alt={cat.label} className="w-full h-full object-cover"
-                            onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement.innerHTML = '<span style="font-size:22px;line-height:1">🍽️</span>'; }}
-                          />
-                        ) : logo ? (
-                          <span className="text-2xl leading-none">{logo}</span>
+                          <Image size={22} style={{ color:"var(--on-p)" }} />
+                        ) : cat.logo ? (
+                          <img src={cat.logo} alt={cat.label} className="w-full h-full object-cover"
+                            onError={e => {
+                              e.currentTarget.style.display = "none";
+                              e.currentTarget.parentElement.innerHTML =
+                                `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+                            }} />
                         ) : (
-                          <span className="text-2xl leading-none">🍽️</span>
+                          <Image size={22} style={{ color:"var(--on-p)", opacity:0.8 }} />
                         )}
                       </div>
-                      {/* ✅ cat.label = nama_kategori dari backend */}
-                      <span className={`text-[11px] font-semibold whitespace-nowrap ${isActive ? "text-amber-600" : "text-gray-500"}`}>
+                      <span className="text-[11px] font-semibold whitespace-nowrap"
+                        style={{ color: isActive ? "var(--p)" : "#6b7280" }}>
                         {cat.label}
                       </span>
                     </button>
@@ -879,7 +863,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ── MENU SECTIONS ── */}
+        {/* MENU SECTIONS */}
         <div className="pb-36 mt-2">
           {hasError && <ErrorState message={menuError || catError} onRetry={() => { refetchMenu(); refetchCat(); }} />}
           {isLoading && <><SkeletonSection /><SkeletonSection /><SkeletonSection /></>}
@@ -892,38 +876,34 @@ export default function Home() {
           {!isLoading && !hasError && categorySections.map(section => {
             const sectionItems = section.items.map(id => menuDatabase[id]).filter(Boolean);
             if (!sectionItems.length) return null;
-            const logo  = section.logo ?? "";
-            const isImg = isImgUrl(logo);
             return (
-              <div key={section.id}
-                id={`section-${section.id}`}
+              <div key={section.id} id={`section-${section.id}`}
                 ref={el => { sectionRefs.current[String(section.id)] = el; }}
-                className="mb-8"
-              >
+                className="mb-8">
                 <div className="px-4 flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    {/* ✅ Logo section: foto atau fallback gradient+emoji */}
-                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm"
-                      style={!isImg ? { background: "linear-gradient(135deg, #f59e0b, #ea580c)" } : {}}
-                    >
-                      {isImg
-                        ? <img src={logo} alt={section.label} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
-                        : <span className="text-base leading-none">{logo || "🍽️"}</span>
-                      }
+                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0"
+                      style={{ background:"var(--grad)" }}>
+                      {section.logo ? (
+                        <img src={section.logo} alt={section.label} className="w-full h-full object-cover"
+                          onError={e => { e.currentTarget.style.display = "none"; }} />
+                      ) : (
+                        <Image size={16} style={{ color:"var(--on-p)" }} />
+                      )}
                     </div>
-                    {/* ✅ section.label = nama_kategori */}
                     <h2 className="text-base font-bold text-gray-900">{section.label}</h2>
                   </div>
-                  <button onClick={() => setLihatSemuaSection(section)} className="text-xs text-amber-600 font-semibold hover:text-amber-700 transition-colors">
+                  <button onClick={() => setLihatSemuaSection(section)}
+                    className="text-xs font-semibold transition-colors"
+                    style={{ color:"var(--p)" }}>
                     Lihat Semua →
                   </button>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-4">
                   {sectionItems.map(item => (
-                    <MenuCard key={item.id} item={item} qty={cart[item.id] || 0}
+                    <MenuCard key={item.id} item={item} qty={cart[item.id]||0}
                       onAdd={() => addItem(item.id)} onRemove={() => removeItem(item.id)}
-                      onClick={() => setSelectedItem(item)}
-                    />
+                      onClick={() => setSelectedItem(item)} />
                   ))}
                 </div>
               </div>
@@ -931,27 +911,28 @@ export default function Home() {
           })}
         </div>
 
-        {/* ── FLOATING CHECKOUT ── */}
+        {/* FLOATING CHECKOUT */}
         {totalQty > 0 && !selectedItem && (
           <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-6">
             <div className="max-w-md mx-auto">
               <button onClick={handleCheckout}
-                className="w-full bg-gradient-to-r from-amber-600 to-orange-600 rounded-3xl p-5 shadow-2xl border border-amber-400/50 hover:scale-[1.01] transition-all"
-              >
+                className="w-full rounded-3xl p-5 shadow-2xl hover:scale-[1.01] transition-all border"
+                style={{ background:"var(--grad)", borderColor:"var(--p-20)" }}>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center border border-white/30 relative">
-                      <ShoppingBag className="text-white" size={20} />
+                      <ShoppingBag style={{ color:"var(--on-p)" }} size={20} />
                       <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
                         <span className="text-white text-[10px] font-bold">{totalQty}</span>
                       </div>
                     </div>
                     <div className="text-left">
-                      <p className="text-white/80 text-xs font-medium mb-0.5">{totalQty} Item dipilih</p>
-                      <p className="text-white text-xl font-bold">Rp{totalPrice.toLocaleString()}</p>
+                      <p className="text-xs font-medium mb-0.5" style={{ color:"var(--on-p)", opacity:0.8 }}>{totalQty} Item dipilih</p>
+                      <p className="text-xl font-bold" style={{ color:"var(--on-p)" }}>Rp{totalPrice.toLocaleString()}</p>
                     </div>
                   </div>
-                  <div className="bg-white text-amber-700 px-6 py-3 rounded-2xl font-bold shadow-xl whitespace-nowrap">Checkout →</div>
+                  <div className="bg-white px-6 py-3 rounded-2xl font-bold shadow-xl whitespace-nowrap"
+                    style={{ color:"var(--p)" }}>Checkout →</div>
                 </div>
               </button>
             </div>
@@ -961,30 +942,28 @@ export default function Home() {
 
       {showRiwayat && (
         <RiwayatPesananSheet menuDatabase={menuDatabase} mejaId={MEJA_ID} cafeId={CAFE_ID}
-          onClose={() => setShowRiwayat(false)} onNavigateToPesanan={handleNavigateToPesanan} onReorder={handleReorder}
-        />
+          cafeName={cafeProfile.nama}
+          onClose={() => setShowRiwayat(false)} onNavigateToPesanan={handleNavigateToPesanan} onReorder={handleReorder} />
       )}
       {lihatSemuaSection && (
         <LihatSemuaPopup section={lihatSemuaSection} cart={cart} menuDatabase={menuDatabase}
-          onAdd={addItem} onRemove={removeItem} onItemClick={setSelectedItem} onClose={() => setLihatSemuaSection(null)}
-        />
+          onAdd={addItem} onRemove={removeItem} onItemClick={setSelectedItem} onClose={() => setLihatSemuaSection(null)} />
       )}
       {selectedItem && (
         <MenuDetailSheet item={selectedItem} menuDatabase={menuDatabase}
-          onClose={() => setSelectedItem(null)} onAddToCart={handleSheetAdd} onOpenItem={item => setSelectedItem(item)}
-        />
+          onClose={() => setSelectedItem(null)} onAddToCart={handleSheetAdd} onOpenItem={item => setSelectedItem(item)} />
       )}
 
       <style>{`
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .animate-slideUp { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-        .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .scrollbar-hide::-webkit-scrollbar { display:none; }
+        .scrollbar-hide { -ms-overflow-style:none; scrollbar-width:none; }
+        @keyframes slideUp { from { transform:translateY(100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
+        @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+        .animate-slideUp { animation:slideUp 0.4s cubic-bezier(0.16,1,0.3,1); }
+        .animate-fadeIn  { animation:fadeIn 0.3s ease-out; }
+        .line-clamp-1 { display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+        .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
       `}</style>
     </div>
   );
-}
+} 

@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import { ConfirmDialog } from "../components/SharedComponents";
 
 // FIX: IP diperbaiki dari .13 ke .3
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -13,7 +13,7 @@ const authHeaders = () => ({
 });
 
 const emptyForm = {
-  code: "", discountType: "persen", discountValue: "",
+  nama_promo: "", code: "", discountType: "persen", discountValue: "",
   minOrder: "", startDate: todayStr, endDate: "",
 };
 
@@ -63,6 +63,7 @@ export default function KelolaPromo() {
   const openEdit = (p) => {
     console.log("Edit promo data:", p);
     setForm({
+      nama_promo:    p.nama_promo    ?? "",
       code:          p.kode_promo    ?? p.code          ?? p.kode          ?? "",
       discountType:  (() => { const t = p.tipe_diskon ?? p.discountType ?? p.discount_type; return (t === 0 || t === "0" || t === "persen" || t === "percent") ? "persen" : "nominal"; })(),
       discountValue: p.nilai         ?? p.discountValue ?? p.discount_value ?? "",
@@ -86,6 +87,7 @@ export default function KelolaPromo() {
     setSaving(true);
     try {
       const payload = {
+        nama_promo:    form.nama_promo.trim(),
         kode_promo:    form.code.toUpperCase(),
         tipe_diskon:   form.discountType === "persen" ? 0 : 1,
         nilai:         Number(form.discountValue),
@@ -156,20 +158,22 @@ export default function KelolaPromo() {
   };
 
   const getCode      = (p) => p.kode_promo    ?? p.code      ?? p.kode      ?? "-";
+  const getNamaPromo = (p) => p.nama_promo    ?? "";
   const getMinOrder  = (p) => Number(p.minimum_order ?? p.minOrder ?? p.min_order ?? 0) || 0;
   const getStartDate = (p) => toDate(p.mulai_date    ?? p.startDate  ?? p.start_date) || "-";
   const getEndDate   = (p) => toDate(p.berakhir_date ?? p.endDate    ?? p.end_date)   || "-";
 
   const normPromo = (p) => ({
     ...p,
-    code:          getCode(p),
-    discountType:  isPersen(p) ? "persen" : "nominal",
-    discountValue: p.nilai         ?? p.discountValue ?? p.discount_value,
-    minOrder:      getMinOrder(p),
-    startDate:     getStartDate(p),
-    endDate:       getEndDate(p),
-    discount:      getDiscount(p),
-    used:          p.used ?? 0,
+    nama_promo:     getNamaPromo(p),
+    code:           getCode(p),
+    discountType:   isPersen(p) ? "persen" : "nominal",
+    discountValue:  p.nilai         ?? p.discountValue ?? p.discount_value,
+    minOrder:       getMinOrder(p),
+    startDate:      getStartDate(p),
+    endDate:        getEndDate(p),
+    discount:       getDiscount(p),
+    used:           p.used ?? 0,
   });
 
   const activeCount = promos.filter(p => isPromoActive(normPromo(p))).length;
@@ -234,6 +238,7 @@ export default function KelolaPromo() {
                     </div>
                     <div>
                       <p className="font-black text-gray-900 text-sm font-mono tracking-wide">{promo.code}</p>
+                      {promo.nama_promo && <p className="text-xs text-gray-600 font-medium mt-0.5">{promo.nama_promo}</p>}
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${status.color}`}>{status.icon} {status.label}</span>
                     </div>
                   </div>
@@ -285,6 +290,17 @@ export default function KelolaPromo() {
               <button onClick={() => setShowForm(false)} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center text-white"><X size={16}/></button>
             </div>
             <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                  Nama Promo
+                </label>
+                <input
+                  value={form.nama_promo}
+                  onChange={e => setF("nama_promo", e.target.value)}
+                  placeholder="Diskon Akhir Tahun"
+                  className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-500 transition-all"
+                />
+              </div>
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
                   Kode Promo <span className="text-red-500">*</span>

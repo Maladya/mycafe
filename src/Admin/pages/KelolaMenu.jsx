@@ -1,55 +1,21 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Search, Image, Edit3, Trash2, ChevronLeft, ChevronRight, X, Smile } from "lucide-react";
+import { Plus, Search, Image, Edit3, Trash2, ChevronLeft, ChevronRight, X, Camera, Loader2 } from "lucide-react";
 import { defaultCategories, getCatColor } from "../data/constants";
 import { useAdmin } from "../AdminPanel";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
 const PER_PAGE = 6;
 
-// ── Daftar emoji untuk picker ────────────────────────────────────────────────
-const EMOJI_LIST = [
-  "☕","🍵","🧋","🥤","🍹","🍺","🧃","🥛","🍶",
-  "🍕","🍔","🌮","🌯","🥪","🥗","🍜","🍝","🍛",
-  "🍱","🍣","🍤","🍗","🥩","🍖","🥚","🧆","🫕",
-  "🍰","🎂","🧁","🍩","🍪","🍫","🍬","🍮","🍧",
-  "🥐","🥖","🧇","🥞","🧈","🫔","🌽","🥦","🥕",
-  "🍟","🌭","🫙","🥣","🥘","🍲","🥫","🫕","🍥",
-  "🍿","🧂","🫒","🥜","🌰","🥨","🍡","🍢","🥮",
-  "🎁","⭐","🔥","💎","👑","🏆","🎯","💫","✨",
-];
-
-// ── Normalisasi URL gambar ────────────────────────────────────────────────────
-// Ambil logo dari objek kategori — cek semua kemungkinan field name
+// ── Ambil logo dari objek kategori — cek semua kemungkinan field name ─────────
 const getCatLogo = (c) => c?.logo ?? c?.icon ?? "";
 
-// Deteksi apakah string adalah URL/base64 gambar (bukan emoji)
-const isImageSrc = (str) => {
-  if (!str) return false;
-  return str.startsWith("http") || str.startsWith("https") || str.startsWith("data:image") || str.startsWith("/");
-};
-
-// Komponen logo kategori — otomatis render <img> atau emoji/teks
-function CatLogo({ logo, size = 20, className = "" }) {
-  if (!logo) return null;
-  if (isImageSrc(logo)) {
-    return (
-      <img
-        src={logo}
-        alt="logo"
-        style={{ width: size, height: size }}
-        className={`rounded-md object-cover flex-shrink-0 ${className}`}
-        onError={e => { e.currentTarget.style.display = "none"; }}
-      />
-    );
-  }
-  // Emoji / teks biasa
-  return <span className="leading-none flex-shrink-0" style={{ fontSize: size - 4 }}>{logo}</span>;
-}
-
+// ── Perbaiki URL gambar agar selalu pakai host yang benar ─────────────────────
 const fixImgUrl = (url) => {
   if (!url?.trim()) return "";
+  // Jika base64 atau relative path, kembalikan apa adanya
+  if (url.startsWith("data:") || url.startsWith("/")) return url;
   try {
     const parsed = new URL(url);
     const base   = new URL(API_URL);
@@ -59,82 +25,138 @@ const fixImgUrl = (url) => {
     }
     return parsed.toString();
   } catch {
-    return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+    return `${API_URL}/${url}`;
   }
 };
 
-// ── Emoji Picker Modal ────────────────────────────────────────────────────────
-function EmojiPicker({ currentEmoji, onSelect, onClose }) {
-  const ref = useRef(null);
+// ── Komponen logo kategori — render gambar atau fallback ──────────────────────
+function CatLogo({ logo, size = 20, className = "" }) {
+  const [err, setErr] = useState(false);
+  const fixedUrl = fixImgUrl(logo);
 
-  // Tutup saat klik di luar
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  if (!logo) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={`rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0 ${className}`}
+      >
+        <Image size={size * 0.55} className="text-gray-300" />
+      </div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={`rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0 ${className}`}
+      >
+        <Image size={size * 0.55} className="text-amber-400" />
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div ref={ref} className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div>
-            <h3 className="font-black text-gray-900 text-base">Pilih Logo Kategori</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Tap emoji untuk memilih</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center text-gray-500 transition-all">
-            <X size={15}/>
-          </button>
-        </div>
+    <img
+      src={fixedUrl}
+      alt="logo"
+      style={{ width: size, height: size }}
+      className={`rounded-md object-cover flex-shrink-0 ${className}`}
+      onError={() => setErr(true)}
+    />
+  );
+}
 
-        {/* Preview current */}
-        <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-3">
-          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-amber-200">
-            {currentEmoji || "?"}
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Logo saat ini</p>
-            <p className="text-sm font-bold text-gray-700">{currentEmoji || "Belum dipilih"}</p>
-          </div>
-        </div>
+// ── Upload logo (base64) ──────────────────────────────────────────────────────
+function useLogoUpload() {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError]         = useState("");
 
-        {/* Emoji grid */}
-        <div className="p-4 grid grid-cols-9 gap-1.5 max-h-64 overflow-y-auto scrollbar-hide">
-          {EMOJI_LIST.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => onSelect(emoji)}
-              className={`w-9 h-9 flex items-center justify-center text-xl rounded-xl transition-all hover:bg-amber-100 hover:scale-110 active:scale-95 ${currentEmoji === emoji ? "bg-amber-500 shadow-md scale-110" : "hover:bg-amber-50"}`}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
+  const upload = (file, onDone) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("File harus berupa gambar"); return; }
+    if (file.size > 2 * 1024 * 1024)    { setError("Ukuran logo max 2MB"); return; }
+    setError(""); setUploading(true);
+    const reader = new FileReader();
+    reader.onload  = (e) => { onDone(e.target.result); setUploading(false); };
+    reader.onerror = ()  => { setError("Gagal membaca file"); setUploading(false); };
+    reader.readAsDataURL(file);
+  };
 
-        {/* Hapus logo */}
-        <div className="px-4 pb-4">
-          <button
-            onClick={() => onSelect("")}
-            className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 font-semibold hover:border-red-300 hover:text-red-400 transition-all"
-          >
-            🗑️ Hapus Logo
-          </button>
-        </div>
+  return { upload, uploading, error, setError };
+}
+
+// ── Logo Upload Button (inline preview) ──────────────────────────────────────
+function LogoUploadButton({ logoUrl, onChange, size = "md" }) {
+  const inputRef = useRef();
+  const { upload, uploading, error, setError } = useLogoUpload();
+  const fixedUrl = fixImgUrl(logoUrl);
+
+  const dim     = size === "sm" ? "w-9 h-9" : "w-16 h-16";
+  const iconSz  = size === "sm" ? 10 : 18;
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div
+        className={`relative ${dim} rounded-xl overflow-hidden border-2 cursor-pointer group flex-shrink-0
+          ${fixedUrl ? "border-amber-300" : "border-dashed border-gray-300 hover:border-amber-400 bg-gray-50"}`}
+        onClick={() => !uploading && inputRef.current?.click()}
+        title="Klik untuk upload logo"
+      >
+        {fixedUrl ? (
+          <>
+            <img
+              src={fixedUrl}
+              alt="logo"
+              className="w-full h-full object-cover"
+              onError={e => { e.currentTarget.style.display = "none"; }}
+            />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+              {uploading
+                ? <Loader2 size={iconSz} className="text-white animate-spin"/>
+                : <Camera  size={iconSz} className="text-white"/>
+              }
+            </div>
+          </>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            {uploading
+              ? <Loader2 size={iconSz} className="text-amber-500 animate-spin"/>
+              : <Camera  size={iconSz} className="text-gray-300"/>
+            }
+          </div>
+        )}
       </div>
+
+      {fixedUrl && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onChange(""); setError(""); }}
+          className="text-[9px] text-red-400 hover:text-red-600 font-semibold leading-none"
+        >
+          Hapus
+        </button>
+      )}
+      {error && <p className="text-[9px] text-red-500 text-center">{error}</p>}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => upload(e.target.files?.[0], onChange)}
+      />
     </div>
   );
 }
 
-// ── Edit Kategori Modal ───────────────────────────────────────────────────────
+// ── Edit / Tambah Kategori Modal ──────────────────────────────────────────────
 function EditKategoriModal({ kategori, onSave, onClose, saving }) {
-  const [nama,  setNama]  = useState(kategori?.nama_kategori ?? "");
-  const [icon,  setIcon]  = useState(kategori?.icon ?? "");
-  const [showPicker, setShowPicker] = useState(false);
+  const [nama, setNama] = useState(kategori?.nama_kategori ?? "");
+  const [logo, setLogo] = useState(kategori?.logo ?? kategori?.icon ?? "");
 
   const handleSubmit = () => {
     if (!nama.trim()) return;
-    onSave({ ...kategori, nama_kategori: nama.trim(), icon });
+    onSave({ ...kategori, nama_kategori: nama.trim(), logo, icon: logo });
   };
 
   return (
@@ -151,21 +173,17 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Logo picker */}
+          {/* Logo upload */}
           <div>
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Logo / Ikon</label>
-            <button
-              onClick={() => setShowPicker(true)}
-              className="flex items-center gap-3 w-full border-2 border-dashed border-gray-200 hover:border-amber-400 rounded-2xl px-4 py-3 transition-all group"
-            >
-              <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-2xl group-hover:bg-amber-100 transition-all border border-amber-200">
-                {icon || <Smile size={20} className="text-amber-400"/>}
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3 block">Logo Kategori</label>
+            <div className="flex items-center gap-4">
+              <LogoUploadButton logoUrl={logo} onChange={setLogo} size="lg" />
+              <div className="flex-1 text-xs text-gray-400 space-y-1">
+                <p className="font-semibold text-gray-600">Upload gambar logo</p>
+                <p>PNG, JPG, WEBP · Maks 2MB</p>
+                <p>Klik kotak untuk pilih file</p>
               </div>
-              <div className="text-left">
-                <p className="text-sm font-semibold text-gray-700">{icon ? "Ganti Logo" : "Pilih Logo"}</p>
-                <p className="text-xs text-gray-400">Tap untuk pilih emoji</p>
-              </div>
-            </button>
+            </div>
           </div>
 
           {/* Nama kategori */}
@@ -174,8 +192,10 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
             <input
               value={nama}
               onChange={e => setNama(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
               placeholder="Contoh: Kopi, Makanan, Dessert..."
               className="w-full border-2 border-gray-200 focus:border-amber-500 rounded-xl px-4 py-2.5 text-sm outline-none transition-all"
+              autoFocus
             />
           </div>
 
@@ -183,7 +203,14 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
           <div className="bg-gray-50 rounded-2xl p-3 flex items-center gap-3">
             <span className="text-xs text-gray-400 font-semibold">Preview:</span>
             <div className="flex items-center gap-2 bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold">
-              {icon && <span>{icon}</span>}
+              {logo && (
+                <img
+                  src={fixImgUrl(logo)}
+                  alt="logo"
+                  className="w-4 h-4 rounded object-cover"
+                  onError={e => { e.currentTarget.style.display = "none"; }}
+                />
+              )}
               <span>{nama || "Nama Kategori"}</span>
             </div>
           </div>
@@ -206,15 +233,6 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
           </div>
         </div>
       </div>
-
-      {/* Emoji Picker */}
-      {showPicker && (
-        <EmojiPicker
-          currentEmoji={icon}
-          onSelect={(e) => { setIcon(e); setShowPicker(false); }}
-          onClose={() => setShowPicker(false)}
-        />
-      )}
     </div>
   );
 }
@@ -223,25 +241,25 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
 export default function KelolaMenu() {
   const { menuItems, setMenuItems, showToast } = useAdmin();
 
-  const [categories,    setCategories]    = useState(defaultCategories);
-  const [search,        setSearch]        = useState("");
-  const [catFilter,     setCatFilter]     = useState("all");
-  const [showForm,      setShowForm]      = useState(false);
-  const [editItem,      setEditItem]      = useState(null);
-  const [confirmDel,    setConfirmDel]    = useState(null);
-  const [page,          setPage]          = useState(1);
-  const [saving,        setSaving]        = useState(false);
-  const [deleting,      setDeleting]      = useState(false);
-  const [showDetail,    setShowDetail]    = useState(null);
+  const [categories,   setCategories]   = useState(defaultCategories);
+  const [search,       setSearch]       = useState("");
+  const [catFilter,    setCatFilter]    = useState("all");
+  const [showForm,     setShowForm]     = useState(false);
+  const [editItem,     setEditItem]     = useState(null);
+  const [confirmDel,   setConfirmDel]   = useState(null);
+  const [page,         setPage]         = useState(1);
+  const [saving,       setSaving]       = useState(false);
+  const [deleting,     setDeleting]     = useState(false);
+  const [showDetail,   setShowDetail]   = useState(null);
 
-  // State untuk kelola kategori
-  const [editKategori,   setEditKategori]  = useState(null);  // null = tutup, {} = tambah baru, obj = edit
-  const [savingKat,      setSavingKat]     = useState(false);
-  const [confirmDelKat,  setConfirmDelKat] = useState(null);
-  const [deletingKat,    setDeletingKat]   = useState(false);
-  const [manageKatMode,  setManageKatMode] = useState(false); // mode kelola kategori
+  // Kelola kategori
+  const [editKategori,  setEditKategori]  = useState(null);
+  const [savingKat,     setSavingKat]     = useState(false);
+  const [confirmDelKat, setConfirmDelKat] = useState(null);
+  const [deletingKat,   setDeletingKat]   = useState(false);
+  const [manageKatMode, setManageKatMode] = useState(false);
 
-  // ── Fetch kategori ───────────────────────────────────────────────────────
+  // ── Fetch kategori ──────────────────────────────────────────────────────
   const fetchKategori = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -256,7 +274,7 @@ export default function KelolaMenu() {
 
   useEffect(() => { fetchKategori(); }, []);
 
-  // ── Fetch menu ───────────────────────────────────────────────────────────
+  // ── Fetch menu ──────────────────────────────────────────────────────────
   const fetchMenu = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -273,7 +291,7 @@ export default function KelolaMenu() {
 
   useEffect(() => { fetchMenu(); }, []);
 
-  // ── Simpan Kategori (tambah / edit) ────────────────────────────────────
+  // ── Simpan Kategori ─────────────────────────────────────────────────────
   const handleSaveKategori = async (kat) => {
     setSavingKat(true);
     try {
@@ -285,7 +303,7 @@ export default function KelolaMenu() {
         {
           method:  isEdit ? "PUT" : "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({ nama_kategori: kat.nama_kategori, icon: kat.icon }),
+          body:    JSON.stringify({ nama_kategori: kat.nama_kategori, logo: kat.logo, icon: kat.logo }),
         }
       );
 
@@ -298,9 +316,7 @@ export default function KelolaMenu() {
       await fetchKategori();
       showToast(isEdit ? "Kategori diupdate!" : "Kategori ditambahkan!", "success");
       setEditKategori(null);
-
-    } catch (err) {
-      console.error("handleSaveKategori error:", err);
+    } catch {
       showToast("Gagal terhubung ke server", "error");
     } finally {
       setSavingKat(false);
@@ -324,36 +340,14 @@ export default function KelolaMenu() {
       setCategories(p => p.filter(c => c.id !== id));
       setConfirmDelKat(null);
       showToast("Kategori dihapus!", "success");
-    } catch (err) {
-      console.error("handleDelKategori error:", err);
+    } catch {
       showToast("Gagal terhubung ke server", "error");
     } finally {
       setDeletingKat(false);
     }
   };
 
-  // ── Update icon kategori langsung (quick-edit dari filter bar) ──────────
-  const handleQuickIconUpdate = async (kat, newIcon) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res   = await fetch(`${API_URL}/api/kategori/${kat.id}`, {
-        method:  "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ ...kat, icon: newIcon }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) {
-        showToast(data.message ?? "Gagal update logo", "error");
-        return;
-      }
-      setCategories(p => p.map(c => c.id === kat.id ? { ...c, icon: newIcon } : c));
-      showToast("Logo kategori diupdate!", "success");
-    } catch (err) {
-      showToast("Gagal terhubung ke server", "error");
-    }
-  };
-
-  // ── Filter & Pagination ──────────────────────────────────────────────────
+  // ── Filter & Pagination ─────────────────────────────────────────────────
   const filtered   = (menuItems ?? []).filter(m =>
     (catFilter === "all" || String(m.id_kategori) === catFilter || m.nama_kategori === catFilter) &&
     (m.nama_menu ?? "").toLowerCase().includes(search.toLowerCase())
@@ -361,7 +355,7 @@ export default function KelolaMenu() {
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged      = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  // ── Tambah / Edit Menu ───────────────────────────────────────────────────
+  // ── Simpan Menu ─────────────────────────────────────────────────────────
   const handleSave = async (item) => {
     setSaving(true);
     try {
@@ -385,14 +379,14 @@ export default function KelolaMenu() {
       showToast(isEdit ? "Menu diupdate!" : "Menu ditambahkan!", "success");
       setShowForm(false);
       setEditItem(null);
-    } catch (err) {
+    } catch {
       showToast("Gagal terhubung ke server", "error");
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Hapus Menu ───────────────────────────────────────────────────────────
+  // ── Hapus Menu ──────────────────────────────────────────────────────────
   const handleDel = async (id) => {
     setDeleting(true);
     try {
@@ -409,14 +403,14 @@ export default function KelolaMenu() {
       setMenuItems(p => p.filter(m => m.id !== id));
       setConfirmDel(null);
       showToast("Menu dihapus!", "success");
-    } catch (err) {
+    } catch {
       showToast("Gagal terhubung ke server", "error");
     } finally {
       setDeleting(false);
     }
   };
 
-  // ── Toggle Stok ──────────────────────────────────────────────────────────
+  // ── Toggle Stok ─────────────────────────────────────────────────────────
   const toggleStock = async (id) => {
     const item    = menuItems.find(m => m.id === id);
     const updated = { ...item, status: !item.status };
@@ -435,7 +429,7 @@ export default function KelolaMenu() {
         return;
       }
       showToast("Stok diupdate!", "success");
-    } catch (err) {
+    } catch {
       setMenuItems(p => p.map(m => m.id === id ? item : m));
       showToast("Gagal terhubung ke server", "error");
     }
@@ -455,9 +449,10 @@ export default function KelolaMenu() {
         <div className="flex gap-2">
           <button
             onClick={() => setManageKatMode(v => !v)}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 font-bold text-sm border-2 transition-all ${manageKatMode ? "border-amber-500 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-600 hover:border-amber-300"}`}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 font-bold text-sm border-2 transition-all
+              ${manageKatMode ? "border-amber-500 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-600 hover:border-amber-300"}`}
           >
-            <Smile size={15}/> Kategori
+            <Image size={15}/> Kategori
           </button>
           <button
             onClick={() => { setEditItem(null); setShowForm(true); }}
@@ -485,48 +480,49 @@ export default function KelolaMenu() {
           </div>
 
           <div className="p-4 flex flex-wrap gap-3">
-            {categories.map(kat => (
-              <div
-                key={kat.id}
-                className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl pl-2 pr-3 py-2 group hover:border-amber-300 hover:bg-amber-50 transition-all"
-              >
-                {/* Logo / icon */}
-                <button
-                  onClick={() => setEditKategori(kat)}
-                  title="Klik untuk ganti logo"
-                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-xl hover:border-amber-400 hover:scale-110 transition-all shadow-sm relative group/icon"
+            {categories.map(kat => {
+              const logo = getCatLogo(kat);
+              return (
+                <div
+                  key={kat.id}
+                  className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl pl-2 pr-3 py-2 group hover:border-amber-300 hover:bg-amber-50 transition-all"
                 >
-                  {kat.icon
-                    ? <span>{kat.icon}</span>
-                    : <Smile size={16} className="text-gray-300"/>
-                  }
-                  <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center opacity-0 group-hover/icon:opacity-100 transition-all shadow">
-                    <Edit3 size={8} className="text-white"/>
+                  {/* Logo gambar */}
+                  <div className="w-9 h-9 rounded-xl overflow-hidden bg-white border border-gray-200 flex-shrink-0 flex items-center justify-center">
+                    {logo
+                      ? <img
+                          src={fixImgUrl(logo)}
+                          alt="logo"
+                          className="w-full h-full object-cover"
+                          onError={e => { e.currentTarget.style.display = "none"; }}
+                        />
+                      : <Image size={14} className="text-gray-300"/>
+                    }
+                  </div>
+
+                  {/* Nama */}
+                  <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                    {kat.nama_kategori ?? kat.name}
                   </span>
-                </button>
 
-                {/* Nama */}
-                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
-                  {kat.nama_kategori ?? kat.name}
-                </span>
-
-                {/* Action buttons — muncul saat hover */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                  <button
-                    onClick={() => setEditKategori(kat)}
-                    className="w-6 h-6 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center justify-center text-blue-500 transition-all"
-                  >
-                    <Edit3 size={11}/>
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelKat(kat.id)}
-                    className="w-6 h-6 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center text-red-400 transition-all"
-                  >
-                    <Trash2 size={11}/>
-                  </button>
+                  {/* Actions — muncul saat hover */}
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button
+                      onClick={() => setEditKategori(kat)}
+                      className="w-6 h-6 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center justify-center text-blue-500 transition-all"
+                    >
+                      <Edit3 size={11}/>
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelKat(kat.id)}
+                      className="w-6 h-6 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center text-red-400 transition-all"
+                    >
+                      <Trash2 size={11}/>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {categories.length === 0 && (
               <p className="text-sm text-gray-400 py-4 w-full text-center">Belum ada kategori. Tambah kategori dulu!</p>
@@ -546,28 +542,29 @@ export default function KelolaMenu() {
             className="w-full pl-9 pr-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-amber-500 transition-all"
           />
         </div>
+
+        {/* Filter tombol kategori */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          {/* Tombol Semua */}
           <button
             onClick={() => { setCatFilter("all"); setPage(1); }}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${catFilter === "all" ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all
+              ${catFilter === "all" ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
-            🍽️ Semua
+            <Image size={14}/> Semua
           </button>
 
-          {/* Tombol per kategori dengan logo */}
           {categories.map(c => {
-            const val   = String(c?.id ?? c?.nama_kategori ?? c);
-            const label = c?.nama_kategori ?? c?.name ?? c;
-            const logo  = getCatLogo(c);
+            const val  = String(c?.id ?? c?.nama_kategori ?? c);
+            const logo = getCatLogo(c);
             return (
               <button
                 key={val}
                 onClick={() => { setCatFilter(val); setPage(1); }}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${catFilter === val ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all
+                  ${catFilter === val ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
               >
                 <CatLogo logo={logo} size={18}/>
-                {label}
+                {c?.nama_kategori ?? c?.name ?? c}
               </button>
             );
           })}
@@ -590,26 +587,19 @@ export default function KelolaMenu() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {paged.map(item => {
-                // Ambil logo dari kategori yang cocok
                 const katObj  = categories.find(c => String(c?.id) === String(item.id_kategori));
                 const katLogo = getCatLogo(katObj);
                 return (
                   <tr key={item.id} onClick={() => setShowDetail(item)} className="hover:bg-amber-50/30 transition-colors cursor-pointer">
+                    {/* Foto menu */}
                     <td className="px-4 py-3">
-                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 relative">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                         {fixImgUrl(item.image_url)
                           ? <img
                               src={fixImgUrl(item.image_url)}
                               alt={item.nama_menu}
                               className="w-full h-full object-cover"
-                              onError={e => {
-                                e.currentTarget.replaceWith((() => {
-                                  const d = document.createElement("div");
-                                  d.className = "w-full h-full flex items-center justify-center";
-                                  d.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
-                                  return d;
-                                })());
-                              }}
+                              onError={e => { e.currentTarget.style.display = "none"; }}
                             />
                           : <div className="w-full h-full flex items-center justify-center">
                               <Image size={16} className="text-gray-300"/>
@@ -617,24 +607,32 @@ export default function KelolaMenu() {
                         }
                       </div>
                     </td>
+
+                    {/* Nama */}
                     <td className="px-4 py-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-900 text-sm truncate max-w-[150px] lg:max-w-none">{item.nama_menu}</p>
                         {item.badge && <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full">{item.badge}</span>}
                       </div>
                     </td>
+
+                    {/* Kategori */}
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getCatColor(item.id_kategori)}`}>
                         <CatLogo logo={katLogo} size={16}/>
                         {item.nama_kategori ?? katObj?.nama_kategori ?? item.id_kategori}
                       </span>
                     </td>
+
+                    {/* Harga */}
                     <td className="px-4 py-3">
                       <span className="text-sm font-bold text-gray-900">Rp{Number(item.harga ?? item.price ?? 0).toLocaleString("id-ID")}</span>
                       {item.variants && item.variants.length > 1 && (
                         <p className="text-[10px] text-blue-500 font-semibold mt-0.5">{item.variants.length} varian</p>
                       )}
                     </td>
+
+                    {/* Stok toggle */}
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleStock(item.id); }}
@@ -643,6 +641,8 @@ export default function KelolaMenu() {
                         <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${item.status ? "left-[26px]" : "left-0.5"}`}/>
                       </button>
                     </td>
+
+                    {/* Aksi */}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
@@ -719,13 +719,16 @@ export default function KelolaMenu() {
             </div>
             <div className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getCatColor(showDetail.id_kategori)}`}>
-                  {(() => {
-                    const dc = categories.find(c => String(c?.id) === String(showDetail.id_kategori));
-                    return <><CatLogo logo={getCatLogo(dc)} size={16}/>{" "}</>;
-                  })()}
-                  {showDetail.nama_kategori ?? categories.find(c => String(c?.id) === String(showDetail.id_kategori))?.nama_kategori ?? showDetail.id_kategori}
-                </span>
+                {(() => {
+                  const dc = categories.find(c => String(c?.id) === String(showDetail.id_kategori));
+                  const dcLogo = getCatLogo(dc);
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getCatColor(showDetail.id_kategori)}`}>
+                      <CatLogo logo={dcLogo} size={16}/>
+                      {showDetail.nama_kategori ?? dc?.nama_kategori ?? showDetail.id_kategori}
+                    </span>
+                  );
+                })()}
                 <p className="text-xl font-black text-amber-600">Rp{Number(showDetail.harga ?? 0).toLocaleString("id-ID")}</p>
               </div>
               {showDetail.description

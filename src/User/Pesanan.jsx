@@ -1,13 +1,112 @@
-import { useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
 import {
   ChevronLeft, Plus, Minus, Edit3, ShoppingBag,
-  Receipt, AlertCircle, Trash2, X, Tag, Clock
+  Receipt, AlertCircle, Trash2, X, Clock, Check,
+  RefreshCw, Image
 } from "lucide-react";
 
+/* ─────────────────────────────────────────────
+   Helpers yang sama persis dengan Home.jsx
+   ──────────────────────────────────────────── */
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000").replace(/\/$/, "");
+const TOKEN_KEY = "astakira_token";
+const tokenManager = {
+  get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
+};
+
+const fixImgUrl = (url) => {
+  if (!url?.trim()) return "";
+  if (url.startsWith("data:")) return url;
+  const b64 = url.indexOf("data:image/");
+  if (b64 !== -1) return url.slice(b64);
+  if (url.startsWith("/")) return `${BASE_URL}${url}`;
+  if (url.startsWith("http")) {
+    try {
+      const p = new URL(url), b = new URL(BASE_URL);
+      if (p.host !== b.host) { p.host = b.host; p.protocol = b.protocol; p.port = b.port; }
+      return p.toString();
+    } catch { return url; }
+  }
+  return `${BASE_URL}/${url}`;
+};
+
+function parseTheme(raw) {
+  const DEF = { primary: "#f59e0b", secondary: "#ea580c", bg: "#f9fafb", text: "#111827" };
+  if (!raw) return DEF;
+  try {
+    const p = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return { primary: p.primary ?? DEF.primary, secondary: p.secondary ?? DEF.secondary,
+             bg: p.bg ?? DEF.bg, text: p.text ?? DEF.text };
+  } catch { return DEF; }
+}
+
+function contrast(hex) {
+  try {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return (0.299*r + 0.587*g + 0.114*b)/255 > 0.55 ? "#111827" : "#ffffff";
+  } catch { return "#ffffff"; }
+}
+
+function ha(hex, a) {
+  try {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return `rgba(${r},${g},${b},${a})`;
+  } catch { return hex; }
+}
+
+const THEME_CACHE_KEY = "astakira_theme";
+
+function applyThemeVars(theme) {
+  const onP = contrast(theme.primary);
+  const vars = [
+    `--p:${theme.primary}`,
+    `--s:${theme.secondary}`,
+    `--bg:${theme.bg}`,
+    `--tx:${theme.text}`,
+    `--on-p:${onP}`,
+    `--p-20:${ha(theme.primary, 0.2)}`,
+    `--bg-soft:${ha(theme.primary, 0.07)}`,
+    `--grad:linear-gradient(135deg,${theme.primary},${theme.secondary})`,
+  ].join(";");
+  document.documentElement.setAttribute("style", vars);
+}
+
+const api = {
+  get: async (path) => {
+    const token = tokenManager.get();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(`${BASE_URL}/${path}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+};
+
+/* ─────────────────────────────────────────────
+   Sub-components
+   ──────────────────────────────────────────── */
+function MenuImage({ src, alt }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) return (
+    <div className="w-full h-full flex items-center justify-center" style={{ background: "var(--bg-soft)" }}>
+      <Image size={20} style={{ color: "var(--p)", opacity: 0.35 }} />
+    </div>
+  );
+  return <img src={src} alt={alt} className="w-full h-full object-cover" onError={() => setErr(true)} />;
+}
+
+/* ─────────────────────────────────────────────
+   Main Component
+   ──────────────────────────────────────────── */
 export default function Pesanan() {
   const navigate = useNavigate();
   const { state } = useLocation();
+  const [searchParams] = useSearchParams();
+
+  // Ambil cafe_id dari state (dikirim Home) atau fallback ke query param
+  const CAFE_ID = state?.cafeId ?? searchParams.get("cafe_id") ?? "";
+  const MEJA_ID = state?.mejaId ?? searchParams.get("table") ?? "1";
 
   const [cart, setCart] = useState(state?.cart || {});
   const items = state?.items || [];
@@ -17,61 +116,83 @@ export default function Pesanan() {
   const [note, setNote] = useState("");
   const [itemNotes, setItemNotes] = useState({});
   const [removing, setRemoving] = useState(null);
+  const [themeReady, setThemeReady] = useState(false);
+  const [cafeName, setCafeName] = useState("ASTAKIRA");
 
-  const orderedItems = items.filter((i) => cart[i.id] > 0);
+  /* ── Muat tema dari cache dulu, lalu fetch fresh ── */
+  useEffect(() => {
+    // Gunakan tema dari cache segera agar tidak blank
+    try {
+      const cached = localStorage.getItem(THEME_CACHE_KEY);
+      if (cached) {
+        applyThemeVars(JSON.parse(cached));
+      }
+    } catch {}
+    setThemeReady(true);
 
-  const addItem = (id) =>
-    setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+    if (!CAFE_ID) return;
 
+    api.get(`api/pengaturan/user/${CAFE_ID}`)
+      .then(r => {
+        const raw = r.data ?? r;
+        const theme = parseTheme(raw?.tema_colors);
+        applyThemeVars(theme);
+        try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme)); } catch {}
+        setCafeName(raw?.nama_cafe ?? raw?.nama ?? raw?.name ?? "ASTAKIRA");
+      })
+      .catch(() => {/* pakai cache */});
+
+    return () => {
+      // Jangan hapus style saat unmount; biarkan tema persisten
+    };
+  }, [CAFE_ID]);
+
+  const orderedItems = items.filter(i => (cart[i.id] || 0) > 0);
+  const subtotal = orderedItems.reduce((sum, i) => sum + (cart[i.id] || 0) * i.price, 0);
+  const totalQty = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
+
+  const addItem = (id) => setCart(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
   const removeItem = (id) => {
     if (cart[id] === 1) {
       setRemoving(id);
       setTimeout(() => {
-        setCart((prev) => {
-          const copy = { ...prev };
-          delete copy[id];
-          return copy;
-        });
+        setCart(prev => { const c = { ...prev }; delete c[id]; return c; });
         setRemoving(null);
       }, 300);
     } else {
-      setCart((prev) => ({ ...prev, [id]: prev[id] - 1 }));
+      setCart(prev => ({ ...prev, [id]: prev[id] - 1 }));
     }
   };
 
-  const subtotal = orderedItems.reduce(
-    (sum, i) => sum + (cart[i.id] || 0) * i.price,
-    0
-  );
-  const totalQty = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
-
   const handleProceedPayment = () => {
     navigate("/pembayaran", {
-      state: { cart, items, note, itemNotes, subtotal },
+      state: { cart, items, note, itemNotes, subtotal, cafeId: CAFE_ID, mejaId: MEJA_ID },
     });
   };
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-gray-50 relative">
+    <div className="max-w-md mx-auto min-h-screen relative" style={{ background: "var(--bg)", color: "var(--tx)" }}>
 
       {/* ── HEADER ── */}
       <div className="sticky top-0 z-40 bg-white shadow-sm border-b border-gray-100">
         <div className="flex items-center justify-between px-4 py-3.5">
           <button
             onClick={() => navigate(-1)}
-            className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
+            className="w-10 h-10 flex items-center justify-center rounded-xl hover:opacity-80 transition-all"
+            style={{ background: "var(--bg-soft)" }}
           >
-            <ChevronLeft size={20} className="text-gray-700" />
+            <ChevronLeft size={20} style={{ color: "var(--p)" }} />
           </button>
 
           <div className="text-center">
             <h1 className="font-extrabold text-base text-gray-900">Pesanan Saya</h1>
-            <p className="text-[10px] text-gray-400 mt-0.5">Meja Nomor 1 · ASTAKIRA</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Meja {MEJA_ID} · {cafeName}</p>
           </div>
 
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold px-3 py-2 rounded-xl hover:bg-amber-100 transition-all"
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl hover:opacity-80 transition-all border"
+            style={{ background: "var(--bg-soft)", color: "var(--p)", borderColor: "var(--p-20)" }}
           >
             <Plus size={13} />
             Tambah
@@ -83,20 +204,21 @@ export default function Pesanan() {
 
         {/* ── ORDER SUMMARY BANNER ── */}
         <div className="px-4 pt-4 mb-5">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl px-5 py-4 shadow-lg shadow-amber-500/20">
-            <div className="flex items-center justify-between text-white">
+          <div className="rounded-2xl px-5 py-4 shadow-lg" style={{ background: "var(--grad)" }}>
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/30">
-                  <ShoppingBag size={20} className="text-white" />
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center border"
+                  style={{ background: "rgba(255,255,255,0.2)", borderColor: "rgba(255,255,255,0.3)" }}>
+                  <ShoppingBag size={20} style={{ color: "var(--on-p)" }} />
                 </div>
                 <div>
-                  <p className="text-white/70 text-xs font-medium">Total Pesanan</p>
-                  <p className="font-extrabold text-xl">{totalQty} Item</p>
+                  <p className="text-xs font-medium" style={{ color: "var(--on-p)", opacity: 0.75 }}>Total Pesanan</p>
+                  <p className="font-extrabold text-xl" style={{ color: "var(--on-p)" }}>{totalQty} Item</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-white/70 text-xs font-medium">Subtotal</p>
-                <p className="font-extrabold text-xl">Rp{subtotal.toLocaleString()}</p>
+                <p className="text-xs font-medium" style={{ color: "var(--on-p)", opacity: 0.75 }}>Subtotal</p>
+                <p className="font-extrabold text-xl" style={{ color: "var(--on-p)" }}>Rp{subtotal.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -110,7 +232,8 @@ export default function Pesanan() {
             <p className="text-gray-400 text-sm mb-6">Yuk, pilih menu favoritmu!</p>
             <button
               onClick={() => navigate(-1)}
-              className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg"
+              className="text-white px-8 py-3 rounded-2xl font-bold shadow-lg"
+              style={{ background: "var(--grad)", color: "var(--on-p)" }}
             >
               Pilih Menu
             </button>
@@ -121,13 +244,13 @@ export default function Pesanan() {
         {orderedItems.length > 0 && (
           <div className="px-4 mb-5">
             <div className="flex items-center gap-2 mb-3">
-              <Receipt size={16} className="text-amber-600" />
+              <Receipt size={16} style={{ color: "var(--p)" }} />
               <h2 className="font-extrabold text-sm text-gray-900">Daftar Pesanan</h2>
               <span className="ml-auto text-xs text-gray-400">{orderedItems.length} menu</span>
             </div>
 
             <div className="space-y-3">
-              {orderedItems.map((item) => (
+              {orderedItems.map(item => (
                 <div
                   key={item.id}
                   className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-300 ${
@@ -136,45 +259,42 @@ export default function Pesanan() {
                 >
                   <div className="flex gap-3 p-3">
                     {/* Image */}
-                    {item.image && (
-                      <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-                        <img
-                          src={item.image + "?w=200&auto=format"}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
+                    <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
+                      style={{ background: "var(--bg-soft)" }}>
+                      <MenuImage src={fixImgUrl(item.image_url ?? item.image ?? "")} alt={item.name} />
+                    </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-bold text-gray-900 text-sm leading-tight line-clamp-1">
-                            {item.name}
-                          </p>
+                          <p className="font-bold text-gray-900 text-sm leading-tight line-clamp-1">{item.name}</p>
                           {item.category && (
-                            <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide mt-0.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide mt-0.5" style={{ color: "var(--p)" }}>
                               {item.category}
                             </p>
                           )}
-                          <p className="text-amber-600 font-extrabold text-sm mt-1">
+                          <p className="font-extrabold text-sm mt-1" style={{ color: "var(--p)" }}>
                             Rp{item.price.toLocaleString()}
                           </p>
                         </div>
+
                         {/* Qty Control */}
-                        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-2 py-1.5 flex-shrink-0">
+                        <div className="flex items-center gap-2 rounded-xl px-2 py-1.5 flex-shrink-0 border"
+                          style={{ background: "var(--bg-soft)", borderColor: "var(--p-20)" }}>
                           <button
                             onClick={() => removeItem(item.id)}
-                            className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center text-white font-bold"
+                            className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold"
+                            style={{ background: "var(--p)" }}
                           >
                             {cart[item.id] === 1 ? <Trash2 size={11} /> : <Minus size={11} />}
                           </button>
-                          <span className="font-extrabold text-amber-800 text-sm w-5 text-center">
+                          <span className="font-extrabold text-sm w-5 text-center" style={{ color: "var(--s)" }}>
                             {cart[item.id]}
                           </span>
                           <button
                             onClick={() => addItem(item.id)}
-                            className="w-6 h-6 bg-amber-500 rounded-lg flex items-center justify-center text-white font-bold"
+                            className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold"
+                            style={{ background: "var(--p)" }}
                           >
                             <Plus size={11} />
                           </button>
@@ -193,14 +313,15 @@ export default function Pesanan() {
                     </div>
                   </div>
 
-                  {/* Item note */}
+                  {/* Item note button */}
                   <button
                     onClick={() => setOpenItemNote(item.id)}
-                    className={`w-full border-t px-3 py-2.5 text-xs flex items-center gap-2 transition-all ${
+                    className="w-full border-t px-3 py-2.5 text-xs flex items-center gap-2 transition-all"
+                    style={
                       itemNotes[item.id]
-                        ? "bg-amber-50 border-amber-100 text-amber-700"
-                        : "bg-gray-50 border-gray-100 text-gray-400 hover:bg-amber-50 hover:text-amber-600"
-                    }`}
+                        ? { background: "var(--bg-soft)", borderColor: "var(--p-20)", color: "var(--p)" }
+                        : { background: "#f9fafb", borderColor: "#f3f4f6", color: "#9ca3af" }
+                    }
                   >
                     <Edit3 size={12} />
                     <span className="line-clamp-1">
@@ -218,15 +339,16 @@ export default function Pesanan() {
           <div className="px-4 mb-5">
             <button
               onClick={() => setOpenNote(true)}
-              className={`w-full rounded-2xl p-4 border-2 transition-all ${
-                note
-                  ? "bg-amber-50 border-amber-300"
-                  : "bg-white border-dashed border-gray-300 hover:border-amber-400 hover:bg-amber-50"
-              }`}
+              className="w-full rounded-2xl p-4 border-2 transition-all bg-white hover:opacity-90"
+              style={note
+                ? { borderColor: "var(--p)", background: "var(--bg-soft)" }
+                : { borderColor: "#d1d5db", borderStyle: "dashed" }
+              }
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Edit3 size={16} className="text-white" />
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "var(--grad)" }}>
+                  <Edit3 size={16} style={{ color: "var(--on-p)" }} />
                 </div>
                 <div className="text-left flex-1 min-w-0">
                   <p className="font-bold text-gray-900 text-sm">Catatan Pesanan</p>
@@ -245,8 +367,9 @@ export default function Pesanan() {
           <div className="px-4 mb-5">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-                <div className="w-7 h-7 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center">
-                  <Receipt size={14} className="text-white" />
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: "var(--grad)" }}>
+                  <Receipt size={14} style={{ color: "var(--on-p)" }} />
                 </div>
                 <h3 className="font-bold text-gray-900 text-sm">Rincian Pembayaran</h3>
               </div>
@@ -261,9 +384,12 @@ export default function Pesanan() {
                   <span className="font-semibold text-green-600">Gratis</span>
                 </div>
                 <div className="h-px bg-gray-100 my-1" />
-                <div className="flex justify-between items-center bg-amber-50 rounded-xl px-3 py-2.5">
+                <div className="flex justify-between items-center rounded-xl px-3 py-2.5"
+                  style={{ background: "var(--bg-soft)" }}>
                   <span className="font-bold text-gray-900 text-sm">Total Pembayaran</span>
-                  <span className="font-extrabold text-amber-600 text-lg">Rp{subtotal.toLocaleString()}</span>
+                  <span className="font-extrabold text-lg" style={{ color: "var(--p)" }}>
+                    Rp{subtotal.toLocaleString()}
+                  </span>
                 </div>
               </div>
 
@@ -280,20 +406,22 @@ export default function Pesanan() {
         {/* ── EST. TIME ── */}
         {orderedItems.length > 0 && (
           <div className="px-4">
-            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3.5 flex items-center gap-3">
-              <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Clock size={16} className="text-white" />
+            <div className="rounded-2xl p-3.5 flex items-center gap-3 border"
+              style={{ background: "var(--bg-soft)", borderColor: "var(--p-20)" }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "var(--p)" }}>
+                <Clock size={16} style={{ color: "var(--on-p)" }} />
               </div>
               <div>
-                <p className="font-bold text-orange-800 text-sm">Estimasi Waktu</p>
-                <p className="text-xs text-orange-600">10–20 menit setelah pembayaran dikonfirmasi</p>
+                <p className="font-bold text-sm" style={{ color: "var(--p)" }}>Estimasi Waktu</p>
+                <p className="text-xs text-gray-500">10–20 menit setelah pembayaran dikonfirmasi</p>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── FOOTER ── */}
+      {/* ── FOOTER CTA ── */}
       {orderedItems.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-gray-100 shadow-xl">
           <div className="max-w-md mx-auto px-4 py-4">
@@ -304,7 +432,8 @@ export default function Pesanan() {
               </div>
               <button
                 onClick={handleProceedPayment}
-                className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-8 py-3.5 rounded-2xl font-bold shadow-lg shadow-amber-500/30 hover:scale-105 hover:shadow-xl transition-all whitespace-nowrap"
+                className="px-8 py-3.5 rounded-2xl font-bold shadow-lg hover:scale-105 hover:shadow-xl transition-all whitespace-nowrap"
+                style={{ background: "var(--grad)", color: "var(--on-p)" }}
               >
                 Lanjut Bayar →
               </button>
@@ -316,37 +445,36 @@ export default function Pesanan() {
       {/* ── ITEM NOTE MODAL ── */}
       {openItemNote && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end z-50 animate-fadeIn"
+          className="fixed inset-0 flex items-end z-50 animate-fadeIn"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
           onClick={() => setOpenItemNote(null)}
         >
           <div
             className="bg-white w-full max-w-md mx-auto rounded-t-[2rem] p-6 space-y-4 animate-slideUp shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-lg text-gray-900">
-                Catatan: {items.find((i) => i.id === openItemNote)?.name}
+                Catatan: {items.find(i => i.id === openItemNote)?.name}
               </h2>
-              <button
-                onClick={() => setOpenItemNote(null)}
-                className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center"
-              >
+              <button onClick={() => setOpenItemNote(null)}
+                className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center">
                 <X size={18} className="text-gray-600" />
               </button>
             </div>
             <textarea
               value={itemNotes[openItemNote] || ""}
-              onChange={(e) =>
-                setItemNotes((prev) => ({ ...prev, [openItemNote]: e.target.value }))
-              }
+              onChange={e => setItemNotes(prev => ({ ...prev, [openItemNote]: e.target.value }))}
               placeholder="Contoh: Tidak pakai bawang, pedas sedikit..."
-              className="w-full h-28 border-2 border-gray-200 rounded-2xl p-4 outline-none focus:border-amber-500 resize-none text-sm transition-all"
+              className="w-full h-28 border-2 border-gray-200 rounded-2xl p-4 outline-none resize-none text-sm transition-all"
+              style={{ "--tw-ring-color": "var(--p)" }}
+              onFocus={e => { e.target.style.borderColor = "var(--p)"; }}
+              onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
             />
-            <button
-              onClick={() => setOpenItemNote(null)}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-2xl font-bold shadow-lg"
-            >
+            <button onClick={() => setOpenItemNote(null)}
+              className="w-full py-3.5 rounded-2xl font-bold shadow-lg"
+              style={{ background: "var(--grad)", color: "var(--on-p)" }}>
               Simpan Catatan
             </button>
           </div>
@@ -356,42 +484,44 @@ export default function Pesanan() {
       {/* ── GENERAL NOTE MODAL ── */}
       {openNote && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end z-50 animate-fadeIn"
+          className="fixed inset-0 flex items-end z-50 animate-fadeIn"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
           onClick={() => setOpenNote(false)}
         >
           <div
             className="bg-white w-full max-w-md mx-auto rounded-t-[2rem] p-6 space-y-4 animate-slideUp shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-lg text-gray-900">Catatan Pesanan</h2>
-              <button
-                onClick={() => setOpenNote(false)}
-                className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center"
-              >
+              <button onClick={() => setOpenNote(false)}
+                className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center">
                 <X size={18} className="text-gray-600" />
               </button>
             </div>
             <textarea
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={e => setNote(e.target.value)}
               maxLength={200}
               placeholder="Contoh: Tidak pakai es, gula sedikit, dll..."
-              className="w-full h-32 border-2 border-gray-200 rounded-2xl p-4 outline-none focus:border-amber-500 resize-none text-sm transition-all"
+              className="w-full h-32 border-2 border-gray-200 rounded-2xl p-4 outline-none resize-none text-sm transition-all"
+              onFocus={e => { e.target.style.borderColor = "var(--p)"; }}
+              onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }}
             />
             <p className="text-xs text-gray-400 text-right">{note.length}/200 karakter</p>
-            <button
-              onClick={() => setOpenNote(false)}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3.5 rounded-2xl font-bold shadow-lg"
-            >
+            <button onClick={() => setOpenNote(false)}
+              className="w-full py-3.5 rounded-2xl font-bold shadow-lg"
+              style={{ background: "var(--grad)", color: "var(--on-p)" }}>
               Simpan Catatan
             </button>
           </div>
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-slideUp { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
