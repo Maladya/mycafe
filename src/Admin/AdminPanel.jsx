@@ -4,7 +4,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Toast } from "./components/SharedComponents";
 import { Sidebar, Header } from "./components/Sidebar";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000";
 
 export const AdminContext = createContext(null);
 export const useAdmin = () => useContext(AdminContext);

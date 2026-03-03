@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000";
 const PER_PAGE = 6;
 
 // ── Ambil logo dari objek kategori — cek semua kemungkinan field name ─────────
@@ -14,14 +14,13 @@ const getCatLogo = (c) => c?.logo ?? c?.icon ?? "";
 // ── Perbaiki URL gambar agar selalu pakai host yang benar ─────────────────────
 const fixImgUrl = (url) => {
   if (!url?.trim()) return "";
-  // Jika base64 atau relative path, kembalikan apa adanya
-  if (url.startsWith("data:") || url.startsWith("/")) return url;
+  if (url.startsWith("data:")) return url;
+  if (url.startsWith("/")) return `${API_URL}${url}`;
   try {
     const parsed = new URL(url);
     const base   = new URL(API_URL);
     if (parsed.host !== base.host) {
-      parsed.host     = base.host;
-      parsed.protocol = base.protocol;
+      return `${API_URL}${parsed.pathname}`;
     }
     return parsed.toString();
   } catch {
@@ -162,7 +161,6 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <h3 className="font-black text-gray-900 text-base">
             {kategori?.id ? "Edit Kategori" : "Tambah Kategori"}
@@ -173,7 +171,6 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Logo upload */}
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3 block">Logo Kategori</label>
             <div className="flex items-center gap-4">
@@ -186,7 +183,6 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
             </div>
           </div>
 
-          {/* Nama kategori */}
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block">Nama Kategori</label>
             <input
@@ -199,7 +195,6 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
             />
           </div>
 
-          {/* Preview */}
           <div className="bg-gray-50 rounded-2xl p-3 flex items-center gap-3">
             <span className="text-xs text-gray-400 font-semibold">Preview:</span>
             <div className="flex items-center gap-2 bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold">
@@ -215,7 +210,6 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
             </div>
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3 pt-1">
             <button
               onClick={onClose}
@@ -252,7 +246,6 @@ export default function KelolaMenu() {
   const [deleting,     setDeleting]     = useState(false);
   const [showDetail,   setShowDetail]   = useState(null);
 
-  // Kelola kategori
   const [editKategori,  setEditKategori]  = useState(null);
   const [savingKat,     setSavingKat]     = useState(false);
   const [confirmDelKat, setConfirmDelKat] = useState(null);
@@ -356,11 +349,12 @@ export default function KelolaMenu() {
   const paged      = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   // ── Simpan Menu ─────────────────────────────────────────────────────────
+  // ✅ FIX: gunakan item?.id bukan editItem untuk deteksi edit vs tambah baru
   const handleSave = async (item) => {
     setSaving(true);
     try {
       const token  = localStorage.getItem("token");
-      const isEdit = !!editItem;
+      const isEdit = !!item?.id; // ✅ FIXED: was !!editItem
 
       const res = await fetch(
         isEdit ? `${API_URL}/api/menu/${item.id}` : `${API_URL}/api/menu`,
@@ -487,7 +481,6 @@ export default function KelolaMenu() {
                   key={kat.id}
                   className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl pl-2 pr-3 py-2 group hover:border-amber-300 hover:bg-amber-50 transition-all"
                 >
-                  {/* Logo gambar */}
                   <div className="w-9 h-9 rounded-xl overflow-hidden bg-white border border-gray-200 flex-shrink-0 flex items-center justify-center">
                     {logo
                       ? <img
@@ -499,13 +492,9 @@ export default function KelolaMenu() {
                       : <Image size={14} className="text-gray-300"/>
                     }
                   </div>
-
-                  {/* Nama */}
                   <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
                     {kat.nama_kategori ?? kat.name}
                   </span>
-
-                  {/* Actions — muncul saat hover */}
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                     <button
                       onClick={() => setEditKategori(kat)}
@@ -523,7 +512,6 @@ export default function KelolaMenu() {
                 </div>
               );
             })}
-
             {categories.length === 0 && (
               <p className="text-sm text-gray-400 py-4 w-full text-center">Belum ada kategori. Tambah kategori dulu!</p>
             )}
@@ -542,8 +530,6 @@ export default function KelolaMenu() {
             className="w-full pl-9 pr-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-amber-500 transition-all"
           />
         </div>
-
-        {/* Filter tombol kategori */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <button
             onClick={() => { setCatFilter("all"); setPage(1); }}
@@ -552,7 +538,6 @@ export default function KelolaMenu() {
           >
             <Image size={14}/> Semua
           </button>
-
           {categories.map(c => {
             const val  = String(c?.id ?? c?.nama_kategori ?? c);
             const logo = getCatLogo(c);
@@ -591,7 +576,6 @@ export default function KelolaMenu() {
                 const katLogo = getCatLogo(katObj);
                 return (
                   <tr key={item.id} onClick={() => setShowDetail(item)} className="hover:bg-amber-50/30 transition-colors cursor-pointer">
-                    {/* Foto menu */}
                     <td className="px-4 py-3">
                       <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                         {fixImgUrl(item.image_url)
@@ -607,32 +591,24 @@ export default function KelolaMenu() {
                         }
                       </div>
                     </td>
-
-                    {/* Nama */}
                     <td className="px-4 py-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-900 text-sm truncate max-w-[150px] lg:max-w-none">{item.nama_menu}</p>
                         {item.badge && <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full">{item.badge}</span>}
                       </div>
                     </td>
-
-                    {/* Kategori */}
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${getCatColor(item.id_kategori)}`}>
                         <CatLogo logo={katLogo} size={16}/>
                         {item.nama_kategori ?? katObj?.nama_kategori ?? item.id_kategori}
                       </span>
                     </td>
-
-                    {/* Harga */}
                     <td className="px-4 py-3">
                       <span className="text-sm font-bold text-gray-900">Rp{Number(item.harga ?? item.price ?? 0).toLocaleString("id-ID")}</span>
                       {item.variants && item.variants.length > 1 && (
                         <p className="text-[10px] text-blue-500 font-semibold mt-0.5">{item.variants.length} varian</p>
                       )}
                     </td>
-
-                    {/* Stok toggle */}
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleStock(item.id); }}
@@ -641,8 +617,6 @@ export default function KelolaMenu() {
                         <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${item.status ? "left-[26px]" : "left-0.5"}`}/>
                       </button>
                     </td>
-
-                    {/* Aksi */}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1.5">
                         <button

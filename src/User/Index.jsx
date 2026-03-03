@@ -6,12 +6,12 @@ import {
   AlertCircle, RefreshCw, Image
 } from "lucide-react";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = {
-  get:   ()      => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
-  set:   (t)     => localStorage.setItem(TOKEN_KEY, t),
-  clear: ()      => localStorage.removeItem(TOKEN_KEY),
+  get:   ()  => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
+  set:   (t) => localStorage.setItem(TOKEN_KEY, t),
+  clear: ()  => localStorage.removeItem(TOKEN_KEY),
 };
 
 const fixImgUrl = (url) => {
@@ -59,12 +59,8 @@ const THEME_CACHE_KEY = "astakira_theme";
 function applyThemeVars(theme) {
   const onP = contrast(theme.primary);
   const vars = [
-    `--p:${theme.primary}`,
-    `--s:${theme.secondary}`,
-    `--bg:${theme.bg}`,
-    `--tx:${theme.text}`,
-    `--on-p:${onP}`,
-    `--p-20:${ha(theme.primary, 0.2)}`,
+    `--p:${theme.primary}`, `--s:${theme.secondary}`, `--bg:${theme.bg}`, `--tx:${theme.text}`,
+    `--on-p:${onP}`, `--p-20:${ha(theme.primary, 0.2)}`,
     `--bg-soft:${ha(theme.primary, 0.07)}`,
     `--grad:linear-gradient(135deg,${theme.primary},${theme.secondary})`,
   ].join(";");
@@ -164,11 +160,21 @@ function buildCategorySections(cats, db) {
 function buildCartFromOrder(orderItems, db) {
   const cart = {}, all = Object.values(db);
   orderItems.forEach(o => {
-    const nama  = (o.name ?? o.nama ?? "").toLowerCase();
-    const found = all.find(m => m.name.toLowerCase() === nama);
+    const nama  = (o.name ?? o.nama_menu ?? o.nama ?? "").toLowerCase().trim();
+    const found = all.find(m => m.name.toLowerCase().trim() === nama);
     if (found) cart[found.id] = (cart[found.id] || 0) + (o.qty ?? o.jumlah ?? 1);
   });
   return cart;
+}
+
+/* ── Format waktu dari ISO atau string ── */
+function formatWaktu(raw) {
+  if (!raw) return "";
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  } catch { return raw; }
 }
 
 function CatLogo({ logo, size = 28 }) {
@@ -448,37 +454,48 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
   );
 }
 
+/* ── RiwayatPesananSheet — fixed data normalization ── */
 function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
   const [activeTab, setActiveTab] = useState("sedang");
   const { data: ordersRaw, loading, error, refetch } = useApi(
-    () => api.get(`api/orders?meja=${mejaId}&cafe_id=${cafeId}`).then(r => r.data ?? r),
+    () => {
+      if (!cafeId || !mejaId) return Promise.resolve([]);
+      return api.get(`api/orders?meja=${mejaId}&cafe_id=${cafeId}`).then(r => r.data ?? r.orders ?? r);
+    },
     [mejaId, cafeId]
   );
+
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  const orders = (ordersRaw ?? []).map(o => ({
+  /* Normalize orders dari berbagai format backend */
+  const orders = (Array.isArray(ordersRaw) ? ordersRaw : []).map(o => ({
     id:       o.id,
-    status:   o.status,
-    waktu:    o.waktu    ?? o.created_at ?? o.tanggal ?? "",
-    estimasi: o.estimasi ?? o.eta        ?? "15 mnt",
+    status:   o.status ?? "proses",
+    waktu:    formatWaktu(o.waktu ?? o.created_at ?? o.tanggal ?? ""),
+    estimasi: o.estimasi ?? o.eta ?? "15 mnt",
     items: (o.items ?? o.detail ?? o.order_items ?? []).map(i => ({
-      name:    i.name   ?? i.nama    ?? i.nama_menu ?? "",
-      variant: i.variant ?? i.varian ?? "",
+      name:    i.name    ?? i.nama_menu ?? i.nama   ?? "",
+      variant: i.variant ?? i.varian    ?? "",
       qty:     Number(i.qty ?? i.jumlah ?? 1),
       price:   Number(i.price ?? i.harga ?? 0),
-      image:   fixImgUrl(i.image ?? i.foto ?? i.gambar ?? ""),
+      // Coba ambil foto dari berbagai field, termasuk yang di-join dari tabel menu
+      image:   fixImgUrl(
+        i.image    ?? i.image_url ?? i.foto    ??
+        i.gambar   ?? i.img       ?? ""
+      ),
     })),
   }));
 
-  const isSedang  = s => ["sedang","proses","pending"].includes(s);
-  const isSelesai = s => ["selesai","done","completed"].includes(s);
+  const isSedang  = s => ["sedang","proses","pending","waiting","processing"].includes(String(s).toLowerCase());
+  const isSelesai = s => ["selesai","done","completed","success","paid"].includes(String(s).toLowerCase());
+
   const sedangOrders  = orders.filter(o => isSedang(o.status));
   const selesaiOrders = orders.filter(o => isSelesai(o.status));
-  const displayed     = activeTab==="sedang" ? sedangOrders : selesaiOrders;
-  const getTotal      = items => items.reduce((s, i) => s + i.price*i.qty, 0);
+  const displayed     = activeTab === "sedang" ? sedangOrders : selesaiOrders;
+  const getTotal      = items => items.reduce((s, i) => s + (i.price * i.qty), 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end animate-fadeIn"
@@ -491,10 +508,19 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
             <h2 className="text-xl font-extrabold text-gray-900">Riwayat Pesanan</h2>
             <p className="text-xs text-gray-400 mt-0.5">Meja Nomor {mejaId} · {cafeName}</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
-            <span className="text-gray-600 font-bold text-xl leading-none">×</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={refetch}
+              className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
+              title="Refresh">
+              <RefreshCw size={14} className={`text-gray-500 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+              <span className="text-gray-600 font-bold text-xl leading-none">×</span>
+            </button>
+          </div>
         </div>
+
+        {/* Tabs */}
         <div className="px-5 mb-4">
           <div className="flex bg-gray-100 rounded-2xl p-1">
             <button onClick={() => setActiveTab("sedang")}
@@ -502,7 +528,11 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
               style={activeTab==="sedang" ? { color:"var(--p)" } : {}}>
               <span className="w-2 h-2 rounded-full" style={{ background: activeTab==="sedang" ? "var(--p)" : "#9ca3af" }} />
               Sedang Diproses
-              {sedangOrders.length > 0 && <span className="text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background:"var(--p)" }}>{sedangOrders.length}</span>}
+              {sedangOrders.length > 0 && (
+                <span className="text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background:"var(--p)" }}>
+                  {sedangOrders.length}
+                </span>
+              )}
             </button>
             <button onClick={() => setActiveTab("selesai")}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab==="selesai" ? "bg-white text-gray-700 shadow-sm" : "text-gray-500"}`}>
@@ -511,26 +541,56 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
             </button>
           </div>
         </div>
+
+        {/* Content */}
         <div className="overflow-y-auto scrollbar-hide px-5 pb-8" style={{ maxHeight:"calc(88vh - 185px)" }}>
-          {loading && <div className="space-y-4">{[1,2].map(i => (<div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm animate-pulse overflow-hidden"><div className="h-16 bg-gray-100" /><div className="p-4 space-y-3"><div className="flex gap-3"><div className="w-12 h-12 bg-gray-200 rounded-xl" /><div className="flex-1 space-y-2"><div className="h-3 bg-gray-200 rounded w-3/4" /><div className="h-3 bg-gray-200 rounded w-1/2" /></div></div></div></div>))}</div>}
+          {loading && (
+            <div className="space-y-4">
+              {[1,2].map(i => (
+                <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm animate-pulse overflow-hidden">
+                  <div className="h-16 bg-gray-100" />
+                  <div className="p-4 space-y-3">
+                    <div className="flex gap-3">
+                      <div className="w-12 h-12 bg-gray-200 rounded-xl" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 bg-gray-200 rounded w-3/4" />
+                        <div className="h-3 bg-gray-200 rounded w-1/2" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {error && !loading && <ErrorState message={error} onRetry={refetch} />}
+
           {!loading && !error && displayed.length === 0 && (
             <div className="text-center py-16">
               <div className="text-5xl mb-3">🛍️</div>
               <p className="text-gray-500 font-semibold">Belum ada pesanan</p>
-              <p className="text-gray-400 text-sm mt-1">{activeTab==="sedang" ? "Tidak ada pesanan yang sedang diproses" : "Belum ada pesanan yang selesai"}</p>
+              <p className="text-gray-400 text-sm mt-1">
+                {activeTab==="sedang" ? "Tidak ada pesanan yang sedang diproses" : "Belum ada pesanan yang selesai"}
+              </p>
             </div>
           )}
+
           {!loading && !error && displayed.length > 0 && (
             <div className="space-y-4">
               {displayed.map(order => (
                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  {/* Order header */}
                   <div className="px-4 py-3 flex items-center justify-between border-b"
-                    style={isSedang(order.status) ? { background:"var(--bg-soft)", borderColor:"var(--p-20)" } : { background:"#f9fafb", borderColor:"#f3f4f6" }}>
+                    style={isSedang(order.status)
+                      ? { background:"var(--bg-soft)", borderColor:"var(--p-20)" }
+                      : { background:"#f9fafb", borderColor:"#f3f4f6" }}>
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center"
                         style={{ background: isSelesai(order.status) ? "#22c55e" : "var(--p)" }}>
-                        {isSelesai(order.status) ? <Check size={14} className="text-white" /> : <Clock size={14} className="text-white" />}
+                        {isSelesai(order.status)
+                          ? <Check size={14} className="text-white" />
+                          : <Clock size={14} className="text-white" />
+                        }
                       </div>
                       <div>
                         <p className="text-xs font-extrabold text-gray-700">{order.id}</p>
@@ -545,34 +605,62 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 bg-green-100 border border-green-200 rounded-full px-2.5 py-1">
-                        <Check size={10} className="text-green-600" /><span className="text-[10px] font-bold text-green-700">Selesai</span>
+                        <Check size={10} className="text-green-600" />
+                        <span className="text-[10px] font-bold text-green-700">Selesai</span>
                       </div>
                     )}
                   </div>
+
+                  {/* Items */}
                   <div className="px-4 py-3 space-y-3">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100" style={{ background:"var(--bg-soft)" }}>
-                          <MenuImage src={item.image} alt={item.name} />
+                        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100"
+                          style={{ background:"var(--bg-soft)" }}>
+                          {item.image ? (
+                            <img src={item.image} alt={item.name} className="w-full h-full object-cover"
+                              onError={e => { e.currentTarget.style.display = "none"; }} />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Image size={16} style={{ color:"var(--p)", opacity:0.3 }} />
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.name}</p>
-                          <p className="text-xs text-gray-400">{item.variant ? `${item.variant} · ` : ""}{item.qty}×</p>
+                          <p className="text-xs text-gray-400">
+                            {item.variant ? `${item.variant} · ` : ""}{item.qty}×
+                          </p>
                         </div>
-                        <p className="font-extrabold text-sm flex-shrink-0" style={{ color:"var(--p)" }}>Rp{(item.price*item.qty).toLocaleString()}</p>
+                        <p className="font-extrabold text-sm flex-shrink-0" style={{ color:"var(--p)" }}>
+                          Rp{(item.price * item.qty).toLocaleString()}
+                        </p>
                       </div>
                     ))}
                   </div>
+
+                  {/* Footer */}
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                    <p className="text-xs text-gray-500">{order.items.reduce((s,i)=>s+i.qty,0)} item</p>
+                    <p className="text-xs text-gray-500">
+                      {order.items.reduce((s,i) => s+i.qty, 0)} item
+                    </p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-gray-500">Total:</p>
-                      <p className="font-extrabold text-gray-900 text-sm">Rp{getTotal(order.items).toLocaleString()}</p>
+                      <p className="font-extrabold text-gray-900 text-sm">
+                        Rp{getTotal(order.items).toLocaleString()}
+                      </p>
                     </div>
                   </div>
+
+                  {/* Actions */}
                   {isSedang(order.status) && (
                     <div className="px-4 pb-4 pt-1">
-                      <button onClick={() => { const c=buildCartFromOrder(order.items,menuDatabase); onClose(); onNavigateToPesanan({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]), orderId:order.id }); }}
+                      <button
+                        onClick={() => {
+                          const c = buildCartFromOrder(order.items, menuDatabase);
+                          onClose();
+                          onNavigateToPesanan({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]), orderId:order.id });
+                        }}
                         className="w-full py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
                         style={{ background:"var(--grad)", color:"var(--on-p)" }}>
                         <ExternalLink size={15} /> Lihat Detail Pesanan
@@ -581,7 +669,12 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                   )}
                   {isSelesai(order.status) && (
                     <div className="px-4 pb-4 pt-1">
-                      <button onClick={() => { const c=buildCartFromOrder(order.items,menuDatabase); onClose(); onReorder({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]) }); }}
+                      <button
+                        onClick={() => {
+                          const c = buildCartFromOrder(order.items, menuDatabase);
+                          onClose();
+                          onReorder({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]) });
+                        }}
                         className="w-full py-3 border-2 font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                         style={{ borderColor:"var(--p)", color:"var(--p)" }}>
                         <RotateCcw size={15} /> 🔄 Pesan Lagi
@@ -605,8 +698,10 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
     return () => { document.body.style.overflow = ""; };
   }, []);
   const badgeColor = {
-    "Promo":"bg-gradient-to-r from-red-500 to-pink-500", "Favorit":"bg-gradient-to-r from-amber-500 to-orange-500",
-    "Baru":"bg-gradient-to-r from-green-500 to-emerald-500", "Best Seller":"bg-gradient-to-r from-purple-500 to-pink-500",
+    "Promo":       "bg-gradient-to-r from-red-500 to-pink-500",
+    "Favorit":     "bg-gradient-to-r from-amber-500 to-orange-500",
+    "Baru":        "bg-gradient-to-r from-green-500 to-emerald-500",
+    "Best Seller": "bg-gradient-to-r from-purple-500 to-pink-500",
   };
   return (
     <div className="fixed inset-0 z-50 flex items-end animate-fadeIn"
@@ -676,6 +771,9 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
   );
 }
 
+/* ══════════════════════════════════════════════════════════
+    Main Home Component
+══════════════════════════════════════════════════════════ */
 export default function Home() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -689,7 +787,7 @@ export default function Home() {
   const [cart, setCart]                           = useState({});
   const sectionRefs = useRef({});
 
-  const { data: menuRaw,       loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
+  const { data: menuRaw, loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
     () => CAFE_ID ? api.get(`api/menu/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
     [CAFE_ID]
   );
@@ -731,15 +829,44 @@ export default function Home() {
 
   const addItem    = (id) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+1 }));
   const removeItem = (id) => setCart(prev => { const u={...prev}; if(u[id]>1) u[id]--; else delete u[id]; return u; });
-  const handleSheetAdd          = (id, qty) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+qty }));
-  const handleCheckout          = () => navigate("/pesanan", { state:{ cart, items:cartItems } });
-  const handleNavigateToPesanan = ({ cart:oc, items:oi, orderId }) => navigate("/pesanan", { state:{ cart:oc, items:oi, fromRiwayat:true, orderId } });
-  const handleReorder = ({ cart:rc }) => {
+  const handleSheetAdd = (id, qty) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+qty }));
+
+  /* ── Navigate ke /pesanan — sertakan cafeId dan mejaId ── */
+  const handleCheckout = () => navigate("/pesanan", {
+    state: {
+      cart,
+      items:   cartItems,
+      cafeId:  CAFE_ID,
+      mejaId:  MEJA_ID,
+    }
+  });
+
+  const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) => navigate("/pesanan", {
+    state: {
+      cart:       oc,
+      items:      oi,
+      cafeId:     CAFE_ID,
+      mejaId:     MEJA_ID,
+      fromRiwayat: true,
+      orderId,
+    }
+  });
+
+  const handleReorder = ({ cart: rc }) => {
     const merged = { ...cart };
     Object.entries(rc).forEach(([id, qty]) => { merged[id] = (merged[id]||0)+qty; });
     setCart(merged);
-    navigate("/pesanan", { state:{ cart:merged, items:Object.values(menuDatabase).filter(m=>merged[m.id]), isReorder:true } });
+    navigate("/pesanan", {
+      state: {
+        cart:     merged,
+        items:    Object.values(menuDatabase).filter(m => merged[m.id]),
+        cafeId:   CAFE_ID,
+        mejaId:   MEJA_ID,
+        isReorder: true,
+      }
+    });
   };
+
   const handleCategoryClick = (catId) => {
     setActiveCategory(catId);
     if (catId === "all") { window.scrollTo({ top:0, behavior:"smooth" }); return; }
@@ -781,7 +908,6 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* ✅ FIX: navigate ke search dengan query params */}
               <button onClick={() => navigate(`/search?table=${MEJA_ID}&cafe_id=${CAFE_ID}`)}
                 className="w-9 h-9 flex items-center justify-center rounded-xl transition-all"
                 style={{ background:"var(--bg-soft)" }}>
@@ -941,17 +1067,25 @@ export default function Home() {
       </div>
 
       {showRiwayat && (
-        <RiwayatPesananSheet menuDatabase={menuDatabase} mejaId={MEJA_ID} cafeId={CAFE_ID}
+        <RiwayatPesananSheet
+          menuDatabase={menuDatabase}
+          mejaId={MEJA_ID}
+          cafeId={CAFE_ID}
           cafeName={cafeProfile.nama}
-          onClose={() => setShowRiwayat(false)} onNavigateToPesanan={handleNavigateToPesanan} onReorder={handleReorder} />
+          onClose={() => setShowRiwayat(false)}
+          onNavigateToPesanan={handleNavigateToPesanan}
+          onReorder={handleReorder}
+        />
       )}
       {lihatSemuaSection && (
         <LihatSemuaPopup section={lihatSemuaSection} cart={cart} menuDatabase={menuDatabase}
-          onAdd={addItem} onRemove={removeItem} onItemClick={setSelectedItem} onClose={() => setLihatSemuaSection(null)} />
+          onAdd={addItem} onRemove={removeItem} onItemClick={setSelectedItem}
+          onClose={() => setLihatSemuaSection(null)} />
       )}
       {selectedItem && (
         <MenuDetailSheet item={selectedItem} menuDatabase={menuDatabase}
-          onClose={() => setSelectedItem(null)} onAddToCart={handleSheetAdd} onOpenItem={item => setSelectedItem(item)} />
+          onClose={() => setSelectedItem(null)} onAddToCart={handleSheetAdd}
+          onOpenItem={item => setSelectedItem(item)} />
       )}
 
       <style>{`
@@ -966,4 +1100,4 @@ export default function Home() {
       `}</style>
     </div>
   );
-} 
+}

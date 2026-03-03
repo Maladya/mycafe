@@ -1,14 +1,17 @@
 import { ChevronLeft, CreditCard, Wallet, Check, Gift, Info, X, Tag, Image } from "lucide-react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 /* ─────────────────────────────────────────────
-   Theme helpers (sama dengan Home & Pesanan)
+   Config
    ──────────────────────────────────────────── */
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
 
+/* ─────────────────────────────────────────────
+   Theme helpers
+   ──────────────────────────────────────────── */
 function parseTheme(raw) {
   const DEF = { primary: "#f59e0b", secondary: "#ea580c", bg: "#f9fafb", text: "#111827" };
   if (!raw) return DEF;
@@ -46,46 +49,162 @@ function applyThemeVars(theme) {
   document.documentElement.setAttribute("style", vars);
 }
 
+/* ─────────────────────────────────────────────
+   API helpers
+   ──────────────────────────────────────────── */
 const api = {
-  get: async (path) => {
+  get: async (path, timeoutMs = 8000) => {
     const token = tokenManager.get();
     const headers = { "Content-Type": "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/${path}`, { headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${BASE_URL}/${path}`, { headers, signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    } finally { clearTimeout(timer); }
+  },
+  post: async (path, body, timeoutMs = 10000) => {
+    const token = tokenManager.get();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${BASE_URL}/${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.message ?? `HTTP ${res.status}`);
+      }
+      return res.json();
+    } finally { clearTimeout(timer); }
   },
 };
 
 /* ─────────────────────────────────────────────
-   PromoCode Modal (tema dinamis)
+   Load Midtrans Snap.js (sandbox)
    ──────────────────────────────────────────── */
-const promoCodes = [
-  { code: "ASTAKIRA10", discount: "10%", description: "Diskon 10% untuk semua menu", minOrder: 20000 },
-  { code: "NEWUSER",    discount: "Rp5.000", description: "Diskon Rp5.000 untuk pelanggan baru", minOrder: 15000 },
-  { code: "KOPI20",     discount: "20%", description: "Diskon 20% khusus menu kopi", minOrder: 10000 },
-];
+function loadSnapScript(clientKey) {
+  return new Promise((resolve, reject) => {
+    if (window.snap) { resolve(); return; }
+    const existing = document.getElementById("midtrans-snap");
+    if (existing) { existing.addEventListener("load", resolve); return; }
+    const script = document.createElement("script");
+    script.id = "midtrans-snap";
+    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.setAttribute("data-client-key", clientKey);
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("Gagal memuat Midtrans Snap"));
+    document.head.appendChild(script);
+  });
+}
 
-function PromoCodeModal({ onClose, onApply, subtotal }) {
-  const [input, setInput]     = useState("");
-  const [error, setError]     = useState("");
-  const [success, setSuccess] = useState(null);
+/* ─────────────────────────────────────────────
+   PromoCode Modal — API driven
+   ──────────────────────────────────────────── */
 
-  const handleApply = (codeObj) => {
-    if (codeObj.minOrder && subtotal < codeObj.minOrder) {
-      setError(`Minimum pesanan Rp${codeObj.minOrder.toLocaleString()} untuk kode ini`);
+/**
+ * Normalise promo object dari berbagai bentuk response backend:
+ *   { code, discount_type, discount_value, description, min_order }
+ *   { code, discount, description, minOrder }
+ * → selalu { code, discountLabel, discountType, discountValue, description, minOrder }
+ */
+function normalisePromo(raw) {
+  // sudah dinormalise sebelumnya
+  if (raw?.discountLabel) return raw;
+
+  const code        = raw.code ?? raw.kode ?? "";
+  const description = raw.description ?? raw.deskripsi ?? "";
+  const minOrder    = raw.min_order ?? raw.minOrder ?? raw.minimum_order ?? 0;
+
+  let discountType  = raw.discount_type ?? raw.tipe_diskon ?? "";
+  let discountValue = raw.discount_value ?? raw.nilai_diskon ?? 0;
+  let discountLabel = raw.discount ?? raw.diskon ?? "";
+
+  /* fallback: parse dari string "10%" atau "Rp5.000" */
+  if (!discountType && discountLabel) {
+    if (String(discountLabel).includes("%")) {
+      discountType  = "percent";
+      discountValue = parseInt(discountLabel);
+    } else {
+      discountType  = "fixed";
+      discountValue = parseInt(String(discountLabel).replace(/\D/g, ""));
+    }
+  }
+
+  /* build label tampilan */
+  if (!discountLabel) {
+    discountLabel = discountType === "percent"
+      ? `${discountValue}%`
+      : `Rp${Number(discountValue).toLocaleString()}`;
+  }
+
+  return { code, discountLabel, discountType, discountValue, description, minOrder };
+}
+
+function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
+  const [input, setInput]       = useState("");
+  const [error, setError]       = useState("");
+  const [success, setSuccess]   = useState(null);
+  const [promos, setPromos]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [validating, setValidating] = useState(false);
+
+  const [fetchError, setFetchError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+
+  /* ── Fetch daftar promo dari backend ── */
+  useEffect(() => {
+    setLoading(true);
+    setFetchError(false);
+    const path = cafeId ? `api/promo/user/${cafeId}` : `api/promo`;
+    api.get(path)
+      .then(r => {
+        const list = r?.data ?? r ?? [];
+        setPromos(Array.isArray(list) ? list.map(normalisePromo) : []);
+      })
+      .catch(() => { setPromos([]); setFetchError(true); })
+      .finally(() => setLoading(false));
+  }, [cafeId, retryKey]);
+
+  /* ── Validasi & apply promo ── */
+  const applyPromo = (promoObj) => {
+    if (promoObj.minOrder && subtotal < promoObj.minOrder) {
+      setError(`Minimum pesanan Rp${Number(promoObj.minOrder).toLocaleString()} untuk kode ini`);
       setSuccess(null);
       return;
     }
-    setSuccess(codeObj);
     setError("");
-    setTimeout(() => { onApply(codeObj); onClose(); }, 800);
+    setSuccess(promoObj);
+    setTimeout(() => { onApply(promoObj); onClose(); }, 700);
   };
 
-  const handleManualApply = () => {
-    const found = promoCodes.find(p => p.code === input.toUpperCase().trim());
-    if (!found) { setError("Kode promo tidak valid"); return; }
-    handleApply(found);
+  /* ── Manual input → validasi ke backend ── */
+  const handleManualApply = async () => {
+    const code = input.toUpperCase().trim();
+    if (!code) return;
+    setValidating(true);
+    setError("");
+    try {
+      const res = await api.post("api/promo/validate", {
+        code,
+        cafe_id:  cafeId,
+        subtotal,
+      });
+      const promoRaw = res?.data ?? res;
+      if (!promoRaw?.code && !promoRaw?.kode) throw new Error("Kode promo tidak valid");
+      applyPromo(normalisePromo(promoRaw));
+    } catch (err) {
+      setError(err.message ?? "Kode promo tidak valid atau sudah kadaluarsa");
+    } finally {
+      setValidating(false);
+    }
   };
 
   return (
@@ -101,17 +220,23 @@ function PromoCodeModal({ onClose, onApply, subtotal }) {
           </button>
         </div>
 
-        {/* Manual input */}
-        <div className="flex gap-2 mb-5">
+        {/* ── Manual input + validasi backend ── */}
+        <div className="flex gap-2 mb-2">
           <input value={input} onChange={e => { setInput(e.target.value); setError(""); }}
             placeholder="Masukkan kode promo"
+            onKeyDown={e => e.key === "Enter" && handleManualApply()}
             className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold uppercase outline-none transition-all"
             onFocus={e => { e.target.style.borderColor = "var(--p)"; }}
             onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }} />
-          <button onClick={handleManualApply}
-            className="text-white px-5 rounded-xl font-bold text-sm shadow-md"
+          <button onClick={handleManualApply} disabled={validating || !input.trim()}
+            className="px-5 rounded-xl font-bold text-sm shadow-md disabled:opacity-60 flex items-center gap-1.5 min-w-[72px] justify-center"
             style={{ background: "var(--grad)", color: "var(--on-p)" }}>
-            Pakai
+            {validating
+              ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+              : "Pakai"}
           </button>
         </div>
 
@@ -121,33 +246,67 @@ function PromoCodeModal({ onClose, onApply, subtotal }) {
           </p>
         )}
 
-        <p className="text-xs text-gray-400 font-semibold mb-3 uppercase tracking-wide">Promo Tersedia</p>
-        <div className="space-y-2 pb-4">
-          {promoCodes.map(p => (
-            <button key={p.code} onClick={() => handleApply(p)}
-              className={`w-full rounded-2xl p-4 flex items-center justify-between text-left transition-all border-2 ${
-                success?.code === p.code ? "border-green-500 bg-green-50" : "hover:bg-gray-50"
-              }`}
-              style={success?.code !== p.code ? { borderStyle: "dashed", borderColor: "var(--p-20)" } : {}}>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: "var(--grad)" }}>
-                  <Tag size={16} style={{ color: "var(--on-p)" }} />
-                </div>
-                <div>
-                  <p className="font-extrabold text-sm" style={{ color: "var(--p)" }}>{p.code}</p>
-                  <p className="text-xs text-gray-500">{p.description}</p>
-                </div>
-              </div>
-              <div className={`text-sm font-extrabold px-3 py-1 rounded-xl ${
-                success?.code === p.code ? "bg-green-500 text-white" : ""
-              }`}
-                style={success?.code !== p.code ? { background: "var(--bg-soft)", color: "var(--p)" } : {}}>
-                {success?.code === p.code ? <Check size={16} /> : p.discount}
-              </div>
+        {/* ── Daftar promo dari backend ── */}
+        <p className="text-xs text-gray-400 font-semibold mb-3 mt-4 uppercase tracking-wide">Promo Tersedia</p>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <svg className="animate-spin w-6 h-6" viewBox="0 0 24 24" fill="none"
+              style={{ color: "var(--p)" }}>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <p className="text-xs text-gray-400">Memuat promo...</p>
+          </div>
+        ) : fetchError ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <span className="text-3xl">📡</span>
+            <p className="text-sm text-gray-500 font-semibold">Gagal memuat promo</p>
+            <p className="text-xs text-gray-400 text-center">Periksa koneksi atau coba lagi</p>
+            <button onClick={() => setRetryKey(k => k + 1)}
+              className="mt-1 px-5 py-2 rounded-xl text-sm font-bold shadow"
+              style={{ background: "var(--grad)", color: "var(--on-p)" }}>
+              Coba Lagi
             </button>
-          ))}
-        </div>
+          </div>
+        ) : promos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-2">
+            <span className="text-3xl">🎟️</span>
+            <p className="text-sm text-gray-400 font-semibold">Tidak ada promo tersedia</p>
+          </div>
+        ) : (
+          <div className="space-y-2 pb-4 max-h-64 overflow-y-auto">
+            {promos.map(p => (
+              <button key={p.code} onClick={() => applyPromo(p)}
+                className={`w-full rounded-2xl p-4 flex items-center justify-between text-left transition-all border-2 ${
+                  success?.code === p.code ? "border-green-500 bg-green-50" : "hover:bg-gray-50"
+                }`}
+                style={success?.code !== p.code ? { borderStyle: "dashed", borderColor: "var(--p-20)" } : {}}>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: "var(--grad)" }}>
+                    <Tag size={16} style={{ color: "var(--on-p)" }} />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <p className="font-extrabold text-sm" style={{ color: "var(--p)" }}>{p.code}</p>
+                    <p className="text-xs text-gray-500 line-clamp-1">{p.description}</p>
+                    {p.minOrder > 0 && (
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        Min. Rp{Number(p.minOrder).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className={`text-sm font-extrabold px-3 py-1 rounded-xl flex-shrink-0 ml-2 ${
+                  success?.code === p.code ? "bg-green-500 text-white" : ""
+                }`}
+                  style={success?.code !== p.code ? { background: "var(--bg-soft)", color: "var(--p)" } : {}}>
+                  {success?.code === p.code ? <Check size={16} /> : p.discountLabel}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -173,14 +332,19 @@ export default function Pembayaran() {
   const orderedItems = items.filter(i => (cart[i.id] || 0) > 0);
   const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
 
-  const [method, setMethod]           = useState("online");
+  const [method, setMethod]             = useState("online");
   const [confirmKasir, setConfirmKasir] = useState(false);
-  const [showPromo, setShowPromo]     = useState(false);
+  const [showPromo, setShowPromo]       = useState(false);
   const [appliedPromo, setAppliedPromo] = useState(null);
-  const [form, setForm]               = useState({ nama: "", meja: MEJA_ID });
-  const [cafeName, setCafeName]       = useState("ASTAKIRA");
+  const [form, setForm]                 = useState({ nama: "", meja: MEJA_ID });
+  const [cafeName, setCafeName]         = useState("ASTAKIRA");
+  const [snapClientKey, setSnapClientKey] = useState("");
 
-  /* ── Muat tema ── */
+  /* loading / error state untuk tombol bayar */
+  const [paying, setPaying]   = useState(false);
+  const [payError, setPayError] = useState("");
+
+  /* ── Muat tema + client key ── */
   useEffect(() => {
     try {
       const cached = localStorage.getItem(THEME_CACHE_KEY);
@@ -195,25 +359,122 @@ export default function Pembayaran() {
         applyThemeVars(theme);
         try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme)); } catch {}
         setCafeName(raw?.nama_cafe ?? raw?.nama ?? raw?.name ?? "ASTAKIRA");
+
+        /* Ambil Midtrans client key dari pengaturan jika tersedia */
+        const key = raw?.midtrans_client_key ?? raw?.snap_client_key ?? "";
+        if (key) setSnapClientKey(key);
       })
       .catch(() => {});
   }, [CAFE_ID]);
 
+  /* ── Kalkulasi harga ── */
   const calculateDiscount = () => {
     if (!appliedPromo) return 0;
-    if (appliedPromo.discount.includes("%"))
-      return Math.round(subtotal * parseInt(appliedPromo.discount) / 100);
-    return parseInt(appliedPromo.discount.replace(/\D/g, ""));
+    if (appliedPromo.discountType === "percent")
+      return Math.round(subtotal * appliedPromo.discountValue / 100);
+    if (appliedPromo.discountType === "fixed")
+      return Math.min(Number(appliedPromo.discountValue), subtotal);
+    const raw = String(appliedPromo.discountLabel ?? "");
+    if (raw.includes("%")) return Math.round(subtotal * parseInt(raw) / 100);
+    return parseInt(raw.replace(/\D/g, "")) || 0;
   };
   const discount = calculateDiscount();
   const total = subtotal - discount;
 
-  const handleBayar = () => {
-    if (method === "kasir") { setConfirmKasir(true); }
-    else {
-      navigate("/ringkasanpesanan", {
-        state: { cart, items, note, itemNotes, subtotal, discount, total, form, method, cafeId: CAFE_ID, mejaId: MEJA_ID },
+  /* ─────────────────────────────────────────
+     Buat transaksi Midtrans ke backend,
+     lalu buka Snap popup
+     ───────────────────────────────────────── */
+  const handleOnlinePayment = useCallback(async () => {
+    if (!form.nama.trim()) {
+      setPayError("Nama lengkap wajib diisi");
+      return;
+    }
+
+    setPaying(true);
+    setPayError("");
+
+    try {
+      /* 1. Minta snap_token dari backend */
+      const payload = {
+        cafe_id:      CAFE_ID,
+        meja_id:      MEJA_ID,
+        nama:         form.nama,
+        note,
+        item_notes:   itemNotes,
+        promo_code:   appliedPromo?.code ?? null,
+        subtotal,
+        discount,
+        total,
+        items: orderedItems.map(item => ({
+          id:       item.id,
+          name:     item.name,
+          price:    item.price,
+          quantity: cart[item.id],
+        })),
+      };
+
+      /* Endpoint backend: POST /api/pembayaran/midtrans/token  (sesuaikan jika berbeda) */
+      const res = await api.post("api/pembayaran/midtrans/token", payload);
+      const snapToken    = res?.snap_token ?? res?.data?.snap_token;
+      const clientKey    = res?.client_key ?? res?.data?.client_key ?? snapClientKey;
+      const orderId      = res?.order_id   ?? res?.data?.order_id;
+
+      if (!snapToken) throw new Error("snap_token tidak ditemukan di respons backend");
+
+      /* 2. Load Snap.js jika belum */
+      await loadSnapScript(clientKey);
+
+      /* 3. Buka popup Midtrans */
+      window.snap.pay(snapToken, {
+        onSuccess: (result) => {
+          setPaying(false);
+          navigate("/ringkasanpesanan", {
+            state: {
+              cart, items, note, itemNotes, subtotal, discount, total,
+              form, method, cafeId: CAFE_ID, mejaId: MEJA_ID,
+              midtrans: { status: "success", orderId, result },
+            },
+          });
+        },
+        onPending: (result) => {
+          setPaying(false);
+          navigate("/ringkasanpesanan", {
+            state: {
+              cart, items, note, itemNotes, subtotal, discount, total,
+              form, method, cafeId: CAFE_ID, mejaId: MEJA_ID,
+              midtrans: { status: "pending", orderId, result },
+            },
+          });
+        },
+        onError: (result) => {
+          setPaying(false);
+          setPayError("Pembayaran gagal: " + (result?.status_message ?? "Silakan coba lagi"));
+        },
+        onClose: () => {
+          setPaying(false);
+          /* user menutup popup tanpa bayar — tetap di halaman ini */
+        },
       });
+
+    } catch (err) {
+      setPaying(false);
+      setPayError(err.message ?? "Terjadi kesalahan, coba lagi");
+    }
+  }, [
+    form, CAFE_ID, MEJA_ID, note, itemNotes, appliedPromo,
+    subtotal, discount, total, orderedItems, cart, items, method,
+    navigate, snapClientKey,
+  ]);
+
+  /* ── Main handler tombol bayar ── */
+  const handleBayar = () => {
+    if (method === "kasir") {
+      if (!form.nama.trim()) { setPayError("Nama lengkap wajib diisi"); return; }
+      setPayError("");
+      setConfirmKasir(true);
+    } else {
+      handleOnlinePayment();
     }
   };
 
@@ -303,7 +564,7 @@ export default function Pembayaran() {
             <div>
               <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Nama Lengkap</label>
               <input type="text" placeholder="Masukkan nama lengkap" value={form.nama}
-                onChange={e => setForm({ ...form, nama: e.target.value })}
+                onChange={e => { setForm({ ...form, nama: e.target.value }); setPayError(""); }}
                 className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm outline-none transition-all"
                 onFocus={e => { e.target.style.borderColor = "var(--p)"; e.target.style.boxShadow = `0 0 0 4px var(--p-20)`; }}
                 onBlur={e => { e.target.style.borderColor = "#e5e7eb"; e.target.style.boxShadow = "none"; }} />
@@ -334,16 +595,14 @@ export default function Pembayaran() {
               { id: "online", icon: <CreditCard size={22} />, label: "Online",    sub: "QRIS / E-Wallet" },
               { id: "kasir",  icon: <Wallet size={22} />,     label: "Di Kasir",  sub: "Bayar langsung" },
             ].map(m => (
-              <button key={m.id} onClick={() => setMethod(m.id)}
+              <button key={m.id} onClick={() => { setMethod(m.id); setPayError(""); }}
                 className="relative rounded-2xl p-4 border-2 transition-all bg-white"
                 style={method === m.id
                   ? { borderColor: "var(--p)", background: "var(--bg-soft)", boxShadow: `0 4px 20px var(--p-20)` }
                   : { borderColor: "#e5e7eb" }}>
                 <div className="flex flex-col items-center gap-2.5">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                    style={method === m.id
-                      ? { background: "var(--grad)" }
-                      : { background: "#f3f4f6" }}>
+                    style={method === m.id ? { background: "var(--grad)" } : { background: "#f3f4f6" }}>
                     <span style={method === m.id ? { color: "var(--on-p)" } : { color: "#6b7280" }}>{m.icon}</span>
                   </div>
                   <div className="text-center">
@@ -372,8 +631,8 @@ export default function Pembayaran() {
                   <span className="text-xl">📱</span>
                 </div>
                 <div>
-                  <p className="font-bold text-sm text-gray-900">QRIS</p>
-                  <p className="text-xs text-gray-400">Scan QR Code untuk bayar</p>
+                  <p className="font-bold text-sm text-gray-900">QRIS / E-Wallet / Kartu</p>
+                  <p className="text-xs text-gray-400">Proses via Midtrans Sandbox</p>
                 </div>
               </div>
               <div className="w-5 h-5 rounded-full flex items-center justify-center"
@@ -414,7 +673,7 @@ export default function Pembayaran() {
                 {appliedPromo ? (
                   <>
                     <p className="font-bold text-green-700 text-sm">{appliedPromo.code}</p>
-                    <p className="text-xs text-green-600">Hemat {appliedPromo.discount}!</p>
+                    <p className="text-xs text-green-600">Hemat {appliedPromo.discountLabel}!</p>
                   </>
                 ) : (
                   <>
@@ -455,6 +714,16 @@ export default function Pembayaran() {
             </div>
           </div>
         </div>
+
+        {/* ── ERROR MESSAGE ── */}
+        {payError && (
+          <div className="px-4 mb-3">
+            <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+              <Info size={16} className="text-red-500 flex-shrink-0" />
+              <p className="text-sm text-red-600 font-semibold">{payError}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── FOOTER ── */}
@@ -466,10 +735,20 @@ export default function Pembayaran() {
               <p className="text-xs text-gray-400 mb-0.5">Total Pembayaran</p>
               <p className="font-extrabold text-2xl text-gray-900">Rp{total.toLocaleString()}</p>
             </div>
-            <button onClick={handleBayar}
-              className="px-8 py-3.5 rounded-2xl font-bold shadow-lg hover:scale-105 hover:shadow-xl transition-all whitespace-nowrap"
+            <button onClick={handleBayar} disabled={paying}
+              className="px-8 py-3.5 rounded-2xl font-bold shadow-lg hover:scale-105 hover:shadow-xl transition-all whitespace-nowrap disabled:opacity-70 disabled:scale-100 flex items-center gap-2"
               style={{ background: "var(--grad)", color: "var(--on-p)" }}>
-              Bayar Sekarang →
+              {paying ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Memproses...
+                </>
+              ) : (
+                "Bayar Sekarang →"
+              )}
             </button>
           </div>
         </div>
@@ -526,7 +805,7 @@ export default function Pembayaran() {
 
       {/* ── PROMO MODAL ── */}
       {showPromo && (
-        <PromoCodeModal onClose={() => setShowPromo(false)} onApply={setAppliedPromo} subtotal={subtotal} />
+        <PromoCodeModal onClose={() => setShowPromo(false)} onApply={setAppliedPromo} subtotal={subtotal} cafeId={CAFE_ID} />
       )}
 
       <style>{`
@@ -537,6 +816,8 @@ export default function Pembayaran() {
         .animate-fadeIn   { animation: fadeIn 0.3s ease-out; }
         .animate-scaleIn  { animation: scaleIn 0.3s cubic-bezier(0.16,1,0.3,1); }
         .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
     </div>
   );

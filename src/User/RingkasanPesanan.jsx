@@ -1,17 +1,18 @@
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronLeft, CheckCircle, Copy, Download, Share2,
   AlertCircle, Receipt, MapPin, Clock, QrCode,
-  Loader2, Image
+  Loader2, Image, RefreshCw
 } from "lucide-react";
 
 /* ─────────────────────────────────────────────
-   Theme helpers
+   Config & Helpers
    ──────────────────────────────────────────── */
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
+const THEME_CACHE_KEY = "astakira_theme";
 
 function parseTheme(raw) {
   const DEF = { primary: "#f59e0b", secondary: "#ea580c", bg: "#f9fafb", text: "#111827" };
@@ -37,8 +38,6 @@ function ha(hex, a) {
   } catch { return hex; }
 }
 
-const THEME_CACHE_KEY = "astakira_theme";
-
 function applyThemeVars(theme) {
   const onP = contrast(theme.primary);
   const vars = [
@@ -50,21 +49,6 @@ function applyThemeVars(theme) {
   document.documentElement.setAttribute("style", vars);
 }
 
-const api = {
-  get: async (path) => {
-    const token = tokenManager.get();
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/${path}`, { headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-};
-
-function generateOrderNumber() {
-  return Math.random().toString(36).toUpperCase().slice(2, 10);
-}
-
 /* ─────────────────────────────────────────────
    Main Component
    ──────────────────────────────────────────── */
@@ -74,7 +58,7 @@ export default function RingkasanPesanan() {
   const [searchParams] = useSearchParams();
 
   const CAFE_ID = state?.cafeId ?? searchParams.get("cafe_id") ?? "";
-  const MEJA_ID = state?.mejaId ?? searchParams.get("table") ?? "1";
+  const MEJA_ID = state?.mejaId ?? searchParams.get("table")   ?? "1";
 
   const cart      = state?.cart      || {};
   const items     = state?.items     || [];
@@ -89,11 +73,15 @@ export default function RingkasanPesanan() {
   const orderedItems = items.filter(i => (cart[i.id] || 0) > 0);
   const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
 
-  const [orderNumber] = useState(() => generateOrderNumber());
-  const [status, setStatus]       = useState("waiting");
-  const [copied, setCopied]       = useState(false);
-  const [confirmNew, setConfirmNew] = useState(false);
-  const [cafeName, setCafeName]   = useState("ASTAKIRA");
+  /* ── State ── */
+  const [orderNumber, setOrderNumber] = useState(""); // dari backend
+  const [orderId,     setOrderId]     = useState(null);
+  const [status,      setStatus]      = useState("submitting"); // submitting | waiting | processing | success | error
+  const [submitError, setSubmitError] = useState(null);
+  const [copied,      setCopied]      = useState(false);
+  const [confirmNew,  setConfirmNew]  = useState(false);
+  const [cafeName,    setCafeName]    = useState("ASTAKIRA");
+  const submitted = useRef(false); // guard double-submit
 
   /* ── Muat tema ── */
   useEffect(() => {
@@ -103,7 +91,10 @@ export default function RingkasanPesanan() {
     } catch {}
 
     if (!CAFE_ID) return;
-    api.get(`api/pengaturan/user/${CAFE_ID}`)
+    fetch(`${BASE_URL}/api/pengaturan/user/${CAFE_ID}`, {
+      headers: { "Content-Type": "application/json" }
+    })
+      .then(r => r.json())
       .then(r => {
         const raw = r.data ?? r;
         const theme = parseTheme(raw?.tema_colors);
@@ -114,32 +105,148 @@ export default function RingkasanPesanan() {
       .catch(() => {});
   }, [CAFE_ID]);
 
-  /* ── Simulasi polling ── */
+  /* ── POST pesanan ke backend saat mount ── */
   useEffect(() => {
-    if (status !== "waiting") return;
-    const timer = setTimeout(() => triggerPaymentSuccess(), 8000);
-    return () => clearTimeout(timer);
-  }, [status]);
+    if (submitted.current) return; // hindari double submit (React StrictMode)
+    submitted.current = true;
 
+    // Kalau tidak ada item, skip
+    if (orderedItems.length === 0) {
+      setStatus("error");
+      setSubmitError("Tidak ada item dalam pesanan.");
+      return;
+    }
+
+    const buatPesanan = async () => {
+      setStatus("submitting");
+      setSubmitError(null);
+      try {
+        const payload = {
+          cafe_id:  CAFE_ID,
+          meja:     MEJA_ID,
+          nama:     form?.nama ?? "",
+          total:    total,
+          note:     note,
+          method:   method,
+          estimasi: "15 mnt",
+          items:    orderedItems.map(item => ({
+            nama_menu: item.name ?? item.nama_menu ?? item.nama ?? "",
+            qty:       cart[item.id] || 0,
+            harga:     item.price ?? item.harga ?? 0,
+            catatan:   itemNotes?.[item.id] ?? "",
+          })),
+        };
+
+        const res = await fetch(`${BASE_URL}/api/orders`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok || data.success === false) {
+          throw new Error(data.message ?? `HTTP ${res.status}`);
+        }
+
+        const newId = data.data?.id ?? data.id ?? data.order_id ?? "";
+        setOrderId(newId);
+        setOrderNumber(newId); // gunakan ID dari backend sebagai nomor pesanan
+        setStatus("waiting");
+      } catch (err) {
+        setSubmitError(err.message || "Gagal membuat pesanan");
+        setStatus("error");
+      }
+    };
+
+    buatPesanan();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Polling status pesanan (untuk QRIS — cek apakah sudah dibayar) ── */
+  useEffect(() => {
+    if (status !== "waiting" || !orderId || method === "kasir") return;
+
+    const poll = setInterval(async () => {
+      try {
+        const res  = await fetch(`${BASE_URL}/api/orders/${orderId}`);
+        const data = await res.json();
+        const s    = data.data?.status ?? data.status;
+        if (s === "selesai" || s === "paid" || s === "completed") {
+          clearInterval(poll);
+          setStatus("processing");
+          setTimeout(() => setStatus("success"), 1500);
+        }
+      } catch { /* silent */ }
+    }, 5000); // poll setiap 5 detik
+
+    return () => clearInterval(poll);
+  }, [status, orderId, method]);
+
+  /* ── Untuk metode kasir: langsung ke success setelah konfirmasi kasir ── */
   const triggerPaymentSuccess = () => {
     setStatus("processing");
-    setTimeout(() => setStatus("success"), 2000);
+    setTimeout(() => setStatus("success"), 1500);
   };
 
   const handleCopy = () => {
+    if (!orderNumber) return;
     navigator.clipboard.writeText(orderNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownloadQR = () => {
+    if (!orderNumber) return;
     const link = document.createElement("a");
     link.href = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${orderNumber}`;
     link.download = `QR-${orderNumber}.png`;
     link.click();
   };
 
-  /* ── Shared: Detail pesanan card ── */
+  /* ── Retry submit ── */
+  const handleRetry = () => {
+    submitted.current = false;
+    setStatus("submitting");
+    setSubmitError(null);
+    // Trigger ulang
+    submitted.current = true;
+    const buatPesanan = async () => {
+      try {
+        const payload = {
+          cafe_id:  CAFE_ID,
+          meja:     MEJA_ID,
+          nama:     form?.nama ?? "",
+          total,
+          note,
+          method,
+          estimasi: "15 mnt",
+          items: orderedItems.map(item => ({
+            nama_menu: item.name ?? item.nama_menu ?? item.nama ?? "",
+            qty:       cart[item.id] || 0,
+            harga:     item.price ?? item.harga ?? 0,
+            catatan:   itemNotes?.[item.id] ?? "",
+          })),
+        };
+        const res  = await fetch(`${BASE_URL}/api/orders`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || data.success === false) throw new Error(data.message ?? `HTTP ${res.status}`);
+        const newId = data.data?.id ?? data.id ?? data.order_id ?? "";
+        setOrderId(newId);
+        setOrderNumber(newId);
+        setStatus("waiting");
+      } catch (err) {
+        setSubmitError(err.message || "Gagal membuat pesanan");
+        setStatus("error");
+      }
+    };
+    buatPesanan();
+  };
+
+  /* ── Sub-components ── */
   const DetailCard = ({ accentColor }) => (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
@@ -152,21 +259,27 @@ export default function RingkasanPesanan() {
             <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0"
               style={{ background: "var(--bg-soft)" }}>
               {item.image_url || item.image
-                ? <img src={item.image_url ?? item.image} alt={item.name} className="w-full h-full object-cover" />
+                ? <img src={item.image_url ?? item.image} alt={item.name}
+                    className="w-full h-full object-cover"
+                    onError={e => { e.currentTarget.style.display = "none"; }} />
                 : <div className="w-full h-full flex items-center justify-center">
                     <Image size={14} style={{ color: "var(--p)", opacity: 0.4 }} />
                   </div>
               }
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900 text-sm line-clamp-1">{item.name}</p>
+              <p className="font-semibold text-gray-900 text-sm line-clamp-1">
+                {item.name ?? item.nama_menu ?? item.nama}
+              </p>
               {itemNotes[item.id] && (
                 <p className="text-[10px]" style={{ color: "var(--p)" }}>📝 {itemNotes[item.id]}</p>
               )}
             </div>
             <div className="text-right flex-shrink-0">
               <p className="text-[10px] text-gray-400">{cart[item.id]}×</p>
-              <p className="text-sm font-bold text-gray-800">Rp{(cart[item.id] * item.price).toLocaleString()}</p>
+              <p className="text-sm font-bold text-gray-800">
+                Rp{((cart[item.id] || 0) * (item.price ?? item.harga ?? 0)).toLocaleString()}
+              </p>
             </div>
           </div>
         ))}
@@ -212,8 +325,7 @@ export default function RingkasanPesanan() {
     </div>
   );
 
-  /* ── Shared: Nomor & QR card ── */
-  const OrderNumberCard = ({ badgeText, badgeClass, tagStyle }) => (
+  const OrderNumberCard = ({ badgeText, tagStyle }) => (
     <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
       <div className="px-4 py-2.5 flex items-center justify-between border-b" style={tagStyle}>
         <div className="flex items-center gap-2">
@@ -222,30 +334,32 @@ export default function RingkasanPesanan() {
             Makan di Tempat · Meja {MEJA_ID}
           </span>
         </div>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>{badgeText}</span>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+          style={{ background: "var(--p-20)", color: "var(--p)" }}>
+          {badgeText}
+        </span>
       </div>
       <div className="p-5 text-center">
         <p className="text-xs text-gray-400 font-semibold mb-3">Nomor Pesanan</p>
         <div className="rounded-2xl px-6 py-3 inline-block shadow-lg mb-3" style={{ background: "var(--grad)" }}>
           <span className="font-extrabold text-2xl tracking-[0.2em]" style={{ color: "var(--on-p)" }}>
-            {orderNumber}
+            {orderNumber || "—"}
           </span>
         </div>
         <div className="flex gap-2 justify-center mt-3">
-          <button onClick={handleCopy}
+          <button onClick={handleCopy} disabled={!orderNumber}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               copied ? "bg-green-100 text-green-700 border border-green-300" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}>
-            <Copy size={13} />
-            {copied ? "Tersalin!" : "Salin"}
+            } disabled:opacity-50`}>
+            <Copy size={13} /> {copied ? "Tersalin!" : "Salin"}
           </button>
           <button onClick={() => navigator.share?.({ text: `Nomor pesananku: ${orderNumber}` })}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all">
+            disabled={!orderNumber}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all disabled:opacity-50">
             <Share2 size={13} /> Bagikan
           </button>
         </div>
       </div>
-
       {/* QR */}
       <div className="px-5 pb-5">
         <div className="bg-gray-50 rounded-2xl p-5 flex flex-col items-center border border-gray-200">
@@ -260,26 +374,34 @@ export default function RingkasanPesanan() {
             ].map((cls, i) => (
               <div key={i} className={`absolute ${cls} w-5 h-5`} style={{ borderColor: "var(--p)" }} />
             ))}
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${orderNumber}`}
-              alt="QR Code" className="w-44 h-44 bg-white p-3 rounded-2xl shadow-lg"
-            />
+            {orderNumber ? (
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${orderNumber}`}
+                alt="QR Code" className="w-44 h-44 bg-white p-3 rounded-2xl shadow-lg"
+              />
+            ) : (
+              <div className="w-44 h-44 bg-white p-3 rounded-2xl shadow-lg flex items-center justify-center">
+                <Loader2 size={32} className="animate-spin" style={{ color: "var(--p)" }} />
+              </div>
+            )}
           </div>
-          <button onClick={handleDownloadQR}
-            className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-white border-2 rounded-xl text-xs font-bold text-gray-700 transition-all hover:opacity-80"
+          <button onClick={handleDownloadQR} disabled={!orderNumber}
+            className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-white border-2 rounded-xl text-xs font-bold text-gray-700 transition-all hover:opacity-80 disabled:opacity-50"
             style={{ borderColor: "var(--p-20)" }}>
-            <Download size={13} />
-            Download QR
+            <Download size={13} /> Download QR
           </button>
         </div>
       </div>
     </div>
   );
 
+  /* ══════════════════════════════════════════════════════════
+      RENDER
+  ══════════════════════════════════════════════════════════ */
   return (
     <div className="max-w-md mx-auto min-h-screen relative" style={{ background: "var(--bg)", color: "var(--tx)" }}>
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <div className="sticky top-0 z-40 bg-white shadow-sm border-b border-gray-100">
         <div className="flex items-center px-4 py-3.5">
           <button onClick={() => navigate(-1)}
@@ -297,12 +419,41 @@ export default function RingkasanPesanan() {
 
       <div className={`pb-8 transition-all duration-300 ${confirmNew ? "blur-sm pointer-events-none" : ""}`}>
 
-        {/* ══════════════════════════════════════
-            WAITING / PROCESSING
-        ══════════════════════════════════════ */}
+        {/* ══ SUBMITTING ══ */}
+        {status === "submitting" && (
+          <div className="flex flex-col items-center justify-center py-24 px-8 text-center">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center shadow-2xl mb-4"
+              style={{ background: "var(--grad)" }}>
+              <Loader2 size={36} className="animate-spin" style={{ color: "var(--on-p)" }} />
+            </div>
+            <h2 className="text-lg font-extrabold text-gray-800 mb-1">Membuat Pesanan...</h2>
+            <p className="text-sm text-gray-400">Mohon tunggu, pesananmu sedang dikirim ke dapur</p>
+          </div>
+        )}
+
+        {/* ══ ERROR ══ */}
+        {status === "error" && (
+          <div className="flex flex-col items-center justify-center py-24 px-8 text-center">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center shadow-lg mb-4">
+              <AlertCircle size={36} className="text-red-500" />
+            </div>
+            <h2 className="text-lg font-extrabold text-gray-800 mb-1">Gagal Membuat Pesanan</h2>
+            <p className="text-sm text-gray-500 mb-6">{submitError || "Terjadi kesalahan. Silakan coba lagi."}</p>
+            <button onClick={handleRetry}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-white shadow-lg transition-all hover:scale-105"
+              style={{ background: "var(--grad)" }}>
+              <RefreshCw size={16} /> Coba Lagi
+            </button>
+            <button onClick={() => navigate(-1)}
+              className="mt-3 text-sm text-gray-400 underline hover:text-gray-600 transition-colors">
+              Kembali ke Pembayaran
+            </button>
+          </div>
+        )}
+
+        {/* ══ WAITING / PROCESSING ══ */}
         {(status === "waiting" || status === "processing") && (
           <>
-            {/* Banner — tetap pakai var(--grad) agar sesuai tema */}
             <div className="px-5 pt-8 pb-12" style={{ background: "var(--grad)" }}>
               <div className="text-center">
                 <div className="flex justify-center mb-4">
@@ -352,7 +503,6 @@ export default function RingkasanPesanan() {
             <div className="px-4 -mt-6 space-y-4">
               <OrderNumberCard
                 badgeText={method === "kasir" ? "Bayar di Kasir" : "Bayar Online"}
-                badgeClass=""
                 tagStyle={{ background: "var(--bg-soft)", borderColor: "var(--p-20)" }}
               />
 
@@ -387,22 +537,29 @@ export default function RingkasanPesanan() {
 
               <DetailCard />
 
-              {/* Dev: simulasi */}
-              <button onClick={triggerPaymentSuccess}
-                className="w-full border-2 border-dashed border-gray-300 text-gray-400 py-3 rounded-2xl text-xs font-semibold hover:opacity-70 transition-all"
-                style={{ ["--hover-border"]: "var(--p)" }}>
-                🧪 Simulasi: QR Sudah Di-scan
-              </button>
+              {/* Tombol konfirmasi kasir */}
+              {method === "kasir" && (
+                <button onClick={triggerPaymentSuccess}
+                  className="w-full py-4 rounded-2xl font-bold shadow-lg hover:scale-[1.02] transition-all"
+                  style={{ background: "var(--grad)", color: "var(--on-p)" }}>
+                  ✓ Konfirmasi Sudah Bayar di Kasir
+                </button>
+              )}
+
+              {/* Dev helper — hapus di production */}
+              {import.meta.env.DEV && method !== "kasir" && (
+                <button onClick={triggerPaymentSuccess}
+                  className="w-full border-2 border-dashed border-gray-300 text-gray-400 py-3 rounded-2xl text-xs font-semibold hover:opacity-70 transition-all">
+                  🧪 [DEV] Simulasi: QR Sudah Di-scan
+                </button>
+              )}
             </div>
           </>
         )}
 
-        {/* ══════════════════════════════════════
-            SUCCESS
-        ══════════════════════════════════════ */}
+        {/* ══ SUCCESS ══ */}
         {status === "success" && (
           <>
-            {/* Success banner — tetap hijau karena universal */}
             <div className="bg-gradient-to-br from-green-500 to-emerald-600 px-5 pt-8 pb-12">
               <div className="text-center">
                 <div className="flex justify-center mb-4 relative">
@@ -423,7 +580,6 @@ export default function RingkasanPesanan() {
             </div>
 
             <div className="px-4 -mt-6 space-y-4">
-              {/* Nomor pesanan success — pakai tema brand */}
               <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                 <div className="px-4 py-2.5 flex items-center justify-between border-b bg-green-50 border-green-100">
                   <div className="flex items-center gap-2">
@@ -457,12 +613,10 @@ export default function RingkasanPesanan() {
 
               <DetailCard accentColor="#22c55e" />
 
-              {/* Pesan lagi — pakai tema brand */}
               <button onClick={() => setConfirmNew(true)}
                 className="w-full py-4 rounded-2xl font-bold shadow-lg hover:scale-[1.02] hover:shadow-xl transition-all flex items-center justify-center gap-2"
                 style={{ background: "var(--grad)", color: "var(--on-p)" }}>
-                <Receipt size={18} />
-                Buat Pesanan Baru
+                <Receipt size={18} /> Buat Pesanan Baru
               </button>
 
               <p className="text-center text-xs text-gray-400 pb-4">
@@ -473,7 +627,7 @@ export default function RingkasanPesanan() {
         )}
       </div>
 
-      {/* ── MODAL PESANAN BARU ── */}
+      {/* MODAL PESANAN BARU */}
       {confirmNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fadeIn"
           style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
