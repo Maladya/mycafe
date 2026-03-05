@@ -1,7 +1,7 @@
-import { ChevronLeft, Gift, Check, X, Tag, Sparkles } from "lucide-react";
+import { Gift, Check, X, Tag, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-export default function PromoCode({ onClose, onApply }) {
+export default function PromoCode({ onClose, onApply, subtotal = 0 }) {
   const [promoCode, setPromoCode] = useState("");
   const [applied, setApplied] = useState(false);
   const [error, setError] = useState("");
@@ -28,6 +28,13 @@ export default function PromoCode({ onClose, onApply }) {
     },
   ];
 
+  const applyPromo = (promo) => {
+    setApplied(true);
+    setTimeout(() => {
+      if (onApply) onApply(promo);
+    }, 800);
+  };
+
   const handleApply = () => {
     setError("");
     
@@ -42,10 +49,13 @@ export default function PromoCode({ onClose, onApply }) {
     );
 
     if (validPromo) {
-      setApplied(true);
-      setTimeout(() => {
-        if (onApply) onApply(validPromo);
-      }, 800);
+      const minTrx = Number(validPromo.minTransaction ?? 0);
+      if (subtotal < minTrx) {
+        setError(`Minimal transaksi Rp${minTrx.toLocaleString("id-ID")}`);
+        return;
+      }
+
+      applyPromo(validPromo);
     } else {
       setError("Kode promo tidak valid");
     }
@@ -56,6 +66,9 @@ export default function PromoCode({ onClose, onApply }) {
     setError("");
     setApplied(false);
   };
+
+  const eligiblePromos = availablePromos.filter((p) => subtotal >= Number(p.minTransaction ?? 0));
+  const showPromoList = !promoCode.trim();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
@@ -141,63 +154,74 @@ export default function PromoCode({ onClose, onApply }) {
             </button>
           </div>
 
-          {/* DIVIDER */}
-          <div className="flex items-center gap-4">
-            <div className="flex-1 h-px bg-gray-200"></div>
-            <span className="text-xs font-semibold text-gray-400">ATAU PILIH PROMO</span>
-            <div className="flex-1 h-px bg-gray-200"></div>
-          </div>
+          {showPromoList && (
+            <>
+              {/* DIVIDER */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-px bg-gray-200"></div>
+                <span className="text-xs font-semibold text-gray-400">ATAU PILIH PROMO</span>
+                <div className="flex-1 h-px bg-gray-200"></div>
+              </div>
 
-          {/* PROMO LIST */}
-          <div className="space-y-3">
-            {availablePromos.map((promo, index) => (
-              <button
-                key={index}
-                onClick={() => handleSelectPromo(promo.code)}
-                className={`w-full bg-gradient-to-br from-white to-amber-50/30 rounded-2xl p-4 border-2 transition-all hover:scale-[1.02] ${
-                  promoCode === promo.code
-                    ? "border-amber-500 shadow-lg shadow-amber-500/20"
-                    : "border-gray-200 hover:border-amber-300"
-                }`}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                    <Sparkles size={24} className="text-white" />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 text-left">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="bg-amber-100 px-3 py-1 rounded-lg">
-                        <p className="font-bold text-sm text-amber-700">{promo.code}</p>
-                      </div>
-                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1 rounded-lg">
-                        <p className="font-bold text-sm text-white">{promo.discount}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-700 font-semibold mb-1">
-                      {promo.description}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Min. transaksi Rp{promo.minTransaction.toLocaleString("id-ID")}
-                    </p>
-                  </div>
-
-                  {/* Checkbox */}
-                  <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+              {/* PROMO LIST */}
+              <div className="space-y-3">
+                {eligiblePromos.map((promo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSelectPromo(promo.code)}
+                    onDoubleClick={() => {
+                      handleSelectPromo(promo.code);
+                      applyPromo(promo);
+                    }}
+                    className={`w-full bg-gradient-to-br from-white to-amber-50/30 rounded-2xl p-4 border-2 transition-all hover:scale-[1.02] ${
                       promoCode === promo.code
-                        ? "bg-gradient-to-br from-amber-500 to-orange-500 border-amber-500"
-                        : "border-gray-300"
+                        ? "border-amber-500 shadow-lg shadow-amber-500/20"
+                        : "border-gray-200 hover:border-amber-300"
                     }`}
                   >
-                    {promoCode === promo.code && <Check size={14} className="text-white" />}
+                    <div className="flex items-start gap-4">
+                      <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg">
+                        <Sparkles size={24} className="text-white" />
+                      </div>
+
+                      <div className="flex-1 text-left">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="bg-amber-100 px-3 py-1 rounded-lg">
+                            <p className="font-bold text-sm text-amber-700">{promo.code}</p>
+                          </div>
+                          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1 rounded-lg">
+                            <p className="font-bold text-sm text-white">{promo.discount}</p>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-700 font-semibold mb-1">
+                          {promo.description}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Min. transaksi Rp{promo.minTransaction.toLocaleString("id-ID")}
+                        </p>
+                      </div>
+
+                      <div
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                          promoCode === promo.code
+                            ? "bg-gradient-to-br from-amber-500 to-orange-500 border-amber-500"
+                            : "border-gray-300"
+                        }`}
+                      >
+                        {promoCode === promo.code && <Check size={14} className="text-white" />}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+
+                {eligiblePromos.length === 0 && (
+                  <div className="text-center text-xs text-gray-400 py-6">
+                    Belum ada promo tersedia untuk total belanja saat ini
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* INFO */}
           <div className="bg-blue-50 rounded-2xl p-4 border border-blue-200">
@@ -221,7 +245,7 @@ export default function PromoCode({ onClose, onApply }) {
       </div>
 
       {/* Custom Styles */}
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from {
             opacity: 0;

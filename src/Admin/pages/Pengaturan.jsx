@@ -222,7 +222,6 @@ function ColorRow({ label, colorKey, value, onChange }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export default function Pengaturan() {
   const { showToast } = useAdmin();
   const handleError = makeErrorHandler(showToast);
@@ -230,6 +229,7 @@ export default function Pengaturan() {
   const [s, setS] = useState({
     cafeNama: "", cafeAlamat: "", logo_cafe: "", username: "", cafeEmail: "",
     notifOrder: true, notifLowStock: true, autoAccept: false,
+    ppn: 10, // default 10%
   });
 
   const [loading, setLoading]             = useState(true);
@@ -250,6 +250,7 @@ export default function Pengaturan() {
     tema:  { saving: false, saved: false },
     pwd:   { saving: false, saved: false },
     notif: { saving: false, saved: false },
+    pajak: { saving: false, saved: false },
   });
 
   const setSecState = useCallback((key, patch) =>
@@ -275,6 +276,7 @@ export default function Pengaturan() {
       notif_low_stock: s.notifLowStock ? 1 : 0,
       auto_accept:     s.autoAccept    ? 1 : 0,
       tema_colors:     JSON.stringify(colors),
+      ppn:             Number(s.ppn) || 0,
       ...partialPayload,
     };
     const res = await fetch(`${API_URL}/api/pengaturan`, {
@@ -312,6 +314,7 @@ export default function Pengaturan() {
             notifOrder:    Boolean(d.notif_order     ?? prev.notifOrder),
             notifLowStock: Boolean(d.notif_low_stock ?? prev.notifLowStock),
             autoAccept:    Boolean(d.auto_accept     ?? prev.autoAccept),
+            ppn:           d.ppn ?? prev.ppn ?? 10,
           }));
         } else {
           const fixed = fixImgUrl(d.logo_cafe);
@@ -325,6 +328,7 @@ export default function Pengaturan() {
             notifOrder:    Boolean(d.notif_order     ?? prev.notifOrder),
             notifLowStock: Boolean(d.notif_low_stock ?? prev.notifLowStock),
             autoAccept:    Boolean(d.auto_accept     ?? prev.autoAccept),
+            ppn:           d.ppn ?? prev.ppn ?? 10,
           }));
           setLogoPreview(fixed);
           setUrlInput(isBase64(d.logo_cafe) ? "" : d.logo_cafe);
@@ -334,12 +338,13 @@ export default function Pengaturan() {
           ...prev,
           cafeNama:      d.nama_cafe  ?? prev.cafeNama,
           cafeAlamat:    d.alamat     ?? prev.cafeAlamat,
-          logo_cafe:     null,
+          logo_cafe:     d.logo_cafe,
           username:      d.username   ?? prev.username,
           cafeEmail:     d.email      ?? prev.cafeEmail,
           notifOrder:    Boolean(d.notif_order     ?? prev.notifOrder),
           notifLowStock: Boolean(d.notif_low_stock ?? prev.notifLowStock),
           autoAccept:    Boolean(d.auto_accept     ?? prev.autoAccept),
+          ppn:           d.ppn ?? prev.ppn ?? 10,
         }));
         setLogoPreview("");
         setUrlInput("");
@@ -497,6 +502,22 @@ export default function Pengaturan() {
       showToast("Pengaturan notifikasi disimpan!", "success");
     } catch (err) { handleError(err, "/api/pengaturan"); }
     finally       { setSecState("notif", { saving: false }); }
+  };
+
+  // ── Save Pajak ─────────────────────────────────────────────────────────────
+  const handleSavePajak = async () => {
+    const ppnVal = Number(s.ppn);
+    if (ppnVal < 0 || ppnVal > 100) {
+      showToast("PPN harus antara 0-100%", "error");
+      return;
+    }
+    setSecState("pajak", { saving: true });
+    try {
+      await postSettings({ ppn: ppnVal });
+      flashSaved("pajak");
+      showToast("Pengaturan pajak disimpan!", "success");
+    } catch (err) { handleError(err, "/api/pengaturan"); }
+    finally       { setSecState("pajak", { saving: false }); }
   };
 
   if (loading) {
@@ -735,6 +756,45 @@ export default function Pengaturan() {
               </button>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── 5. Pajak & Biaya ──────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <SectionHeader
+          icon={<span className="text-white text-sm font-bold">%</span>}
+          iconClass="bg-gradient-to-br from-red-500 to-rose-600"
+          title="Pajak & Biaya"
+          subtitle="Atur PPN dan biaya layanan"
+        >
+          <SaveButton onClick={handleSavePajak} saving={sec.pajak.saving} saved={sec.pajak.saved} label="Simpan Pajak" />
+        </SectionHeader>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">PPN (Pajak Pertambahan Nilai)</p>
+              <p className="text-xs text-gray-400">Persentase pajak yang ditambahkan ke total pesanan</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={s.ppn}
+                onChange={e => set("ppn", Math.max(0, Math.min(100, Number(e.target.value))))}
+                className="w-20 border-2 border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-red-500 transition-all text-center font-semibold"
+              />
+              <span className="text-sm font-bold text-gray-600">%</span>
+            </div>
+          </div>
+
+          <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+            <p className="text-xs text-red-600">
+              <span className="font-semibold">Info:</span> PPN saat ini diatur {s.ppn || 0}%. 
+              Total pajak = Subtotal × {s.ppn || 0}%
+            </p>
+          </div>
         </div>
       </div>
     </div>

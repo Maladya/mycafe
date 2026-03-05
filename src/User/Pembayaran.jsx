@@ -182,6 +182,26 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
   const [fetchError, setFetchError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
+  const applyPromo = (promo) => {
+    if (!promo) return;
+    if (!isPromoActive(promo)) {
+      setError("Promo sudah tidak aktif");
+      return;
+    }
+
+    const min = Number(promo.minOrder ?? 0);
+    if (subtotal < min) {
+      setError(`Minimal transaksi Rp${min.toLocaleString("id-ID")}`);
+      return;
+    }
+
+    setSuccess(promo);
+    setTimeout(() => {
+      if (onApply) onApply(promo);
+      onClose();
+    }, 450);
+  };
+
   /* ── Fetch daftar promo dari backend ── */
   useEffect(() => {
     setLoading(true);
@@ -197,16 +217,18 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
   }, [cafeId, retryKey]);
 
   useEffect(() => {
-    if (!input.trim()) {
+    const code = input.toUpperCase().trim();
+    if (!code) {
       setFilteredPromos([]);
       return;
     }
-    const search = input.toUpperCase().trim();
-    const matches = promos.filter(p => 
-      p.code?.toUpperCase().includes(search) || 
-      p.nama_promo?.toUpperCase().includes(search)
-    );
-    setFilteredPromos(matches);
+    // Jangan tampilkan daftar promo hasil search sebelum kodenya cocok persis
+    const exact = promos.find(p => (p.code ?? "").toUpperCase() === code);
+    if (!exact) {
+      setFilteredPromos([]);
+      return;
+    }
+    setFilteredPromos([exact]);
   }, [input, promos]);
 
   /* ── Manual input → cari di lokal dulu, kalau tidak ketemu validasi ke backend ── */
@@ -215,7 +237,7 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
     if (!code) return;
     setValidating(true);
     setError("");
-    
+
     // 1. Cari di daftar promo lokal dulu
     const localPromo = promos.find(p => p.code?.toUpperCase() === code);
     if (localPromo) {
@@ -223,7 +245,7 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
       setValidating(false);
       return;
     }
-    
+
     // 2. Kalau tidak ketemu di lokal, coba validasi ke backend
     try {
       const res = await api.post("api/promo/validate", {
@@ -234,6 +256,7 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
       const promoRaw = res?.data ?? res;
       if (!promoRaw?.code && !promoRaw?.kode) throw new Error("Kode promo tidak valid");
       applyPromo(normalisePromo(promoRaw));
+
     } catch (err) {
       // Kalau endpoint 404 atau error, tampilkan pesan error
       setError(err.message ?? "Kode promo tidak ditemukan atau sudah kadaluarsa");
@@ -279,15 +302,16 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
         {/* ── Hasil pencarian langsung ── */}
         {filteredPromos.length > 0 && (
           <div className="mb-3 bg-gray-50 rounded-xl p-3 border border-gray-200">
-            <p className="text-[10px] text-gray-500 font-semibold mb-2 uppercase">Promo Ditemukan — Klik untuk pakai:</p>
+            <p className="text-[10px] text-gray-500 font-semibold mb-2 uppercase">Kode cocok — Double click untuk pakai:</p>
             <div className="space-y-2">
               {filteredPromos.map(p => (
-                <button key={p.code} onClick={() => applyPromo(p)}
+                <button key={p.code} onDoubleClick={() => applyPromo(p)}
                   className="w-full bg-white rounded-xl p-3 flex items-center justify-between text-left border-2 border-green-200 hover:border-green-400 transition-all shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-green-100">
                       <Tag size={14} className="text-green-600" />
                     </div>
+
                     <div>
                       <p className="font-bold text-sm text-gray-900">{p.nama_promo || p.code}</p>
                       <p className="text-xs text-green-600 font-semibold">{p.discountLabel}</p>
@@ -336,8 +360,14 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
           </div>
         ) : (
           <div className="space-y-2 pb-4 max-h-64 overflow-y-auto">
-            {promos.filter(isPromoActive).map(p => (
-              <button key={p.code} onClick={() => applyPromo(p)}
+            {promos
+              .filter(isPromoActive)
+              .filter(p => subtotal >= Number(p.minOrder ?? 0))
+              .map(p => (
+              <button
+                key={p.code}
+                onClick={() => setInput((p.code ?? "").toUpperCase())}
+                onDoubleClick={() => applyPromo(p)}
                 className={`w-full rounded-2xl p-4 flex items-center justify-between text-left transition-all border-2 ${
                   success?.code === p.code ? "border-green-500 bg-green-50" : "hover:bg-gray-50"
                 }`}
@@ -347,6 +377,7 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
                     style={{ background: "var(--grad)" }}>
                     <Tag size={16} style={{ color: "var(--on-p)" }} />
                   </div>
+
                   <div className="text-left min-w-0">
                     <p className="font-extrabold text-sm" style={{ color: "var(--p)" }}>{p.nama_promo || "Promo"}</p>
                     <p className="text-xs text-gray-500 line-clamp-1">{p.description}</p>
@@ -376,12 +407,14 @@ function PromoCodeModal({ onClose, onApply, subtotal, cafeId }) {
    Main Pembayaran
    ──────────────────────────────────────────── */
 export default function Pembayaran() {
+
   const navigate = useNavigate();
   const { state } = useLocation();
   const [searchParams] = useSearchParams();
 
   const CAFE_ID = state?.cafeId ?? searchParams.get("cafe_id") ?? "";
   const MEJA_ID = state?.mejaId ?? searchParams.get("table") ?? "1";
+  const orderId = state?.orderId ?? null;
 
   const cart       = state?.cart       || {};
   const items      = state?.items      || [];
@@ -477,6 +510,7 @@ export default function Pembayaran() {
             state: {
               cart, items, note, itemNotes, subtotal, discount, total,
               form, method, cafeId: CAFE_ID, mejaId: MEJA_ID,
+              orderId,
               midtrans: { status: "success", orderId, result },
             },
           });
@@ -487,6 +521,7 @@ export default function Pembayaran() {
             state: {
               cart, items, note, itemNotes, subtotal, discount, total,
               form, method, cafeId: CAFE_ID, mejaId: MEJA_ID,
+              orderId,
               midtrans: { status: "pending", orderId, result },
             },
           });
@@ -571,7 +606,7 @@ export default function Pembayaran() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm line-clamp-1">{item.name}</p>
                     {itemNotes[item.id] && (
-                      <p className="text-[10px] line-clamp-1" style={{ color: "var(--p)" }}>📝 {itemNotes[item.id]}</p>
+                      <p className="text-[10px] line-clamp-1" style={{ color: "var(--p)" }}> Catatan: {itemNotes[item.id]}</p>
                     )}
                   </div>
                   <div className="text-right flex-shrink-0">
@@ -583,7 +618,7 @@ export default function Pembayaran() {
             </div>
             {note && (
               <div className="mx-4 mb-3 rounded-xl px-3 py-2 border" style={{ background: "var(--bg-soft)", borderColor: "var(--p-20)" }}>
-                <span className="text-[10px]" style={{ color: "var(--p)" }}>📝 Catatan: {note}</span>
+                <span className="text-[10px]" style={{ color: "var(--p)" }}> Catatan: {note}</span>
               </div>
             )}
           </div>
@@ -785,7 +820,7 @@ export default function Pembayaran() {
             </div>
             <div className="flex gap-3">
               <button onClick={() => setConfirmKasir(false)} className="flex-1 border-2 border-gray-200 text-gray-700 rounded-2xl py-3.5 font-bold hover:bg-gray-50 transition-all">Cek Lagi</button>
-              <button onClick={() => navigate("/ringkasanpesanan", { state: { cart, items, note, itemNotes, subtotal, discount, total, form, method, cafeId: CAFE_ID, mejaId: MEJA_ID } })}
+              <button onClick={() => navigate("/ringkasanpesanan", { state: { cart, items, note, itemNotes, subtotal, discount, total, form, method, cafeId: CAFE_ID, mejaId: MEJA_ID, orderId } })}
                 className="flex-1 rounded-2xl py-3.5 font-bold shadow-lg transition-all" style={{ background: "var(--grad)", color: "var(--on-p)" }}>
                 Lanjutkan →
               </button>

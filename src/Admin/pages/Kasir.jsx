@@ -13,6 +13,28 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
 });
 
+function parseDateFlexible(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // Handle format: "YYYY-MM-DD HH:mm:ss" (tanpa timezone)
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    const hh = Number(m[4]);
+    const mm = Number(m[5]);
+    const ss = Number(m[6] ?? 0);
+    // Anggap input adalah WIB (UTC+7)
+    return new Date(Date.UTC(y, mo - 1, d, hh - 7, mm, ss));
+  }
+
+  const dt = new Date(str);
+  return isNaN(dt.getTime()) ? null : dt;
+}
 
 export default function Kasir() {
   const navigate = useNavigate();
@@ -75,15 +97,15 @@ export default function Kasir() {
     if (!currentOrder) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/orders/${currentOrder.id}/status`, {
-        method: "PUT",
+      const res = await fetch(`${API_URL}/api/orders/admin/${currentOrder.id}/status`, {
+        method: "PATCH",
         headers: authHeaders(),
-        body: JSON.stringify({ status: "lunas" }),
+        body: JSON.stringify({ status: "selesai" }),
       });
       const data = await res.json();
       if (res.ok) {
         showToast(`Pembayaran tunai berhasil!`, "success");
-        setCurrentOrder({ ...currentOrder, status: "lunas" });
+        setCurrentOrder({ ...currentOrder, status: "selesai" });
         setPaymentModal(null);
       } else throw new Error(data.message || "Gagal memproses pembayaran");
     } catch (err) {
@@ -99,8 +121,9 @@ export default function Kasir() {
   const formatWaktu = (raw) => {
     if (!raw) return "";
     try {
-      const d = new Date(raw);
-      return isNaN(d.getTime()) ? raw : d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      const d = parseDateFlexible(raw);
+      if (!d) return String(raw);
+      return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
     } catch { return raw; }
   };
 
@@ -124,7 +147,7 @@ export default function Kasir() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-xs text-gray-400">{new Date().toLocaleDateString("id-ID")}</p>
-              <p className="text-sm font-bold">{new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="text-sm font-bold">{new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })}</p>
             </div>
             <button
               onClick={handleLogout}
@@ -192,8 +215,9 @@ export default function Kasir() {
                           <p className="text-2xl font-black text-gray-900">#{currentOrder.id || currentOrder.order_code}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
-                              currentOrder.status === "lunas" ? "bg-green-100 text-green-700" :
+                              currentOrder.status === "selesai" ? "bg-green-100 text-green-700" :
                               currentOrder.status === "siap"  ? "bg-blue-100 text-blue-700" :
+                              currentOrder.status === "lunas" ? "bg-green-100 text-green-700" :
                               "bg-amber-100 text-amber-700"
                             }`}>{currentOrder.status?.toUpperCase() || "BARU"}</span>
                             <span className="text-gray-400 text-xs">
@@ -263,7 +287,7 @@ export default function Kasir() {
                         </div>
                       </div>
 
-                      {currentOrder.status !== "lunas" ? (
+                      {currentOrder.status !== "selesai" ? (
                         <button
                           onClick={() => setPaymentModal(currentOrder)}
                           disabled={loading}

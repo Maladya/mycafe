@@ -69,6 +69,7 @@ export default function RingkasanPesanan() {
   const total     = state?.total     || subtotal;
   const form      = state?.form      || {};
   const method    = state?.method    || "online";
+  const existingOrderId = state?.orderId ?? null;
 
   const orderedItems = items.filter(i => (cart[i.id] || 0) > 0);
   const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
@@ -101,12 +102,21 @@ export default function RingkasanPesanan() {
   const [paymentStatus, setPaymentStatus] = useState("pending"); // pending | paid
 
   const [copied,      setCopied]      = useState(false);
-  const [confirmNew,  setConfirmNew]  = useState(false);
   const [cafeName,    setCafeName]    = useState("ASTAKIRA");
   const submitted = useRef(false); // guard double-submit
 
   const clearCachedOrder = () => {
     try { sessionStorage.removeItem(orderCacheKey); } catch {}
+  };
+
+  const handleOrderAgain = () => {
+    clearCachedOrder();
+    navigate(`/user?table=${encodeURIComponent(MEJA_ID)}&cafe_id=${encodeURIComponent(CAFE_ID)}`,
+      {
+        replace: true,
+        state: { cafeId: CAFE_ID, mejaId: MEJA_ID, existingCart: null },
+      }
+    );
   };
 
   /* ── Muat tema ── */
@@ -170,6 +180,33 @@ export default function RingkasanPesanan() {
       setStatus("submitting");
       setSubmitError(null);
       try {
+        // Jika datang dari flow "Tambah Pesanan", append ke order yang sudah ada
+        if (existingOrderId) {
+          const payloadTambah = {
+            items: orderedItems.map(item => ({
+              nama_menu: item.name ?? item.nama_menu ?? item.nama ?? "",
+              qty:       cart[item.id] || 0,
+              harga:     item.price ?? item.harga ?? 0,
+              catatan:   itemNotes?.[item.id] ?? "",
+            })),
+          };
+
+          const resTambah = await fetch(`${BASE_URL}/api/orders/${existingOrderId}/items`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify(payloadTambah),
+          });
+          const dataTambah = await resTambah.json().catch(() => ({}));
+          if (!resTambah.ok || dataTambah.success === false) {
+            throw new Error(dataTambah.message ?? `HTTP ${resTambah.status}`);
+          }
+
+          setOrderId(existingOrderId);
+          setOrderNumber(existingOrderId);
+          setStatus("success");
+          return;
+        }
+
         const payload = {
           cafe_id:  CAFE_ID,
           meja:     MEJA_ID,
@@ -259,11 +296,28 @@ export default function RingkasanPesanan() {
     setStatus("success");
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!orderNumber) return;
-    navigator.clipboard.writeText(orderNumber);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(orderNumber);
+      } else {
+        // Fallback untuk browser lama
+        const textArea = document.createElement("textarea");
+        textArea.value = orderNumber;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Gagal menyalin:", err);
+      alert("Gagal menyalin. Silakan salin manual.");
+    }
   };
 
   /* ── Sub-components ── */
@@ -405,7 +459,7 @@ export default function RingkasanPesanan() {
         </div>
       </div>
 
-      <div className={`pb-8 transition-all duration-300 ${confirmNew ? "blur-sm pointer-events-none" : ""}`}>
+      <div className="pb-8 transition-all duration-300">
 
         {/* ══ SUBMITTING ══ */}
         {status === "submitting" && (
@@ -437,7 +491,7 @@ export default function RingkasanPesanan() {
               Kembali ke Pembayaran
             </button>
           </div>
-        )} // Added closing bracket here
+        )}
 
         {/* ══ SUCCESS ══ */}
         {status === "success" && (
@@ -498,7 +552,7 @@ export default function RingkasanPesanan() {
 
                   <DetailCard accentColor="#22c55e" />
 
-                  <button onClick={() => { clearCachedOrder(); setConfirmNew(true); }}
+                  <button onClick={handleOrderAgain}
                     className="w-full py-4 rounded-2xl font-bold shadow-lg hover:scale-[1.02] hover:shadow-xl transition-all flex items-center justify-center gap-2"
                     style={{ background: "var(--grad)", color: "var(--on-p)" }}>
                     <Receipt size={18} /> Buat Pesanan Baru
@@ -642,7 +696,7 @@ export default function RingkasanPesanan() {
 
                   <DetailCard accentColor="#22c55e" />
 
-                  <button onClick={() => { clearCachedOrder(); setConfirmNew(true); }}
+                  <button onClick={handleOrderAgain}
                     className="w-full py-4 rounded-2xl font-bold shadow-lg hover:scale-[1.02] hover:shadow-xl transition-all flex items-center justify-center gap-2"
                     style={{ background: "var(--grad)", color: "var(--on-p)" }}>
                     <Receipt size={18} /> Buat Pesanan Baru

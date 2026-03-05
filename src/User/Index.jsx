@@ -167,12 +167,35 @@ function buildCartFromOrder(orderItems, db) {
   return cart;
 }
 
+function parseDateFlexible(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // Handle format: "YYYY-MM-DD HH:mm:ss" (tanpa timezone)
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    const hh = Number(m[4]);
+    const mm = Number(m[5]);
+    const ss = Number(m[6] ?? 0);
+    // Anggap input adalah WIB (UTC+7)
+    return new Date(Date.UTC(y, mo - 1, d, hh - 7, mm, ss));
+  }
+
+  const dt = new Date(str);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
 function formatWaktu(raw) {
   if (!raw) return "";
   try {
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) return raw;
-    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const d = parseDateFlexible(raw);
+    if (!d) return String(raw);
+    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
   } catch { return raw; }
 }
 
@@ -765,29 +788,26 @@ export default function Home() {
   const navigate = useNavigate();
   const { state: locationState } = useLocation(); // ✅ baca state dari navigate
   const [searchParams] = useSearchParams();
+
   const MEJA_ID = searchParams.get("table")   ?? "1";
   const CAFE_ID = searchParams.get("cafe_id") ?? "";
+
 
   const [activeCategory, setActiveCategory]       = useState("all");
   const [selectedItem, setSelectedItem]           = useState(null);
   const [lihatSemuaSection, setLihatSemuaSection] = useState(null);
   const [showRiwayat, setShowRiwayat]             = useState(false);
 
+  const [paramError, setParamError] = useState("");
+  const [tableValidating, setTableValidating] = useState(false);
+  const [tableOk, setTableOk] = useState(null);
+  const [validateKey, setValidateKey] = useState(0);
+
+
   // ✅ FIX UTAMA: Saat kembali dari Pesanan, pakai existingCart agar item tidak hilang
   const [cart, setCart] = useState(locationState?.existingCart ?? {});
 
   const sectionRefs = useRef({});
-
-  // ✅ Sinkronkan cart jika user navigate balik dari Pesanan lebih dari sekali
-  useEffect(() => {
-    if (locationState?.existingCart) {
-      setCart(prev => {
-        // Merge: gabungkan existing cart dari Pesanan dengan cart lokal yang mungkin sudah ada
-        const merged = { ...locationState.existingCart };
-        return merged;
-      });
-    }
-  }, [locationState?.existingCart]);
 
   const { data: menuRaw, loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
     () => CAFE_ID ? api.get(`api/menu/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
@@ -797,16 +817,76 @@ export default function Home() {
     () => CAFE_ID ? api.get(`api/kategori/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
     [CAFE_ID]
   );
-  const { data: cafeRaw } = useApi(
+
+  const { data: cafeRaw, loading: cafeLoading, error: cafeError, refetch: refetchCafe } = useApi(
     () => CAFE_ID ? api.get(`api/pengaturan/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve(null),
     [CAFE_ID]
   );
+
+  useEffect(() => {
+    setParamError("");
+    setTableOk(null);
+    setTableValidating(false);
+
+
+    if (!CAFE_ID) {
+      setParamError("Cafe tidak ditemukan");
+      return;
+    }
+
+    const mejaN = Number(MEJA_ID);
+    if (!Number.isFinite(mejaN) || mejaN <= 0) {
+      setParamError("Meja tidak ditemukan");
+      return;
+    }
+
+    setTableValidating(true);
+    const token = tokenManager.get() || localStorage.getItem("token") || "";
+    fetch(`${BASE_URL}/api/tables`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+      .then(r => r.json())
+      .then(r => {
+        const list = r?.data ?? r?.tables ?? r ?? [];
+        const arr = Array.isArray(list) ? list : [];
+        const exists = arr.some(t => {
+          const no = Number(t.nomor_meja ?? t.no_meja ?? t.meja ?? t.id);
+          if (no !== mejaN) return false;
+          const tCafe = t.cafe_id ?? t.cafeId ?? t.cafe ?? null;
+          if (tCafe == null) return true;
+          return String(tCafe) === String(CAFE_ID);
+        });
+        setTableOk(exists);
+        if (!exists) setParamError("Meja tidak ditemukan");
+      })
+      .catch(() => {
+        setTableOk(false);
+        setParamError("Meja tidak ditemukan");
+      })
+      .finally(() => setTableValidating(false));
+  }, [CAFE_ID, MEJA_ID, validateKey]);
+
+
+  useEffect(() => {
+    if (!CAFE_ID) return;
+    if (cafeLoading) return;
+    if (cafeError) {
+      setParamError("Cafe tidak ditemukan");
+      return;
+    }
+    if (!cafeRaw) {
+      setParamError("Cafe tidak ditemukan");
+    }
+  }, [CAFE_ID, cafeLoading, cafeError, cafeRaw]);
+
 
   const cafeProfile = useMemo(() => ({
     nama:    cafeRaw?.nama_cafe  ?? cafeRaw?.nama    ?? cafeRaw?.name   ?? "ASTAKIRA",
     alamat:  cafeRaw?.alamat     ?? cafeRaw?.address ?? cafeRaw?.lokasi ?? "",
     logo:    fixImgUrl(cafeRaw?.logo_cafe ?? cafeRaw?.logo ?? cafeRaw?.foto ?? cafeRaw?.icon ?? ""),
-    tagline: cafeRaw?.tagline    ?? cafeRaw?.deskripsi ?? "",
   }), [cafeRaw]);
 
   const theme = useMemo(() => parseTheme(cafeRaw?.tema_colors), [cafeRaw]);
@@ -822,12 +902,43 @@ export default function Home() {
   const categorySections = useMemo(() => buildCategorySections(normalizedCats, menuDatabase), [normalizedCats, menuDatabase]);
   const categories       = useMemo(() => [{ id:"all", label:"Semua", logo:"" }, ...normalizedCats], [normalizedCats]);
 
+
   const allItems   = Object.values(menuDatabase);
   const totalQty   = Object.values(cart).reduce((a, b) => a + b, 0);
   const totalPrice = allItems.reduce((sum, item) => sum + (cart[item.id] || 0) * item.price, 0);
   const cartItems  = allItems.filter(item => (cart[item.id] || 0) > 0);
   const isLoading  = menuLoading || catLoading;
   const hasError   = (menuError || catError) && !isLoading;
+
+  if (tableValidating || cafeLoading) {
+    return (
+      <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
+        <div className="max-w-md mx-auto">
+          <><SkeletonSection /><SkeletonSection /><SkeletonSection /></>
+        </div>
+      </div>
+    );
+  }
+
+  if (paramError) {
+    return (
+      <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
+        <div className="max-w-md mx-auto px-4 py-8">
+          <ErrorState
+            message={paramError}
+            onRetry={() => {
+              setParamError("");
+              setValidateKey(k => k + 1);
+              if (refetchCafe) refetchCafe();
+              refetchMenu();
+              refetchCat();
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
 
   const addItem    = (id) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+1 }));
   const removeItem = (id) => setCart(prev => { const u={...prev}; if(u[id]>1) u[id]--; else delete u[id]; return u; });

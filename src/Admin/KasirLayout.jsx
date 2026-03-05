@@ -136,7 +136,7 @@ export default function KasirLayout() {
         <footer className="bg-gray-800 text-gray-400 px-4 py-2 text-[10px] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span>Terminal Aktif • {new Date().toLocaleTimeString("id-ID")}</span>
+            <span>Terminal Aktif • {new Date().toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta" })}</span>
           </div>
           <span>Shift: {new Date().toLocaleDateString("id-ID")}</span>
         </footer>

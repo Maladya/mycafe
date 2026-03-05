@@ -11,15 +11,12 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
 });
 
-const statusStyle = {
-  true:  { border:"border-green-200", dot:"bg-green-500", text:"text-green-700", label:"Tersedia", bg:"bg-green-50" },
-  false: { border:"border-amber-300", dot:"bg-amber-500", text:"text-amber-700", label:"Terisi",   bg:"bg-amber-50" },
-};
-
 export default function KelolaMeja() {
   const { setTables, orders, showToast } = useAdmin();
 
   const [tables,     setLocalTables] = useState([]);
+  const [search,     setSearch]      = useState("");
+  const [page,       setPage]        = useState(1);
   const [confirmDel, setConfirmDel]  = useState(null);
   const [qrTable,    setQrTable]     = useState(null);
   const [adding,     setAdding]      = useState(false);
@@ -109,6 +106,22 @@ export default function KelolaMeja() {
     }
   };
 
+  const filteredTables = tables.filter(t => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    const no = String(t.nomor_meja ?? t.id ?? "").toLowerCase();
+    return no.includes(q);
+  });
+
+  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { setPage(1); }, [tables.length]);
+
+  const pageSize = 12;
+  const totalPages = Math.max(1, Math.ceil(filteredTables.length / pageSize));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const paginatedTables = filteredTables.slice(startIndex, startIndex + pageSize);
+
   return (
     <div className="p-4 lg:p-6 space-y-4">
       {/* Header */}
@@ -116,8 +129,7 @@ export default function KelolaMeja() {
         <div>
           <h1 className="text-xl lg:text-2xl font-black text-gray-900">Kelola Meja</h1>
           <p className="text-gray-400 text-sm">
-            {tables.length} meja ·{" "}
-            {tables.filter(t => t.status === false).length} terisi
+            {tables.length} meja
           </p>
         </div>
         <div className="flex gap-2">
@@ -140,20 +152,13 @@ export default function KelolaMeja() {
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { label:"Tersedia", count: tables.filter(t => t.status === true).length,  color:"from-green-500 to-emerald-600" },
-          { label:"Terisi",   count: tables.filter(t => t.status === false).length, color:"from-amber-500 to-orange-500"  },
-        ].map((s, i) => (
-          <div key={i} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
-            <div className={`w-10 h-10 bg-gradient-to-br ${s.color} rounded-xl flex items-center justify-center mx-auto mb-2 shadow-md`}>
-              <Table2 size={18} className="text-white"/>
-            </div>
-            <p className="text-2xl font-black text-gray-900">{s.count}</p>
-            <p className="text-xs text-gray-400 font-medium">{s.label}</p>
-          </div>
-        ))}
+      <div className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cari nomor meja..."
+          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-amber-200"
+        />
       </div>
 
       {/* Skeleton saat fetch awal */}
@@ -179,21 +184,18 @@ export default function KelolaMeja() {
       {/* Table Grid */}
       {(!fetching || tables.length > 0) && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {tables.map(table => {
-            const statusKey = String(table.status);
-            const s         = statusStyle[statusKey] || statusStyle["true"];
+          {paginatedTables.map(table => {
             const order     = (orders ?? []).find(o => o.id === table.currentOrder);
             const noMeja    = table.nomor_meja ?? table.id;
 
             return (
-              <div key={table.id} className={`bg-white rounded-2xl border-2 p-4 hover:shadow-md transition-all ${s.border}`}>
+              <div key={table.id} className="bg-white rounded-2xl border-2 border-gray-100 p-4 hover:shadow-md transition-all">
                 <div className="flex items-center justify-between mb-3">
-                  <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center`}>
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
                     <span className="font-black text-gray-700 text-xl">{noMeja}</span>
                   </div>
-                  <div className={`w-2 h-2 rounded-full ${s.dot} ${table.status === false ? "animate-pulse" : ""}`}/>
+                  <div className="w-2 h-2 rounded-full bg-gray-200"/>
                 </div>
-                <p className={`text-xs font-bold ${s.text} mb-0.5`}>{s.label}</p>
                 <p className="text-[10px] text-gray-400">🪑 Meja {noMeja}</p>
                 {order && <p className="text-[10px] text-amber-600 font-bold mt-0.5 truncate">{order.id}</p>}
                 <div className="flex gap-1.5 mt-3">
@@ -221,6 +223,36 @@ export default function KelolaMeja() {
               <p className="text-xs mt-1">Klik Tambah Meja untuk memulai</p>
             </div>
           )}
+
+          {tables.length > 0 && filteredTables.length === 0 && !fetching && (
+            <div className="col-span-full text-center py-16 text-gray-400">
+              <Table2 size={40} className="mx-auto mb-3 opacity-30"/>
+              <p className="font-semibold">Meja tidak ditemukan</p>
+              <p className="text-xs mt-1">Coba kata kunci lain</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {filteredTables.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+          >
+            Prev
+          </button>
+          <p className="text-sm font-bold text-gray-700">
+            Halaman {safePage} / {totalPages}
+          </p>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+          >
+            Next
+          </button>
         </div>
       )}
 

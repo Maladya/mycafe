@@ -1,15 +1,32 @@
-import { useState, useEffect, useCallback } from "react";
-import { ClipboardList, MessageSquare, Check, RefreshCw, Loader2, AlertCircle } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { ClipboardList, MessageSquare, RefreshCw, AlertCircle, Search } from "lucide-react";
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
 const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
 const POLL_INTERVAL = 15000; // polling setiap 15 detik
 
-/* ─── Status Config ──────────────────────────────────────────────────────── */
-const statusConfig = {
-  proses:  { dot: "bg-amber-400", label: "Diproses", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
-  selesai: { dot: "bg-green-500", label: "Selesai",  bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
-};
+function parseDateFlexible(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // Handle format: "YYYY-MM-DD HH:mm:ss" (tanpa timezone)
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    const hh = Number(m[4]);
+    const mm = Number(m[5]);
+    const ss = Number(m[6] ?? 0);
+    // Anggap input adalah WIB (UTC+7)
+    return new Date(Date.UTC(y, mo - 1, d, hh - 7, mm, ss));
+  }
+
+  const dt = new Date(str);
+  return isNaN(dt.getTime()) ? null : dt;
+}
 
 /* ─── Normalize order dari backend ──────────────────────────────────────── */
 function normalizeOrder(o) {
@@ -26,33 +43,27 @@ function normalizeOrder(o) {
   return {
     id:         o.id,
     meja:       o.meja   ?? o.table ?? o.nomor_meja ?? "-",
-    status:     o.status === "proses" || o.status === "selesai" ? o.status : "proses",
-    waktu:      o.waktu  ?? o.created_at ?? o.tanggal ?? "",
+    waktu:      o.waktu  ?? "",
+    tanggal:    o.tanggal ?? "",
+    createdAt:  o.created_at ?? o.createdAt ?? "",
     nama:       o.nama   ?? o.nama_pelanggan ?? o.customer ?? "",
     total:      Number(o.total ?? 0),
     note:       o.note   ?? o.catatan ?? o.keterangan ?? "",
-    selesaiAt:  o.status === "selesai" ? (o.selesai_at ?? o.updated_at ?? o.waktu ?? "") : null,
     itemNotes,
     items,
   };
 }
 
-/* ─── Sorting: proses dulu, selesai di bawah (urut waktu selesai terbaru) ── */
-function sortOrders(list) {
-  return [...list].sort((a, b) => {
-    if (a.status === b.status) return 0;
-    return a.status === "selesai" ? 1 : -1;
-  });
-}
-
 /* ─── Component ──────────────────────────────────────────────────────────── */
 export default function KelolaOrders() {
   const [orders,   setOrders]   = useState([]);
-  const [filter,   setFilter]   = useState("all");
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
-  const [updating, setUpdating] = useState(null);
   const [lastSync, setLastSync] = useState(null);
+  const [search,   setSearch]   = useState("");
+  const [tick,     setTick]     = useState(0);
+  const [serverBaseMs, setServerBaseMs] = useState(null);
+  const perfBaseRef = useRef(0);
 
   /* ── Fetch orders dari backend ────────────────────────────────────────── */
   const fetchOrders = useCallback(async (silent = false) => {
@@ -63,14 +74,22 @@ export default function KelolaOrders() {
       const res = await fetch(`${API_URL}/api/orders/admin`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const serverDateHeader = res.headers.get("date");
       const data = await res.json();
       if (!res.ok || data.success === false) {
         throw new Error(data.message ?? `HTTP ${res.status}`);
       }
       const raw = data.data ?? data.orders ?? data ?? [];
-      // ✅ Langsung sort saat data masuk dari backend
-      setOrders(sortOrders(Array.isArray(raw) ? raw.map(normalizeOrder) : []));
+      setOrders(raw.map(normalizeOrder));
       setLastSync(new Date());
+
+      if (serverDateHeader) {
+        const d = new Date(serverDateHeader);
+        if (!isNaN(d.getTime())) {
+          setServerBaseMs(d.getTime());
+          perfBaseRef.current = performance.now();
+        }
+      }
     } catch (err) {
       setError(err.message || "Gagal memuat pesanan");
     } finally {
@@ -85,70 +104,112 @@ export default function KelolaOrders() {
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
-  /* ── Tandai Selesai ───────────────────────────────────────────────────── */
-  const markSelesai = async (id) => {
-    setUpdating(id);
-
-    // ✅ Optimistic update + langsung pindahkan ke bawah
-    setOrders(prev =>
-      sortOrders(prev.map(o =>
-        o.id !== id ? o : { ...o, status: "selesai", selesaiAt: new Date().toISOString() }
-      ))
-    );
-
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_URL}/api/orders/admin/${id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: "selesai" }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.success === false) {
-        // ✅ Rollback: kembalikan ke proses dan posisi semula
-        setOrders(prev =>
-          sortOrders(prev.map(o =>
-            o.id !== id ? o : { ...o, status: "proses", selesaiAt: null }
-          ))
-        );
-        alert(data.message ?? "Gagal update status");
-      }
-    } catch {
-      // ✅ Rollback
-      setOrders(prev =>
-        sortOrders(prev.map(o =>
-          o.id !== id ? o : { ...o, status: "proses", selesaiAt: null }
-        ))
-      );
-      alert("Gagal terhubung ke server");
-    } finally {
-      setUpdating(null);
-    }
-  };
+  useEffect(() => {
+    const t = setInterval(() => setTick(v => v + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   /* ── Filter ───────────────────────────────────────────────────────────── */
-  const validOrders = orders.filter(o => o.status === "proses" || o.status === "selesai");
-  // ✅ filtered sudah tersorted karena `orders` selalu di-sort via sortOrders()
-  const filtered    = filter === "all" ? validOrders : validOrders.filter(o => o.status === filter);
-  const prosesCount = validOrders.filter(o => o.status === "proses").length;
+  const validOrders = orders;
+  const filtered    = validOrders.filter(o => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    const id = String(o.id ?? "").toLowerCase();
+    const nama = String(o.nama ?? "").toLowerCase();
+    return id.includes(q) || nama.includes(q);
+  });
 
   /* ── Format waktu ─────────────────────────────────────────────────────── */
-  const formatWaktu = (raw) => {
-    if (!raw) return "";
+  const parseTanggalWaktuFlexible = (tanggal, waktu) => {
+    const tgl = String(tanggal ?? "").trim();
+    const wkt = String(waktu ?? "").trim();
+    if (!tgl || !wkt) return null;
+
+    const wm = wkt.match(/^(\d{1,2})[.:](\d{2})$/);
+    if (!wm) return null;
+    const hh = Number(wm[1]);
+    const mm = Number(wm[2]);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+
+    const tm = tgl.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+    if (!tm) return null;
+    const dd = Number(tm[1]);
+    const monRaw = String(tm[2]).toLowerCase();
+    const yyyy = Number(tm[3]);
+
+    const monMap = {
+      jan: 1, januari: 1,
+      feb: 2, februari: 2,
+      mar: 3, maret: 3,
+      apr: 4, april: 4,
+      mei: 5,
+      jun: 6, juni: 6,
+      jul: 7, juli: 7,
+      agu: 8, ags: 8, aug: 8, agustus: 8,
+      sep: 9, september: 9,
+      okt: 10, october: 10, oktober: 10,
+      nov: 11, november: 11,
+      des: 12, dec: 12, desember: 12,
+    };
+    const key = monRaw.slice(0, 3);
+    const mo = monMap[monRaw] ?? monMap[key] ?? null;
+    if (!mo) return null;
+
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const iso = `${yyyy}-${pad2(mo)}-${pad2(dd)}T${pad2(hh)}:${pad2(mm)}:00+07:00`;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const formatWaktu = (order) => {
+    if (!order) return "";
     try {
-      const d = new Date(raw);
-      if (isNaN(d.getTime())) return raw;
-      return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-    } catch { return raw; }
+      const tgl = String(order.tanggal ?? "").trim();
+      const wkt = String(order.waktu ?? "").trim();
+      if (tgl && wkt) {
+        return `${tgl} · ${wkt}`;
+      }
+
+      const dPrimary = parseDateFlexible(order.createdAt);
+      const dFallback = parseTanggalWaktuFlexible(order.tanggal, order.waktu);
+      const d = dPrimary ?? dFallback;
+      if (!d) return String(order.createdAt || "");
+      return d.toLocaleString("id-ID", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Jakarta",
+      });
+    } catch {
+      return String(order.tanggal && order.waktu ? `${order.tanggal} · ${order.waktu}` : (order.createdAt || ""));
+    }
   };
 
   /* ── Format lastSync ──────────────────────────────────────────────────── */
   const formatSync = (d) => {
     if (!d) return "";
-    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Jakarta" });
+  };
+
+  const formatNow = (d) => {
+    if (!d) return "";
+    return d.toLocaleString("id-ID", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone: "Asia/Jakarta",
+    });
+  };
+
+  const getServerNow = () => {
+    if (!serverBaseMs) return null;
+    const elapsed = performance.now() - (perfBaseRef.current || 0);
+    return new Date(serverBaseMs + elapsed);
   };
 
   return (
@@ -159,13 +220,14 @@ export default function KelolaOrders() {
         <div>
           <h1 className="text-xl lg:text-2xl font-black text-gray-900">Kelola Pesanan</h1>
           <p className="text-gray-400 text-sm">
-            {loading ? "Memuat..." : `${prosesCount} pesanan diproses`}
+            {loading ? "Memuat..." : `${validOrders.length} pesanan`}
             {lastSync && !loading && (
               <span className="ml-2 text-gray-300 text-xs">· Sync {formatSync(lastSync)}</span>
             )}
           </p>
         </div>
         <div className="flex items-center gap-2">
+
           <button
             onClick={() => fetchOrders()}
             disabled={loading}
@@ -178,6 +240,23 @@ export default function KelolaOrders() {
             <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
             <span className="text-xs font-semibold text-amber-700">Live</span>
           </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-400 leading-none">{formatNow(getServerNow())}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari pemesan atau Order ID..."
+            className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-amber-500 transition-all"
+          />
         </div>
       </div>
 
@@ -197,37 +276,6 @@ export default function KelolaOrders() {
           </button>
         </div>
       )}
-
-      {/* Filter tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {[
-          { k: "all",     l: "Semua" },
-          { k: "proses",  l: "Diproses" },
-          { k: "selesai", l: "Selesai" },
-        ].map(({ k, l }) => {
-          const count = k === "all" ? validOrders.length : validOrders.filter(o => o.status === k).length;
-          const s = statusConfig[k];
-          return (
-            <button
-              key={k}
-              onClick={() => setFilter(k)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                filter === k
-                  ? "bg-gray-900 text-white shadow-md"
-                  : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {k !== "all" && <div className={`w-1.5 h-1.5 rounded-full ${s?.dot}`} />}
-              {l}
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                filter === k ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
-              }`}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
 
       {/* Loading skeleton */}
       {loading && (
@@ -252,25 +300,17 @@ export default function KelolaOrders() {
       {!loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(order => {
-            const s          = statusConfig[order.status] ?? statusConfig.proses;
             const hasNotes   = order.note || (order.itemNotes && Object.keys(order.itemNotes).length > 0);
-            const isSelesai  = order.status === "selesai";
-            const isUpdating = updating === order.id;
             const itemList   = (order.items ?? []).filter(i => (i.qty ?? 1) > 0);
 
             return (
               <div
                 key={order.id}
-                className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-500 ${
-                  isSelesai
-                    ? "opacity-60 hover:opacity-80 hover:shadow-md " + s.border
-                    : "hover:shadow-md " + s.border
-                }`}
+                className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-500 hover:shadow-md"
               >
                 {/* Card Header */}
-                <div className={`px-4 py-3 flex items-center justify-between border-b ${s.bg}`}>
+                <div className="px-4 py-3 flex items-center justify-between border-b bg-gray-50">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${s.dot} ${!isSelesai ? "animate-pulse" : ""}`} />
                     <span className="font-bold text-gray-900 text-sm">{order.id}</span>
                     <span className="text-xs text-gray-500">Meja {order.meja}</span>
                   </div>
@@ -280,16 +320,13 @@ export default function KelolaOrders() {
                         <MessageSquare size={11} className="text-white" />
                       </div>
                     )}
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.bg} ${s.text} border border-current/20`}>
-                      {s.label}
-                    </span>
                   </div>
                 </div>
 
                 {/* Card Body */}
                 <div className="px-4 py-3">
                   <p className="text-xs text-gray-400 mb-2">
-                    {formatWaktu(order.waktu)}
+                    {formatWaktu(order)}
                     {order.nama ? ` · ${order.nama}` : ""}
                   </p>
                   <div className="space-y-1.5">
@@ -328,25 +365,6 @@ export default function KelolaOrders() {
                 </div>
 
                 {/* Action */}
-                <div className="px-4 pb-3">
-                  {!isSelesai ? (
-                    <button
-                      onClick={() => markSelesai(order.id)}
-                      disabled={isUpdating}
-                      className="w-full py-2.5 rounded-xl font-bold text-sm bg-green-500 hover:bg-green-600 text-white transition-all active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
-                    >
-                      {isUpdating
-                        ? <><Loader2 size={14} className="animate-spin" /> Memproses...</>
-                        : <>✓ Tandai Selesai</>
-                      }
-                    </button>
-                  ) : (
-                    <div className="w-full py-2 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center gap-2">
-                      <Check size={14} className="text-green-500" />
-                      <span className="text-xs font-semibold text-gray-500">Pesanan Selesai</span>
-                    </div>
-                  )}
-                </div>
               </div>
             );
           })}
@@ -355,9 +373,7 @@ export default function KelolaOrders() {
             <div className="col-span-full text-center py-16 text-gray-400">
               <ClipboardList size={40} className="mx-auto mb-3 opacity-30" />
               <p className="font-semibold">
-                {filter === "proses"  ? "Tidak ada pesanan yang diproses" :
-                 filter === "selesai" ? "Belum ada pesanan selesai" :
-                 "Belum ada pesanan masuk"}
+                {search.trim() ? "Pesanan tidak ditemukan" : "Belum ada pesanan masuk"}
               </p>
               <p className="text-sm mt-1 text-gray-300">Pesanan baru akan muncul otomatis</p>
             </div>

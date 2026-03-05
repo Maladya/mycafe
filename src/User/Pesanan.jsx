@@ -108,6 +108,8 @@ export default function Pesanan() {
   const CAFE_ID = state?.cafeId ?? searchParams.get("cafe_id") ?? "";
   const MEJA_ID = state?.mejaId ?? searchParams.get("table") ?? "1";
 
+  const orderId = state?.orderId ?? null;
+
   const [cart, setCart] = useState(state?.cart || {});
   const items = state?.items || [];
 
@@ -166,8 +168,17 @@ export default function Pesanan() {
 
   const handleProceedPayment = () => {
     navigate("/pembayaran", {
-      state: { cart, items, note, itemNotes, subtotal, cafeId: CAFE_ID, mejaId: MEJA_ID },
+      state: { cart, items, note, itemNotes, subtotal, cafeId: CAFE_ID, mejaId: MEJA_ID, orderId },
     });
+  };
+
+  const handleTambahPesanan = () => {
+    navigate(`/user?table=${encodeURIComponent(MEJA_ID)}&cafe_id=${encodeURIComponent(CAFE_ID)}`,
+      {
+        replace: true,
+        state: { existingCart: cart, cafeId: CAFE_ID, mejaId: MEJA_ID, orderId },
+      }
+    );
   };
 
   return (
@@ -190,7 +201,7 @@ export default function Pesanan() {
           </div>
 
           <button
-            onClick={() => navigate(-1)}
+            onClick={handleTambahPesanan}
             className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl hover:opacity-80 transition-all border"
             style={{ background: "var(--bg-soft)", color: "var(--p)", borderColor: "var(--p-20)" }}
           >

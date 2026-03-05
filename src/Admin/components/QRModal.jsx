@@ -1,11 +1,7 @@
 import { X, QrCode, Loader2, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem("token")}`,
-});
+const PUBLIC_URL = (import.meta.env.VITE_PUBLIC_URL ?? window.location.origin).replace(/\/$/, "");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QR CODE MODAL — ambil & regenerasi QR dari backend
@@ -19,96 +15,28 @@ export function QRModal({ table, onClose }) {
   // FIX: prioritaskan nomor_meja, fallback ke no_meja, lalu id
   const noMeja = table.nomor_meja ?? table.no_meja ?? table.id;
 
+  const cafeId = table.cafe_id ?? table.cafeId ?? "";
+  const userUrl = `${PUBLIC_URL}/user?table=${encodeURIComponent(noMeja)}${cafeId ? `&cafe_id=${encodeURIComponent(cafeId)}` : ""}`;
+  const buildQrImageUrl = (nonce = "") => {
+    const data = encodeURIComponent(userUrl);
+    const n = nonce ? `&nonce=${encodeURIComponent(nonce)}` : "";
+    return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${data}${n}`;
+  };
+
   useEffect(() => {
-    const load = async () => {
-      setLoading(true); setError("");
-
-      // Kalau qr_code sudah ada di data meja, langsung pakai
-      if (table.qr_code) {
-        if (table.qr_code.startsWith("data:image") || table.qr_code.startsWith("/9j") || table.qr_code.startsWith("iVBOR")) {
-          setQrSrc(
-            table.qr_code.startsWith("data:image")
-              ? table.qr_code
-              : `data:image/png;base64,${table.qr_code}`
-          );
-        } else {
-          setQrSrc(table.qr_code);
-        }
-        setLoading(false);
-        return;
-      }
-
-      // Kalau tidak ada, fetch dari API pakai id tabel
-      try {
-        const res  = await fetch(`${API_URL}/api/tables/${table.id}/qr`, { headers: authHeaders() });
-        const data = await res.json();
-        console.log("QR response:", data);
-
-        const qr = data.qr_code ?? data.qr ?? data.data?.qr_code ?? data.data?.qr;
-        if (!qr) { setError("QR code tidak ditemukan"); return; }
-
-        setQrSrc(
-          qr.startsWith("data:image") ? qr : `data:image/png;base64,${qr}`
-        );
-      } catch (err) {
-        console.error("QR fetch error:", err);
-        setError("Gagal memuat QR code");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [table]);
+    setLoading(true);
+    setError("");
+    setQrSrc(buildQrImageUrl(String(Date.now())));
+    setLoading(false);
+  }, [userUrl]);
 
   /* ── Regenerasi QR Code ── */
   const handleRegenerate = async () => {
     setRegenerating(true);
     setError("");
-    
-    const token = localStorage.getItem("token");
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: token ? `Bearer ${token}` : "",
-    };
-    
-    try {
-      // Coba POST dulu (regenerate)
-      let res = await fetch(`${API_URL}/api/tables/${table.id}/qr`, {
-        method: "POST",
-        headers,
-      });
-      
-      // Kalau POST 404/405, coba PUT
-      if (res.status === 404 || res.status === 405) {
-        res = await fetch(`${API_URL}/api/tables/${table.id}/qr`, {
-          method: "PUT",
-          headers,
-        });
-      }
-      
-      // Kalau masih 404/405, coba GET /api/tables/{id}/qr/regenerate
-      if (res.status === 404 || res.status === 405) {
-        res = await fetch(`${API_URL}/api/tables/${table.id}/qr/regenerate`, {
-          method: "GET",
-          headers: { Authorization: token ? `Bearer ${token}` : "" },
-        });
-      }
-      
-      if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`HTTP ${res.status}: ${errText || "Server error"}`);
-      }
-      
-      const data = await res.json();
-      const qr = data.qr_code ?? data.qr ?? data.data?.qr_code ?? data.data?.qr;
-      
-      if (!qr) { 
-        setError("QR code tidak ditemukan di response"); 
-        return; 
-      }
 
-      setQrSrc(qr.startsWith("data:image") ? qr : `data:image/png;base64,${qr}`);
+    try {
+      setQrSrc(buildQrImageUrl(String(Date.now())));
     } catch (err) {
       console.error("QR regenerate error:", err);
       setError(err.message ?? "Gagal terhubung ke server. Periksa koneksi atau endpoint API.");
