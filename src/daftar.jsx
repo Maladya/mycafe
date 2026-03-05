@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Coffee, AlertCircle, Eye, EyeOff, Building2, Mail, User, Lock, Phone } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Coffee, AlertCircle, Eye, EyeOff, Building2, Mail, User, Lock } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
 
 export default function Daftar() {
   const [namaCafe,     setNamaCafe]     = useState("");
@@ -15,7 +16,7 @@ export default function Daftar() {
 
   const handleDaftar = async () => {
     setErr("");
-    if (!namaCafe || !email || !username || !password ) {
+    if (!namaCafe || !email || !username || !password) {
       setErr("Semua field wajib diisi");
       return;
     }
@@ -177,8 +178,6 @@ export default function Daftar() {
                 </div>
               </div>
 
-             
-
               {/* Error */}
               {err && (
                 <div className="bg-red-500/20 border border-red-500/30 rounded-xl px-4 py-2.5 flex items-center gap-2">
@@ -200,13 +199,16 @@ export default function Daftar() {
                 {loading ? "Mendaftarkan..." : "Daftar Sekarang →"}
               </button>
 
-              {/* Login link */}
+              {/* ✅ FIX: Login link — sekarang mengarah ke /login menggunakan Link */}
               <div className="text-center pt-1">
                 <p className="text-gray-400 text-sm">
                   Sudah punya akun?{" "}
-                  <a href="/" className="text-amber-400 hover:text-amber-300 font-semibold transition-colors">
+                  <Link
+                    to="/login"
+                    className="text-amber-400 hover:text-amber-300 font-semibold transition-colors"
+                  >
                     Masuk sekarang
-                  </a>
+                  </Link>
                 </p>
               </div>
             </div>

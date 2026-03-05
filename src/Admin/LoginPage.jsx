@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Coffee, AlertCircle, Eye, EyeOff, User, Lock } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -15,8 +15,19 @@ export default function LoginPage() {
 
   // ── Kalau sudah login langsung redirect ───────────────────────────────────
   useEffect(() => {
-    if (localStorage.getItem("token")) {
-      navigate("/admin/dashboard", { replace: true });
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        const tokenPayload = JSON.parse(atob(token.split(".")[1]));
+        const role = tokenPayload?.role?.toLowerCase();
+        if (role === "kasir") {
+          navigate("/kasir", { replace: true });
+        } else {
+          navigate("/admin/dashboard", { replace: true });
+        }
+      } catch {
+        navigate("/admin/dashboard", { replace: true });
+      }
     }
   }, [navigate]);
 
@@ -45,26 +56,38 @@ export default function LoginPage() {
         return;
       }
 
-      // ── Ambil token dari data.access_token ────────────────────────────────
-      // Struktur response: { success, message, data: { access_token, refresh_token, user, cafe } }
-      const access_token  = data.data.token;
-      const refresh_token = data.data?.refresh_token;
-      const userData      = data.data?.user;
-      const cafeData      = data.data?.cafe;
+      // ── Ambil token ────────────────────────────────────────────────────────
+      // Struktur response: { status, message, data: { token }, admin: { id, email, ... } }
+      const access_token = data.data?.token;
+      const adminData    = data.admin;
 
       if (!access_token) {
         setErr("Login berhasil tapi token tidak diterima. Hubungi admin.");
         return;
       }
 
-      // ── Simpan ke localStorage ─────────────────────────────────────────────
-      localStorage.setItem("token",         access_token);
-      localStorage.setItem("refresh_token", refresh_token ?? "");
-      localStorage.setItem("user",          JSON.stringify(userData ?? {}));
-      localStorage.setItem("cafe",          JSON.stringify(cafeData ?? {}));
+      // ── Decode JWT untuk ambil role ────────────────────────────────────────
+      let role = "admin";
+      try {
+        const tokenPayload = JSON.parse(atob(access_token.split(".")[1]));
+        role = tokenPayload?.role?.toLowerCase() ?? "admin";
+      } catch {
+        console.warn("Gagal decode JWT, default ke admin");
+      }
 
-      // ── Redirect ke dashboard ──────────────────────────────────────────────
-      navigate("/admin/dashboard", { replace: true });
+      // ── Gabungkan admin data dengan role dari JWT ──────────────────────────
+      const userData = { ...adminData, role };
+
+      // ── Simpan ke localStorage ─────────────────────────────────────────────
+      localStorage.setItem("token", access_token);
+      localStorage.setItem("user",  JSON.stringify(userData));
+
+      // ── Redirect berdasarkan role ──────────────────────────────────────────
+      if (role === "kasir") {
+        navigate("/kasir", { replace: true });
+      } else {
+        navigate("/admin/dashboard", { replace: true });
+      }
 
     } catch (error) {
       console.error("Login error:", error);

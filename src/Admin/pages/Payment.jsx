@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useAdmin } from "../AdminPanel";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -50,8 +50,10 @@ const initialEwallet  = {
 const TAB_CONFIG = {
   qris:          { endpoint: "/api/qris",          httpMethod: "POST" },
   transfer_bank: { endpoint: "/api/bank-transfer",  httpMethod: "POST" },
-  ewalet:        { endpoint: "/api/ewalet",         httpMethod: "POST" },
+  ewalet:        { endpoint: "/api/ewallet_manual", httpMethod: "POST" },
 };
+
+const EWALLET_ENDPOINTS = ["/api/ewallet_manual", "/api/ewalet_manual", "/api/ewalet"];
 
 function PayIcon({ type, size = 20 }) {
   if (type === "qris")     return <QrCode size={size} />;
@@ -93,7 +95,12 @@ export default function Payment() {
       const safeFetch = async (url) => {
         try {
           const r = await fetch(url, { headers: authHeaders() });
-          if (!r.ok) { console.warn(`${url} → ${r.status}`); return null; }
+          if (!r.ok) {
+            // 404 pada konfigurasi opsional (mis. e-wallet manual) dianggap "belum ada data"
+            if (r.status === 404) return null;
+            console.warn(`${url} → ${r.status}`);
+            return null;
+          }
           return await r.json();
         } catch (e) {
           console.warn(`${url} fetch error:`, e);
@@ -101,15 +108,21 @@ export default function Payment() {
         }
       };
 
-      const [dQris, dTransfer, dEwallet] = await Promise.all([
+      const safeFetchFirst = async (paths) => {
+        for (const p of paths) {
+          const data = await safeFetch(`${API_URL}${p}`);
+          if (data) return data;
+        }
+        return null;
+      };
+
+      const [dQris, dTransfer] = await Promise.all([
         safeFetch(`${API_URL}/api/qris`),
         safeFetch(`${API_URL}/api/bank-transfer`),
-        safeFetch(`${API_URL}/api/ewalet`),
       ]);
 
       console.log("QRIS data:",     dQris);
       console.log("Transfer data:", dTransfer);
-      console.log("Ewallet data:",  dEwallet);
 
       if (dQris) {
         const qRaw = dQris.data ?? dQris;
@@ -148,52 +161,6 @@ export default function Payment() {
         }
       }
 
-      if (dEwallet) {
-        const eRaw = dEwallet.data ?? dEwallet;
-
-        const applyWallet = (key, wallet) => {
-          if (!key) return;
-          const rawKey    = String(key).toLowerCase().trim();
-          const compactKey = rawKey.replace(/[\s_-]+/g, "");
-          const k = (
-            compactKey === "shopeepay" ? "shopee" :
-            compactKey === "go" || compactKey === "gopay" || compactKey === "gopayid" ? "gopay" :
-            compactKey
-          );
-          if (!["gopay", "ovo", "dana", "shopee"].includes(k)) return;
-          const nextNomor = wallet?.nomor ?? wallet?.nomor_wallet ?? wallet?.nomor_ewallet ?? wallet?.no_hp ?? "";
-          const nextAtasNama = (
-            wallet?.atasNama ?? wallet?.atas_nama ?? wallet?.atasnama ?? wallet?.nama_pemilik ??
-            wallet?.nama_pemilik_wallet ?? wallet?.nama_pemilik_ewallet ?? wallet?.owner ?? wallet?.nama ?? ""
-          );
-
-          setEwallet(prev => {
-            const existing = prev?.[k] ?? {};
-            return {
-              ...prev,
-              [k]: {
-                nomor:    nextNomor    ? String(nextNomor)    : (existing.nomor    ?? ""),
-                atasNama: nextAtasNama ? String(nextAtasNama) : (existing.atasNama ?? ""),
-              },
-            };
-          });
-        };
-
-        if (Array.isArray(eRaw)) {
-          eRaw.forEach((row) => applyWallet(row?.nama_wallet ?? row?.wallet ?? row?.jenis_wallet, row));
-        } else if (eRaw && typeof eRaw === "object") {
-          const e = eRaw;
-          if (e.nama_wallet || e.wallet || e.jenis_wallet) {
-            applyWallet(e.nama_wallet ?? e.wallet ?? e.jenis_wallet, e);
-          } else {
-            applyWallet("gopay",  { nomor: e.gopay_nomor  ?? e.gopay?.nomor,  atasNama: e.gopay_nama  ?? e.gopay?.atasNama });
-            applyWallet("ovo",    { nomor: e.ovo_nomor    ?? e.ovo?.nomor,    atasNama: e.ovo_nama    ?? e.ovo?.atasNama });
-            applyWallet("dana",   { nomor: e.dana_nomor   ?? e.dana?.nomor,   atasNama: e.dana_nama   ?? e.dana?.atasNama });
-            applyWallet("shopee", { nomor: e.shopee_nomor ?? e.shopee?.nomor, atasNama: e.shopee_nama ?? e.shopee?.atasNama });
-          }
-        }
-      }
-
       const dMethods = await safeFetch(`${API_URL}/api/pembayaran`);
       console.log("Methods data:", dMethods);
       if (dMethods) {
@@ -201,8 +168,29 @@ export default function Payment() {
         const methodArr = Array.isArray(m) ? m : (Array.isArray(m?.metode) ? m.metode : null);
         if (methodArr) {
           setMethods(prev => prev.map(mt => {
-            const found = methodArr.find(x => x.id === mt.id || x.name === mt.id);
-            return found ? { ...mt, enabled: Boolean(found.status ?? found.enabled ?? found.aktif ?? mt.enabled) } : mt;
+            const found = methodArr.find(x =>
+              x.id === mt.id ||
+              x.name === mt.id ||
+              x.metode === mt.id ||
+              x.method === mt.id
+            );
+
+            if (!found) return mt;
+
+            const backendId = found.id ?? found.payment_id ?? found.metode_id;
+            const enabledVal = (
+              found.status_method ??
+              found.statusMethod ??
+              found.status ??
+              found.enabled ??
+              found.aktif
+            );
+
+            return {
+              ...mt,
+              backendId,
+              enabled: Boolean(enabledVal ?? mt.enabled),
+            };
           }));
         } else if (m && typeof m === "object") {
           setMethods(prev => prev.map(mt => {
@@ -217,6 +205,80 @@ export default function Payment() {
 
     fetchAll();
   }, []);
+
+  // ── Fetch e-wallet hanya saat tab E-Wallet dibuka (hindari 404 saat load awal) ──
+  useEffect(() => {
+    if (activeTab !== "ewalet") return;
+
+    const fetchEwallet = async () => {
+      const safeFetch = async (url) => {
+        try {
+          const r = await fetch(url, { headers: authHeaders() });
+          if (!r.ok) return null;
+          return await r.json();
+        } catch {
+          return null;
+        }
+      };
+
+      const safeFetchFirst = async (paths) => {
+        for (const p of paths) {
+          const data = await safeFetch(`${API_URL}${p}`);
+          if (data) return data;
+        }
+        return null;
+      };
+
+      const dEwallet = await safeFetchFirst(EWALLET_ENDPOINTS);
+      if (!dEwallet) return;
+
+      const eRaw = dEwallet.data ?? dEwallet;
+
+      const applyWallet = (key, wallet) => {
+        if (!key) return;
+        const rawKey    = String(key).toLowerCase().trim();
+        const compactKey = rawKey.replace(/[\s_-]+/g, "");
+        const k = (
+          compactKey === "shopeepay" ? "shopee" :
+          compactKey === "go" || compactKey === "gopay" || compactKey === "gopayid" ? "gopay" :
+          compactKey
+        );
+        if (!["gopay", "ovo", "dana", "shopee"].includes(k)) return;
+        const nextNomor = wallet?.nomor ?? wallet?.nomor_wallet ?? wallet?.nomor_ewallet ?? wallet?.no_hp ?? "";
+        const nextAtasNama = (
+          wallet?.atasNama ?? wallet?.atas_nama ?? wallet?.atasnama ?? wallet?.nama_pemilik ??
+          wallet?.nama_pemilik_wallet ?? wallet?.nama_pemilik_ewallet ?? wallet?.owner ?? wallet?.nama ?? ""
+        );
+
+        setEwallet(prev => {
+          const existing = prev?.[k] ?? {};
+          return {
+            ...prev,
+            [k]: {
+              nomor:    nextNomor    ? String(nextNomor)    : (existing.nomor    ?? ""),
+              atasNama: nextAtasNama ? String(nextAtasNama) : (existing.atasNama ?? ""),
+            },
+          };
+        });
+      };
+
+      if (Array.isArray(eRaw)) {
+        eRaw.forEach((row) => applyWallet(row?.nama_wallet ?? row?.wallet ?? row?.jenis_wallet, row));
+      } else if (eRaw && typeof eRaw === "object") {
+        const e = eRaw;
+        if (e.nama_wallet || e.wallet || e.jenis_wallet) {
+          applyWallet(e.nama_wallet ?? e.wallet ?? e.jenis_wallet, e);
+        } else {
+          applyWallet("gopay",  { nomor: e.gopay_nomor  ?? e.gopay?.nomor,  atasNama: e.gopay_nama  ?? e.gopay?.atasNama });
+          applyWallet("ovo",    { nomor: e.ovo_nomor    ?? e.ovo?.nomor,    atasNama: e.ovo_nama    ?? e.ovo?.atasNama });
+          applyWallet("dana",   { nomor: e.dana_nomor   ?? e.dana?.nomor,   atasNama: e.dana_nama   ?? e.dana?.atasNama });
+          applyWallet("shopee", { nomor: e.shopee_nomor ?? e.shopee?.nomor, atasNama: e.shopee_nama ?? e.shopee?.atasNama });
+        }
+      }
+    };
+
+    fetchEwallet();
+  }, [activeTab]);
 
   // ── Simpan per tab ───────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -259,16 +321,30 @@ export default function Payment() {
     }
 
     try {
-      const res  = await fetch(`${API_URL}${cfg.endpoint}`, {
-        method:  cfg.httpMethod,
-        headers: authHeaders(),
-        body:    JSON.stringify(payload),
-      });
+      const endpoints = activeTab === "ewalet" ? EWALLET_ENDPOINTS : [cfg.endpoint];
 
-      const contentType = res.headers.get("content-type") ?? "";
-      const isJson = contentType.includes("application/json");
-      const raw  = await res.text();
-      const data = isJson ? (raw ? JSON.parse(raw) : null) : null;
+      let res = null;
+      let raw = "";
+      let data = null;
+
+      const methodsToTry = activeTab === "ewalet" ? ["POST", "PUT"] : [cfg.httpMethod];
+
+      outer: for (const ep of endpoints) {
+        for (const m of methodsToTry) {
+          res  = await fetch(`${API_URL}${ep}`, {
+            method:  m,
+            headers: authHeaders(),
+            body:    JSON.stringify(payload),
+          });
+
+          const contentType = res.headers.get("content-type") ?? "";
+          const isJson = contentType.includes("application/json");
+          raw  = await res.text();
+          data = isJson ? (raw ? JSON.parse(raw) : null) : null;
+
+          if (res.ok && data?.success !== false) break outer;
+        }
+      }
       console.log("Save pembayaran HTTP status:", res.status);
       console.log("Save pembayaran response:", data ?? raw);
 
@@ -291,22 +367,32 @@ export default function Payment() {
   // ── Toggle metode aktif/nonaktif ─────────────────────────────────────────
   const toggleMethod = async (id) => {
     const current    = methods.find(m => m.id === id);
+    if (!current) return;
     const newEnabled = !current.enabled;
+    
+    // Optimistic update
     setMethods(prev => prev.map(m => m.id === id ? { ...m, enabled: newEnabled } : m));
+    
     try {
-      const res  = await fetch(`${API_URL}/api/pembayaran/${id}`, {
+      const endpointId = current.backendId ?? id;
+      // Fix: gunakan PUT /api/pembayaran/:id dengan format yang benar
+      const res  = await fetch(`${API_URL}/api/pembayaran/${endpointId}`, {
         method:  "PUT",
         headers: authHeaders(),
-        body:    JSON.stringify({ status_method: newEnabled ? 1 : 0 }),
+        body:    JSON.stringify({ 
+          status_method: newEnabled ? 1 : 0 
+        }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
+        // Rollback jika gagal
         setMethods(prev => prev.map(m => m.id === id ? { ...m, enabled: current.enabled } : m));
         showToast(data.message ?? "Gagal update metode", "error");
       } else {
         showToast(`${current.label} ${newEnabled ? "diaktifkan" : "dinonaktifkan"}`, "success");
       }
     } catch (err) {
+      // Rollback jika error
       setMethods(prev => prev.map(m => m.id === id ? { ...m, enabled: current.enabled } : m));
       console.error("Toggle metode error:", err);
       showToast("Gagal terhubung ke server", "error");

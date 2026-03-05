@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom"; // ✅ tambah useLocation
 import {
   Search, ShoppingBag, ArrowLeft, Heart, Share2, Plus, Minus,
   Clock, MapPin, Flame, Leaf, Check, ExternalLink, RotateCcw,
   AlertCircle, RefreshCw, Image
 } from "lucide-react";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = {
   get:   ()  => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
@@ -167,7 +167,6 @@ function buildCartFromOrder(orderItems, db) {
   return cart;
 }
 
-/* ── Format waktu dari ISO atau string ── */
 function formatWaktu(raw) {
   if (!raw) return "";
   try {
@@ -454,7 +453,6 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
   );
 }
 
-/* ── RiwayatPesananSheet — fixed data normalization ── */
 function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
   const [activeTab, setActiveTab] = useState("sedang");
   const { data: ordersRaw, loading, error, refetch } = useApi(
@@ -470,7 +468,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  /* Normalize orders dari berbagai format backend */
   const orders = (Array.isArray(ordersRaw) ? ordersRaw : []).map(o => ({
     id:       o.id,
     status:   o.status ?? "proses",
@@ -481,11 +478,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
       variant: i.variant ?? i.varian    ?? "",
       qty:     Number(i.qty ?? i.jumlah ?? 1),
       price:   Number(i.price ?? i.harga ?? 0),
-      // Coba ambil foto dari berbagai field, termasuk yang di-join dari tabel menu
-      image:   fixImgUrl(
-        i.image    ?? i.image_url ?? i.foto    ??
-        i.gambar   ?? i.img       ?? ""
-      ),
+      image:   fixImgUrl(i.image ?? i.image_url ?? i.foto ?? i.gambar ?? i.img ?? ""),
     })),
   }));
 
@@ -520,7 +513,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="px-5 mb-4">
           <div className="flex bg-gray-100 rounded-2xl p-1">
             <button onClick={() => setActiveTab("sedang")}
@@ -542,7 +534,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
           </div>
         </div>
 
-        {/* Content */}
         <div className="overflow-y-auto scrollbar-hide px-5 pb-8" style={{ maxHeight:"calc(88vh - 185px)" }}>
           {loading && (
             <div className="space-y-4">
@@ -579,7 +570,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
             <div className="space-y-4">
               {displayed.map(order => (
                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                  {/* Order header */}
                   <div className="px-4 py-3 flex items-center justify-between border-b"
                     style={isSedang(order.status)
                       ? { background:"var(--bg-soft)", borderColor:"var(--p-20)" }
@@ -611,7 +601,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                     )}
                   </div>
 
-                  {/* Items */}
                   <div className="px-4 py-3 space-y-3">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3">
@@ -639,7 +628,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                     ))}
                   </div>
 
-                  {/* Footer */}
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
                     <p className="text-xs text-gray-500">
                       {order.items.reduce((s,i) => s+i.qty, 0)} item
@@ -652,7 +640,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                     </div>
                   </div>
 
-                  {/* Actions */}
                   {isSedang(order.status) && (
                     <div className="px-4 pb-4 pt-1">
                       <button
@@ -776,6 +763,7 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
 ══════════════════════════════════════════════════════════ */
 export default function Home() {
   const navigate = useNavigate();
+  const { state: locationState } = useLocation(); // ✅ baca state dari navigate
   const [searchParams] = useSearchParams();
   const MEJA_ID = searchParams.get("table")   ?? "1";
   const CAFE_ID = searchParams.get("cafe_id") ?? "";
@@ -784,8 +772,22 @@ export default function Home() {
   const [selectedItem, setSelectedItem]           = useState(null);
   const [lihatSemuaSection, setLihatSemuaSection] = useState(null);
   const [showRiwayat, setShowRiwayat]             = useState(false);
-  const [cart, setCart]                           = useState({});
+
+  // ✅ FIX UTAMA: Saat kembali dari Pesanan, pakai existingCart agar item tidak hilang
+  const [cart, setCart] = useState(locationState?.existingCart ?? {});
+
   const sectionRefs = useRef({});
+
+  // ✅ Sinkronkan cart jika user navigate balik dari Pesanan lebih dari sekali
+  useEffect(() => {
+    if (locationState?.existingCart) {
+      setCart(prev => {
+        // Merge: gabungkan existing cart dari Pesanan dengan cart lokal yang mungkin sudah ada
+        const merged = { ...locationState.existingCart };
+        return merged;
+      });
+    }
+  }, [locationState?.existingCart]);
 
   const { data: menuRaw, loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
     () => CAFE_ID ? api.get(`api/menu/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
@@ -831,7 +833,6 @@ export default function Home() {
   const removeItem = (id) => setCart(prev => { const u={...prev}; if(u[id]>1) u[id]--; else delete u[id]; return u; });
   const handleSheetAdd = (id, qty) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+qty }));
 
-  /* ── Navigate ke /pesanan — sertakan cafeId dan mejaId ── */
   const handleCheckout = () => navigate("/pesanan", {
     state: {
       cart,
@@ -843,10 +844,10 @@ export default function Home() {
 
   const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) => navigate("/pesanan", {
     state: {
-      cart:       oc,
-      items:      oi,
-      cafeId:     CAFE_ID,
-      mejaId:     MEJA_ID,
+      cart:        oc,
+      items:       oi,
+      cafeId:      CAFE_ID,
+      mejaId:      MEJA_ID,
       fromRiwayat: true,
       orderId,
     }
@@ -858,10 +859,10 @@ export default function Home() {
     setCart(merged);
     navigate("/pesanan", {
       state: {
-        cart:     merged,
-        items:    Object.values(menuDatabase).filter(m => merged[m.id]),
-        cafeId:   CAFE_ID,
-        mejaId:   MEJA_ID,
+        cart:      merged,
+        items:     Object.values(menuDatabase).filter(m => merged[m.id]),
+        cafeId:    CAFE_ID,
+        mejaId:    MEJA_ID,
         isReorder: true,
       }
     });

@@ -1,4 +1,4 @@
-import { X, QrCode, Loader2 } from "lucide-react";
+import { X, QrCode, Loader2, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
@@ -8,12 +8,13 @@ const authHeaders = () => ({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QR CODE MODAL — ambil QR dari backend
+// QR CODE MODAL — ambil & regenerasi QR dari backend
 // ─────────────────────────────────────────────────────────────────────────────
 export function QRModal({ table, onClose }) {
   const [qrSrc,   setQrSrc]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState("");
+  const [regenerating, setRegenerating] = useState(false);
 
   // FIX: prioritaskan nomor_meja, fallback ke no_meja, lalu id
   const noMeja = table.nomor_meja ?? table.no_meja ?? table.id;
@@ -60,6 +61,62 @@ export function QRModal({ table, onClose }) {
     load();
   }, [table]);
 
+  /* ── Regenerasi QR Code ── */
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    setError("");
+    
+    const token = localStorage.getItem("token");
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    };
+    
+    try {
+      // Coba POST dulu (regenerate)
+      let res = await fetch(`${API_URL}/api/tables/${table.id}/qr`, {
+        method: "POST",
+        headers,
+      });
+      
+      // Kalau POST 404/405, coba PUT
+      if (res.status === 404 || res.status === 405) {
+        res = await fetch(`${API_URL}/api/tables/${table.id}/qr`, {
+          method: "PUT",
+          headers,
+        });
+      }
+      
+      // Kalau masih 404/405, coba GET /api/tables/{id}/qr/regenerate
+      if (res.status === 404 || res.status === 405) {
+        res = await fetch(`${API_URL}/api/tables/${table.id}/qr/regenerate`, {
+          method: "GET",
+          headers: { Authorization: token ? `Bearer ${token}` : "" },
+        });
+      }
+      
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`HTTP ${res.status}: ${errText || "Server error"}`);
+      }
+      
+      const data = await res.json();
+      const qr = data.qr_code ?? data.qr ?? data.data?.qr_code ?? data.data?.qr;
+      
+      if (!qr) { 
+        setError("QR code tidak ditemukan di response"); 
+        return; 
+      }
+
+      setQrSrc(qr.startsWith("data:image") ? qr : `data:image/png;base64,${qr}`);
+    } catch (err) {
+      console.error("QR regenerate error:", err);
+      setError(err.message ?? "Gagal terhubung ke server. Periksa koneksi atau endpoint API.");
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="bg-white rounded-3xl w-full max-w-xs shadow-2xl overflow-hidden">
@@ -97,10 +154,22 @@ export function QRModal({ table, onClose }) {
 
           <button
             onClick={() => window.print()}
-            disabled={!qrSrc}
+            disabled={!qrSrc || regenerating}
             className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl py-3 font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <QrCode size={16}/> Cetak QR
+          </button>
+
+          <button
+            onClick={handleRegenerate}
+            disabled={regenerating}
+            className="w-full bg-white border-2 border-amber-200 text-amber-700 rounded-xl py-2.5 font-bold hover:bg-amber-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {regenerating ? (
+              <><Loader2 size={14} className="animate-spin"/> Membuat...</>
+            ) : (
+              <><RefreshCw size={14}/> Regenerasi QR</>
+            )}
           </button>
         </div>
       </div>

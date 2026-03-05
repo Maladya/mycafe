@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ClipboardList, MessageSquare, Check, RefreshCw, Loader2, AlertCircle } from "lucide-react";
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
 const POLL_INTERVAL = 15000; // polling setiap 15 detik
 
 /* ─── Status Config ──────────────────────────────────────────────────────── */
@@ -13,29 +13,36 @@ const statusConfig = {
 
 /* ─── Normalize order dari backend ──────────────────────────────────────── */
 function normalizeOrder(o) {
-  // Support berbagai format field name dari backend
   const items = (o.items ?? o.detail ?? o.order_items ?? []).map(i => ({
-    name:  i.name ?? i.nama_menu ?? i.nama ?? "",
-    qty:   Number(i.qty ?? i.jumlah ?? 1),
-    price: Number(i.price ?? i.harga ?? 0),
+    name:    i.name ?? i.nama_menu ?? i.nama ?? "",
+    qty:     Number(i.qty ?? i.jumlah ?? 1),
+    price:   Number(i.price ?? i.harga ?? 0),
     catatan: i.catatan ?? i.note ?? i.keterangan ?? "",
   }));
 
-  // Rebuild itemNotes dari catatan per item
   const itemNotes = {};
   items.forEach(i => { if (i.catatan) itemNotes[i.name] = i.catatan; });
 
   return {
-    id:     o.id,
-    meja:   o.meja   ?? o.table ?? o.nomor_meja ?? "-",
-    status: o.status === "proses" || o.status === "selesai" ? o.status : "proses",
-    waktu:  o.waktu  ?? o.created_at ?? o.tanggal ?? "",
-    nama:   o.nama   ?? o.nama_pelanggan ?? o.customer ?? "",
-    total:  Number(o.total ?? 0),
-    note:   o.note   ?? o.catatan ?? o.keterangan ?? "",
+    id:         o.id,
+    meja:       o.meja   ?? o.table ?? o.nomor_meja ?? "-",
+    status:     o.status === "proses" || o.status === "selesai" ? o.status : "proses",
+    waktu:      o.waktu  ?? o.created_at ?? o.tanggal ?? "",
+    nama:       o.nama   ?? o.nama_pelanggan ?? o.customer ?? "",
+    total:      Number(o.total ?? 0),
+    note:       o.note   ?? o.catatan ?? o.keterangan ?? "",
+    selesaiAt:  o.status === "selesai" ? (o.selesai_at ?? o.updated_at ?? o.waktu ?? "") : null,
     itemNotes,
     items,
   };
+}
+
+/* ─── Sorting: proses dulu, selesai di bawah (urut waktu selesai terbaru) ── */
+function sortOrders(list) {
+  return [...list].sort((a, b) => {
+    if (a.status === b.status) return 0;
+    return a.status === "selesai" ? 1 : -1;
+  });
 }
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -44,7 +51,7 @@ export default function KelolaOrders() {
   const [filter,   setFilter]   = useState("all");
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
-  const [updating, setUpdating] = useState(null); // id order yang sedang diupdate
+  const [updating, setUpdating] = useState(null);
   const [lastSync, setLastSync] = useState(null);
 
   /* ── Fetch orders dari backend ────────────────────────────────────────── */
@@ -61,7 +68,8 @@ export default function KelolaOrders() {
         throw new Error(data.message ?? `HTTP ${res.status}`);
       }
       const raw = data.data ?? data.orders ?? data ?? [];
-      setOrders(Array.isArray(raw) ? raw.map(normalizeOrder) : []);
+      // ✅ Langsung sort saat data masuk dari backend
+      setOrders(sortOrders(Array.isArray(raw) ? raw.map(normalizeOrder) : []));
       setLastSync(new Date());
     } catch (err) {
       setError(err.message || "Gagal memuat pesanan");
@@ -80,8 +88,14 @@ export default function KelolaOrders() {
   /* ── Tandai Selesai ───────────────────────────────────────────────────── */
   const markSelesai = async (id) => {
     setUpdating(id);
-    // Optimistic update
-    setOrders(prev => prev.map(o => o.id !== id ? o : { ...o, status: "selesai" }));
+
+    // ✅ Optimistic update + langsung pindahkan ke bawah
+    setOrders(prev =>
+      sortOrders(prev.map(o =>
+        o.id !== id ? o : { ...o, status: "selesai", selesaiAt: new Date().toISOString() }
+      ))
+    );
+
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API_URL}/api/orders/admin/${id}/status`, {
@@ -94,13 +108,21 @@ export default function KelolaOrders() {
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
-        // Rollback kalau gagal
-        setOrders(prev => prev.map(o => o.id !== id ? o : { ...o, status: "proses" }));
+        // ✅ Rollback: kembalikan ke proses dan posisi semula
+        setOrders(prev =>
+          sortOrders(prev.map(o =>
+            o.id !== id ? o : { ...o, status: "proses", selesaiAt: null }
+          ))
+        );
         alert(data.message ?? "Gagal update status");
       }
     } catch {
-      // Rollback
-      setOrders(prev => prev.map(o => o.id !== id ? o : { ...o, status: "proses" }));
+      // ✅ Rollback
+      setOrders(prev =>
+        sortOrders(prev.map(o =>
+          o.id !== id ? o : { ...o, status: "proses", selesaiAt: null }
+        ))
+      );
       alert("Gagal terhubung ke server");
     } finally {
       setUpdating(null);
@@ -109,6 +131,7 @@ export default function KelolaOrders() {
 
   /* ── Filter ───────────────────────────────────────────────────────────── */
   const validOrders = orders.filter(o => o.status === "proses" || o.status === "selesai");
+  // ✅ filtered sudah tersorted karena `orders` selalu di-sort via sortOrders()
   const filtered    = filter === "all" ? validOrders : validOrders.filter(o => o.status === filter);
   const prosesCount = validOrders.filter(o => o.status === "proses").length;
 
@@ -143,7 +166,6 @@ export default function KelolaOrders() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Tombol refresh manual */}
           <button
             onClick={() => fetchOrders()}
             disabled={loading}
@@ -152,7 +174,6 @@ export default function KelolaOrders() {
           >
             <RefreshCw size={15} className={`text-gray-600 ${loading ? "animate-spin" : ""}`} />
           </button>
-          {/* Live indicator */}
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
             <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
             <span className="text-xs font-semibold text-amber-700">Live</span>
@@ -231,16 +252,20 @@ export default function KelolaOrders() {
       {!loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(order => {
-            const s         = statusConfig[order.status] ?? statusConfig.proses;
-            const hasNotes  = order.note || (order.itemNotes && Object.keys(order.itemNotes).length > 0);
-            const isSelesai = order.status === "selesai";
+            const s          = statusConfig[order.status] ?? statusConfig.proses;
+            const hasNotes   = order.note || (order.itemNotes && Object.keys(order.itemNotes).length > 0);
+            const isSelesai  = order.status === "selesai";
             const isUpdating = updating === order.id;
-            const itemList  = (order.items ?? []).filter(i => (i.qty ?? 1) > 0);
+            const itemList   = (order.items ?? []).filter(i => (i.qty ?? 1) > 0);
 
             return (
               <div
                 key={order.id}
-                className={`bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-all ${s.border}`}
+                className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-500 ${
+                  isSelesai
+                    ? "opacity-60 hover:opacity-80 hover:shadow-md " + s.border
+                    : "hover:shadow-md " + s.border
+                }`}
               >
                 {/* Card Header */}
                 <div className={`px-4 py-3 flex items-center justify-between border-b ${s.bg}`}>
@@ -330,7 +355,7 @@ export default function KelolaOrders() {
             <div className="col-span-full text-center py-16 text-gray-400">
               <ClipboardList size={40} className="mx-auto mb-3 opacity-30" />
               <p className="font-semibold">
-                {filter === "proses" ? "Tidak ada pesanan yang diproses" :
+                {filter === "proses"  ? "Tidak ada pesanan yang diproses" :
                  filter === "selesai" ? "Belum ada pesanan selesai" :
                  "Belum ada pesanan masuk"}
               </p>

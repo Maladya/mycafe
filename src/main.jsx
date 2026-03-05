@@ -25,6 +25,8 @@ import Laporan      from "./Admin/pages/Laporan.jsx";
 import Payment      from "./Admin/pages/Payment.jsx";
 import Pengaturan   from "./Admin/pages/Pengaturan.jsx";
 import Billing      from "./Admin/pages/KelolaBilling.jsx";
+import Kasir        from "./Admin/pages/Kasir.jsx";
+import KelolaKasir  from "./Admin/pages/KelolaKasir.jsx";
 
 // ── User ──────────────────────────────────────────────────────────────────────
 import Home                 from "./User/Index.jsx";
@@ -36,12 +38,45 @@ import RingkasanPesananUser from "./User/RingkasanPesanan.jsx";
 
 function ProtectedRoute() {
   const token = localStorage.getItem("token");
-  if (!token) return <Navigate to="/user" replace />;
+  if (!token) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
+function KasirProtectedRoute() {
+  const token = localStorage.getItem("token");
+  const userStr = localStorage.getItem("user");
+  
+  if (!token) return <Navigate to="/login" replace />;
+  
+  try {
+    const userData = JSON.parse(userStr || "{}");
+    const role = userData?.role?.toLowerCase();
+    
+    // Only allow kasir, admin, or staff
+    if (role !== "kasir" && role !== "admin" && role !== "staff") {
+      return <Navigate to="/login" replace />;
+    }
+  } catch {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return <Outlet />;
+}
+
+const navLabels = {
+  dashboard:  "Dashboard",
+  menu:       "Kelola Menu",
+  orders:     "Pesanan",
+  tables:     "Meja",
+  promo:      "Promo",
+  laporan:    "Laporan",
+  payment:    "Pembayaran",
+  pengaturan: "Pengaturan",
+  billing:    "Langganan",
+};
+
 const router = createBrowserRouter([
-  { path: "/", element: <Navigate to="/user" replace /> },
+  { path: "/", element: <Navigate to="/login" replace /> },
 
   { path: "/user/table/:tableId", element: <Home /> },
   { path: "/login",  element: <LoginPage /> },
@@ -63,6 +98,14 @@ const router = createBrowserRouter([
           { path: "/admin/payment",    element: <Payment /> },
           { path: "/admin/pengaturan", element: <Pengaturan /> },
           { path: "/admin/billing",    element: <Billing /> },
+          { path: "/admin/kasir-users", element: <KelolaKasir /> },
+        ],
+      },
+      // Kasir route - protected and only for kasir role
+      {
+        element: <KasirProtectedRoute />,
+        children: [
+          { path: "/kasir", element: <Kasir /> },
         ],
       },
     ],
