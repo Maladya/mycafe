@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, UtensilsCrossed, ClipboardList, Table2,
-  BarChart3, Settings, LogOut, Tag, Coffee, X, Menu, Bell,
+  Settings, LogOut, Tag, Coffee, X, Menu, Bell,
   CreditCard, Wallet, Users
 } from "lucide-react";
 import { isPromoActive } from "../data/constants";
@@ -13,7 +13,6 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
     { id:"kasir-users", label:"Kelola Kasir", icon:<Users size={18}/> },
     { id:"tables",     label:"Meja",        icon:<Table2 size={18}/> },
     { id:"promo",      label:"Promo",       icon:<Tag size={18}/>,             badge:(promoCodes ?? []).filter(p=>isPromoActive(p)).length||null },
-    { id:"laporan",    label:"Laporan",     icon:<BarChart3 size={18}/> },
     { id:"payment",    label:"Pembayaran",  icon:<Wallet size={18}/> },
     { id:"billing",    label:"Langganan",   icon:<CreditCard size={18}/> },
     { id:"pengaturan", label:"Pengaturan",  icon:<Settings size={18}/> },
@@ -102,7 +101,6 @@ export function Header({ activePage, setSidebarOpen, orders, setActivePage }) {
     "kasir-users": "Kelola Kasir",
     tables:     "Meja",
     promo:      "Promo",
-    laporan:    "Laporan",
     payment:    "Pembayaran",
     pengaturan: "Pengaturan",
     billing:    "Langganan",

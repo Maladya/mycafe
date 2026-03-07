@@ -114,7 +114,6 @@ export default function KelolaMeja() {
   });
 
   useEffect(() => { setPage(1); }, [search]);
-  useEffect(() => { setPage(1); }, [tables.length]);
 
   const pageSize = 12;
   const totalPages = Math.max(1, Math.ceil(filteredTables.length / pageSize));
@@ -200,7 +199,31 @@ export default function KelolaMeja() {
                 {order && <p className="text-[10px] text-amber-600 font-bold mt-0.5 truncate">{order.id}</p>}
                 <div className="flex gap-1.5 mt-3">
                   <button
-                    onClick={() => setQrTable({ ...table, nomor_meja: noMeja })}
+                    onClick={() => {
+                      const userStr = localStorage.getItem("user");
+                      const cafeStr = localStorage.getItem("cafe");
+                      console.log("Opening QR for table:", table);
+                      console.log("localStorage user:", userStr);
+                      console.log("localStorage cafe:", cafeStr);
+                      
+                      let cafeId = "";
+                      try {
+                        const user = JSON.parse(userStr);
+                        cafeId = user?.cafe_id ?? user?.cafeId ?? user?.cafe ?? cafeStr ?? "";
+                      } catch {
+                        cafeId = cafeStr ?? "";
+                      }
+                      
+                      console.log("Extracted cafeId:", cafeId);
+                      
+                      const tableData = { 
+                        ...table, 
+                        nomor_meja: noMeja, 
+                        cafe_id: cafeId 
+                      };
+                      console.log("Sending to QRModal:", tableData);
+                      setQrTable(tableData);
+                    }}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-[10px] font-bold transition-all"
                   >
                     <QrCode size={11}/> QR

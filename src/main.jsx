@@ -21,7 +21,6 @@ import KelolaMenu   from "./Admin/pages/KelolaMenu.jsx";
 import KelolaOrders from "./Admin/pages/KelolaOrders.jsx";
 import KelolaMeja   from "./Admin/pages/KelolaMeja.jsx";
 import KelolaPromo  from "./Admin/pages/KelolaPromo.jsx";
-import Laporan      from "./Admin/pages/Laporan.jsx";
 import Payment      from "./Admin/pages/Payment.jsx";
 import Pengaturan   from "./Admin/pages/Pengaturan.jsx";
 import Billing      from "./Admin/pages/KelolaBilling.jsx";
@@ -69,7 +68,6 @@ const navLabels = {
   orders:     "Pesanan",
   tables:     "Meja",
   promo:      "Promo",
-  laporan:    "Laporan",
   payment:    "Pembayaran",
   pengaturan: "Pengaturan",
   billing:    "Langganan",
@@ -94,7 +92,7 @@ const router = createBrowserRouter([
           { path: "/admin/orders",     element: <KelolaOrders /> },
           { path: "/admin/tables",     element: <KelolaMeja /> },
           { path: "/admin/promo",      element: <KelolaPromo /> },
-          { path: "/admin/laporan",    element: <Laporan /> },
+          { path: "/admin/laporan",    element: <Navigate to="/admin/dashboard" replace /> },
           { path: "/admin/payment",    element: <Payment /> },
           { path: "/admin/pengaturan", element: <Pengaturan /> },
           { path: "/admin/billing",    element: <Billing /> },
