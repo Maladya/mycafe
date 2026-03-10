@@ -7,8 +7,19 @@ import {
 } from "lucide-react";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
+const DEVICE_KEY = "astakira_device_id";
+
+function getOrCreateDeviceId() {
+  let deviceId = localStorage.getItem(DEVICE_KEY);
+  if (!deviceId) {
+    deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem(DEVICE_KEY, deviceId);
+  }
+  return deviceId;
+}
+
 const tokenManager = {
   get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
 };
@@ -406,8 +417,12 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
 function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
   const [activeTab, setActiveTab] = useState("sedang");
   const { data: ordersRaw, loading, error, refetch } = useApi(
-    () => api.get(`api/orders?meja=${mejaId}&cafe_id=${cafeId}`).then(r => r.data ?? r),
-    [mejaId, cafeId]
+    () => {
+      const deviceId = getOrCreateDeviceId();
+      if (!cafeId) return Promise.resolve([]);
+      return api.get(`api/orders?device_id=${deviceId}&cafe_id=${cafeId}`).then(r => r.data ?? r);
+    },
+    [cafeId]
   );
 
   useEffect(() => {

@@ -1,17 +1,109 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Coffee, AlertCircle, Eye, EyeOff, User, Lock } from "lucide-react";
+import { Coffee, AlertCircle, Eye, EyeOff, User, Lock, CheckCircle2 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
 
+/* ── Success Overlay ─────────────────────────────────────────────── */
+function SuccessOverlay({ visible, role }) {
+  const destination = role === "kasir" ? "Kasir" : "Dashboard";
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.55)",
+        backdropFilter: "blur(6px)",
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? "auto" : "none",
+        transition: "opacity 0.3s ease",
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(22,22,32,0.97)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: "20px",
+          padding: "36px 32px",
+          textAlign: "center",
+          width: "280px",
+          boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+          animation: visible ? "popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards" : "none",
+        }}
+      >
+        {/* Check icon */}
+        <div
+          style={{
+            width: "64px",
+            height: "64px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #10b981, #059669)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 16px",
+            boxShadow: "0 0 20px rgba(16,185,129,0.3)",
+            animation: visible ? "checkPop 0.4s 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275) both" : "none",
+          }}
+        >
+          <CheckCircle2 size={32} color="white" strokeWidth={2.5} />
+        </div>
+
+        <h2 style={{ color: "white", fontSize: "17px", fontWeight: 700, marginBottom: "6px" }}>
+          Login Berhasil!
+        </h2>
+        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", marginBottom: "20px" }}>
+          Mengarahkan ke {destination}...
+        </p>
+
+        {/* Progress bar */}
+        <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "99px", height: "3px", overflow: "hidden" }}>
+          <div
+            style={{
+              height: "100%",
+              background: "linear-gradient(90deg, #f59e0b, #f97316)",
+              borderRadius: "99px",
+              animation: visible ? "progressFill 1.5s 0.2s linear forwards" : "none",
+              width: "0%",
+            }}
+          />
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes popIn {
+          0%   { transform: scale(0.88) translateY(8px); opacity: 0; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        @keyframes checkPop {
+          0%   { transform: scale(0); opacity: 0; }
+          70%  { transform: scale(1.12); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes progressFill {
+          0%   { width: 0%; }
+          100% { width: 100%; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ── Main Component ──────────────────────────────────────────────── */
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  const [user,     setUser]     = useState("");
-  const [pass,     setPass]     = useState("");
-  const [err,      setErr]      = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [showPass, setShowPass] = useState(false);
+  const [user,         setUser]         = useState("");
+  const [pass,         setPass]         = useState("");
+  const [err,          setErr]          = useState("");
+  const [loading,      setLoading]      = useState(false);
+  const [showPass,     setShowPass]     = useState(false);
+  const [showSuccess,  setShowSuccess]  = useState(false);
+  const [successRole,  setSuccessRole]  = useState("");
 
   // ── Kalau sudah login langsung redirect ───────────────────────────────────
   useEffect(() => {
@@ -50,14 +142,11 @@ export default function LoginPage() {
 
       const data = await res.json();
 
-      // ── Gagal login ────────────────────────────────────────────────────────
       if (!res.ok || data.success === false) {
         setErr(data.message ?? data.error ?? "email atau password salah");
         return;
       }
 
-      // ── Ambil token ────────────────────────────────────────────────────────
-      // Struktur response: { status, message, data: { token }, admin: { id, email, ... } }
       const access_token = data.data?.token;
       const adminData    = data.admin;
 
@@ -66,7 +155,6 @@ export default function LoginPage() {
         return;
       }
 
-      // ── Decode JWT untuk ambil role ────────────────────────────────────────
       let role = "admin";
       try {
         const tokenPayload = JSON.parse(atob(access_token.split(".")[1]));
@@ -75,19 +163,20 @@ export default function LoginPage() {
         console.warn("Gagal decode JWT, default ke admin");
       }
 
-      // ── Gabungkan admin data dengan role dari JWT ──────────────────────────
       const userData = { ...adminData, role };
-
-      // ── Simpan ke localStorage ─────────────────────────────────────────────
       localStorage.setItem("token", access_token);
       localStorage.setItem("user",  JSON.stringify(userData));
 
-      // ── Redirect berdasarkan role ──────────────────────────────────────────
-      if (role === "kasir") {
-        navigate("/kasir", { replace: true });
-      } else {
-        navigate("/admin/dashboard", { replace: true });
-      }
+      // ── Tampilkan success overlay, lalu redirect ───────────────────────────
+      setSuccessRole(role);
+      setShowSuccess(true);
+      setTimeout(() => {
+        if (role === "kasir") {
+          navigate("/kasir", { replace: true });
+        } else {
+          navigate("/admin/dashboard", { replace: true });
+        }
+      }, 1800);
 
     } catch (error) {
       console.error("Login error:", error);
@@ -99,6 +188,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex">
+      <SuccessOverlay visible={showSuccess} role={successRole} />
 
       {/* ── Left Side - Branding ─────────────────────────────────────────── */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 items-center justify-center p-12 relative overflow-hidden">
@@ -137,7 +227,6 @@ export default function LoginPage() {
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-amber-500/5 rounded-full -translate-x-1/2 translate-y-1/2 blur-3xl" />
 
         <div className="relative w-full max-w-sm">
-
           {/* Mobile branding */}
           <div className="lg:hidden text-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-xl shadow-amber-500/30 mx-auto mb-3">
@@ -153,8 +242,7 @@ export default function LoginPage() {
             <p className="text-gray-400 text-sm mb-6">Selamat datang kembali 👋</p>
 
             <form onSubmit={handle} className="space-y-4">
-
-              {/* email */}
+              {/* Email */}
               <div>
                 <label className="text-gray-300 text-xs font-semibold mb-2 block uppercase tracking-wide">
                   email
@@ -208,9 +296,9 @@ export default function LoginPage() {
               {/* Submit */}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || showSuccess}
                 className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all mt-2 ${
-                  loading
+                  loading || showSuccess
                     ? "bg-amber-400 cursor-wait"
                     : "bg-gradient-to-r from-amber-500 to-orange-500 hover:shadow-lg hover:shadow-amber-500/30 hover:scale-[1.02]"
                 } text-white shadow-lg`}

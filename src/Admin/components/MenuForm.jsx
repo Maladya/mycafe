@@ -4,7 +4,7 @@ import {
   Hash, Save, Upload, Loader2, Edit3, AlertCircle, Camera
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
 
 const authHeaders = (json = true) => {
   const token = localStorage.getItem("token");
@@ -150,6 +150,10 @@ export default function MenuForm({ item, onSave, onCancel }) {
   const [deletingVarId, setDeletingVarId] = useState(null);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const getSelectedCategoryName = () => {
+    const selectedCategory = categories.find(c => catId(c) === form.id_kategori);
+    return selectedCategory?.nama_kategori || selectedCategory?.name || form.id_kategori || "";
+  };
   const catId   = (c) => String(c?.id ?? c?.nama_kategori ?? c?.name ?? "unknown");
   const catName = (c) => String(c?.nama_kategori ?? c?.name ?? c?.id ?? "");
   const catLogo = (c) => {
@@ -192,7 +196,11 @@ export default function MenuForm({ item, onSave, onCancel }) {
         const data = await res.json();
         if (!res.ok) { setVarErr("Gagal memuat varian"); return; }
         const list = data.data ?? data.variants ?? data.varian ?? data ?? [];
-        setVariants(Array.isArray(list) ? list : []);
+        const arr = Array.isArray(list) ? list : [];
+        setVariants(arr.map(v => ({
+          ...v,
+          id_kategori: v?.id_kategori ?? item?.id_kategori ?? "",
+        })));
       } catch {
         setVarErr("Gagal terhubung ke server");
       } finally {
@@ -298,6 +306,29 @@ export default function MenuForm({ item, onSave, onCancel }) {
   // CRUD VARIAN
   // ════════════════════════════════════════════════════════════════════════════
 
+  const getVariantsByCategory = () => {
+    const current = String(form.id_kategori ?? "");
+    if (!current) return variants;
+    return variants.filter(v => String(v?.id_kategori ?? current) === current);
+  };
+
+  useEffect(() => {
+    setEditVarId(null);
+    setEditVarLabel("");
+    setEditVarPrice("");
+    setVarErr("");
+  }, [form.id_kategori]);
+
+  useEffect(() => {
+    if (!editVarId) return;
+    const visible = getVariantsByCategory().some(v => String(v?.id) === String(editVarId));
+    if (!visible) {
+      setEditVarId(null);
+      setEditVarLabel("");
+      setEditVarPrice("");
+    }
+  }, [editVarId, variants, form.id_kategori]);
+
   // ── Tambah varian ─────────────────────────────────────────────────────────
   const addVariant = async () => {
     const label = newVarLabel.trim();
@@ -306,23 +337,17 @@ export default function MenuForm({ item, onSave, onCancel }) {
 
     setVarSaving(true); setVarErr("");
     try {
-      // Jika menu baru (belum punya id), simpan sementara di local state
-      if (!item?.id && !form.id) {
-        const tempVar = { id: `temp_${Date.now()}`, label, harga, isTemp: true };
-        setVariants(p => [...p, tempVar]);
-        setNewVarLabel(""); setNewVarPrice("");
-        return;
-      }
+      const menuId = await ensureMenuSaved();
+      if (!menuId) return;
 
-      const menuId = item?.id ?? form.id;
       const res = await fetch(`${API_URL}/api/variant`, {
         method: "POST", headers: authHeaders(),
-        body: JSON.stringify({ label, harga, id_menu: menuId }),
+        body: JSON.stringify({ label, harga, id_menu: menuId, id_kategori: form.id_kategori }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) { setVarErr(data.message ?? "Gagal menambah varian"); return; }
 
-      const newVar = data.data ?? data.varian ?? data.variant ?? { label, harga };
+      const newVar = data.data ?? data.varian ?? data.variant ?? { label, harga, id_kategori: form.id_kategori };
       setVariants(p => [...p, newVar]);
       setNewVarLabel(""); setNewVarPrice("");
     } catch { setVarErr("Gagal terhubung ke server"); }
@@ -347,19 +372,19 @@ export default function MenuForm({ item, onSave, onCancel }) {
     try {
       // Varian sementara (menu baru belum disimpan)
       if (v.isTemp) {
-        setVariants(p => p.map(x => x.id === v.id ? { ...x, label, harga } : x));
+        setVariants(p => p.map(x => x.id === v.id ? { ...x, label, harga, id_kategori: (x.id_kategori ?? form.id_kategori) } : x));
         setEditVarId(null); setEditVarLabel(""); setEditVarPrice("");
         return;
       }
 
       const res = await fetch(`${API_URL}/api/variant/${v.id}`, {
         method: "PUT", headers: authHeaders(),
-        body: JSON.stringify({ label, harga }),
+        body: JSON.stringify({ label, harga, id_kategori: (v.id_kategori ?? form.id_kategori) }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) { setVarErr(data.message ?? "Gagal mengedit varian"); return; }
 
-      setVariants(p => p.map(x => x.id === v.id ? { ...x, label, harga } : x));
+      setVariants(p => p.map(x => x.id === v.id ? { ...x, label, harga, id_kategori: (x.id_kategori ?? form.id_kategori) } : x));
       setEditVarId(null); setEditVarLabel(""); setEditVarPrice("");
     } catch { setVarErr("Gagal terhubung ke server"); }
     finally { setVarSaving(false); }
@@ -387,6 +412,57 @@ export default function MenuForm({ item, onSave, onCancel }) {
     finally { setDeletingVarId(null); }
   };
 
+  const ensureMenuSaved = async () => {
+    if (item?.id || form.id) return item?.id ?? form.id;
+
+    if (!form.nama_menu?.trim()) {
+      setVarErr("Nama menu wajib diisi sebelum menambah varian.");
+      return null;
+    }
+    if (!form.harga) {
+      setVarErr("Harga menu wajib diisi sebelum menambah varian.");
+      return null;
+    }
+    if (!form.image_url?.trim()) {
+      setVarErr("Gambar/URL menu wajib diisi sebelum menambah varian.");
+      return null;
+    }
+    if (!form.id_kategori) {
+      setVarErr("Kategori wajib dipilih sebelum menambah varian.");
+      return null;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/menu`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          ...form,
+          harga: Number(form.harga),
+          id_kategori: form.id_kategori,
+          image_url: form.image_url?.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        setVarErr(data.message ?? data.error ?? "Gagal menyimpan menu sebelum menambah varian");
+        return null;
+      }
+
+      const created = data.data ?? data.menu ?? data.item ?? data;
+      const newId = created?.id;
+      if (!newId) {
+        setVarErr("Menu tersimpan tapi ID menu tidak ditemukan.");
+        return null;
+      }
+      setForm(p => ({ ...p, id: newId }));
+      return newId;
+    } catch {
+      setVarErr("Gagal terhubung ke server");
+      return null;
+    }
+  };
+
   // ── Simpan menu utama ─────────────────────────────────────────────────────
   const handleSave = () => {
     if (!form.nama_menu.trim()) { alert("Nama menu wajib diisi"); return; }
@@ -397,7 +473,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
     onSave({
       ...form,
       harga:       Number(form.harga),
-      id:          item?.id || undefined,
+      id:          item?.id ?? form.id ?? undefined,
       id_kategori: form.id_kategori,
       image_url:   form.image_url.trim(),
       variants:    variants.map(({ isTemp, ...v }) => v), // hapus flag isTemp
@@ -431,9 +507,9 @@ export default function MenuForm({ item, onSave, onCancel }) {
               className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-semibold transition-all ${tab===t.id?"border-b-2 border-amber-500 text-amber-600 bg-white":"text-gray-500 hover:text-gray-700"}`}
             >
               {t.icon}{t.label}
-              {t.id === "variants" && variants.length > 0 && (
+              {t.id === "variants" && getVariantsByCategory().length > 0 && (
                 <span className="ml-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                  {variants.length}
+                  {getVariantsByCategory().length}
                 </span>
               )}
             </button>
@@ -686,6 +762,11 @@ export default function MenuForm({ item, onSave, onCancel }) {
           {tab === "variants" && (
             <div className="space-y-4">
 
+              <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                <p className="text-xs font-bold text-amber-700">Kategori: {getSelectedCategoryName() || "-"}</p>
+                <p className="text-[10px] text-amber-600">{getVariantsByCategory().length} varian</p>
+              </div>
+
               <p className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                 💡 Varian ditampilkan di halaman detail user (mis. Hot/Iced, Single/Double).
                 {!item?.id && " Varian akan disimpan ke database setelah menu disimpan."}
@@ -709,7 +790,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                 <>
                   {/* ── List varian ── */}
                   <div className="space-y-2">
-                    {variants.map((v) => (
+                    {getVariantsByCategory().map((v) => (
                       <div key={v.id} className="bg-gray-50 rounded-xl p-3">
                         {editVarId === v.id ? (
                           /* Mode edit */
@@ -815,10 +896,10 @@ export default function MenuForm({ item, onSave, onCancel }) {
                   </div>
 
                   {/* Empty state */}
-                  {variants.length === 0 && (
+                  {getVariantsByCategory().length === 0 && (
                     <div className="text-center py-6 text-gray-400">
                       <Hash size={32} className="mx-auto mb-2 opacity-30"/>
-                      <p className="text-sm">Belum ada varian.</p>
+                      <p className="text-sm">Belum ada varian untuk kategori {getSelectedCategoryName() || "ini"}.</p>
                       <p className="text-xs mt-1">Tambah varian di atas.</p>
                     </div>
                   )}

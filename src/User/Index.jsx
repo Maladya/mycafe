@@ -6,7 +6,7 @@ import {
   AlertCircle, RefreshCw, Image
 } from "lucide-react";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = {
   get:   ()  => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
@@ -73,14 +73,42 @@ try {
   if (cached) applyThemeVars(JSON.parse(cached));
 } catch {}
 
+const DEVICE_KEY = "astakira_device_id";
+
+function getOrCreateDeviceId() {
+  let deviceId = localStorage.getItem(DEVICE_KEY);
+  if (!deviceId) {
+    // Generate unique device ID
+    deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem(DEVICE_KEY, deviceId);
+  }
+  return deviceId;
+}
+
 const api = {
   get: async (path) => {
     const token = tokenManager.get();
     const headers = { "Content-Type": "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${BASE_URL}/${path}`, { headers });
+    const deviceId = getOrCreateDeviceId();
+    const url = path.includes('?') ? `${path}&device_id=${deviceId}` : `${path}?device_id=${deviceId}`;
+    const res = await fetch(`${BASE_URL}/${url}`, { headers });
     if (res.status === 401) { tokenManager.clear(); throw new Error("Sesi habis."); }
     if (res.status === 403) { throw new Error("Akses ditolak (403)."); }
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    return res.json();
+  },
+  post: async (path, body) => {
+    const token = tokenManager.get();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const deviceId = getOrCreateDeviceId();
+    const url = path.includes('?') ? `${path}&device_id=${deviceId}` : `${path}?device_id=${deviceId}`;
+    const res = await fetch(`${BASE_URL}/${url}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     return res.json();
   },
@@ -480,10 +508,11 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
   const [activeTab, setActiveTab] = useState("sedang");
   const { data: ordersRaw, loading, error, refetch } = useApi(
     () => {
-      if (!cafeId || !mejaId) return Promise.resolve([]);
-      return api.get(`api/orders?meja=${mejaId}&cafe_id=${cafeId}`).then(r => r.data ?? r.orders ?? r);
+      const deviceId = getOrCreateDeviceId();
+      if (!cafeId) return Promise.resolve([]);
+      return api.get(`api/orders?device_id=${deviceId}&cafe_id=${cafeId}`).then(r => r.data ?? r.orders ?? r);
     },
-    [mejaId, cafeId]
+    [cafeId]
   );
 
   useEffect(() => {

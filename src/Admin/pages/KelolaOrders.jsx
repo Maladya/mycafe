@@ -6,7 +6,7 @@ import { ClipboardList, MessageSquare, RefreshCw, AlertCircle, Search } from "lu
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000").replace(/\/$/, "");
 
 const POLL_INTERVAL = 15000; // polling setiap 15 detik
 

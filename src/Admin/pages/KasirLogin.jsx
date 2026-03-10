@@ -1,18 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { QrCode, Loader2, Eye, EyeOff, Store } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
 
-/* ────────────────────────────────────────────────────────────────────────────
-   KASIR LOGIN PAGE — Login terpisah untuk kasir
-   ──────────────────────────────────────────────────────────────────────────── */
 export default function KasirLogin() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: "", password: "" });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [cafeInfo, setCafeInfo] = useState({ nama: "ASTAKIRA", alamat: "Ciakar, Tasikmalaya" });
+
+  // Jika sudah login, redirect ke kasir
+  useEffect(() => {
+    const token = localStorage.getItem("kasir_token");
+    if (token) navigate("/kasir", { replace: true });
+  }, []);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("kasir_user");
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        if (user?.cafe_id) fetchCafeInfo(user.cafe_id);
+      } catch {}
+    }
+  }, []);
+
+  const fetchCafeInfo = async (cafeId) => {
+    try {
+      const token = localStorage.getItem("kasir_token");
+      const res = await fetch(`${API_URL}/api/pengaturan/user/${cafeId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const cafe = data.data ?? data ?? null;
+        setCafeInfo({
+          nama: cafe?.nama_cafe || "ASTAKIRA",
+          alamat: cafe?.alamat || "Ciakar, Tasikmalaya",
+        });
+      }
+    } catch {}
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,29 +59,36 @@ export default function KasirLogin() {
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        // Backend query pakai field: email — kirim username sebagai email
+        body: JSON.stringify({ email: form.username, password: form.password }),
       });
 
       const data = await res.json();
 
-      if (!res.ok || data.success === false) {
+      if (!res.ok) {
         throw new Error(data.message || "Login gagal");
       }
 
-      // Cek role kasir
-      const user = data.user || data.data?.user || data.data;
-      const role = user?.role || user?.jabatan || "";
-      
-      if (role !== "kasir" && role !== "admin" && role !== "staff") {
+      // ✅ Struktur response backend:
+      // { status, message, data: { token }, admin: { id, cafe_id, role, ... } }
+      const token = data.data?.token;
+      const user  = data.admin;
+
+      if (!token) throw new Error("Token tidak ditemukan, hubungi developer");
+      if (!user)  throw new Error("Data user tidak ditemukan, hubungi developer");
+
+      const role = user?.role ?? "";
+      if (role !== "kasir" && role !== "admin") {
         throw new Error("Akun ini tidak memiliki akses kasir");
       }
 
-      // Simpan token kasir terpisah
-      const token = data.token || data.access_token || data.data?.token;
+      if (!user.cafe_id) {
+        throw new Error("Akun tidak terhubung ke cafe manapun");
+      }
+
       localStorage.setItem("kasir_token", token);
       localStorage.setItem("kasir_user", JSON.stringify(user));
-      
-      // Redirect ke dashboard kasir
+
       navigate("/kasir", { replace: true });
     } catch (err) {
       setError(err.message || "Gagal login, periksa koneksi");
@@ -62,12 +100,13 @@ export default function KasirLogin() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-8 text-center">
           <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <QrCode size={32} className="text-white" />
           </div>
-          <h1 className="text-2xl font-black text-white">KASIR</h1>
+          <h1 className="text-2xl font-black text-white">TERMINAL KASIR</h1>
           <p className="text-gray-400 text-sm mt-1">Login untuk akses terminal kasir</p>
         </div>
 
@@ -82,17 +121,17 @@ export default function KasirLogin() {
             </div>
           )}
 
-          {/* Username */}
+          {/* Username / Email */}
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
               <Store size={14} className="text-amber-500" />
-              Username
+              Email
             </label>
             <input
               type="text"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
-              placeholder="Masukkan username"
+              placeholder="Masukkan email"
               className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-amber-500 transition-all"
             />
           </div>
@@ -144,7 +183,7 @@ export default function KasirLogin() {
         {/* Footer */}
         <div className="bg-gray-50 px-6 py-4 text-center">
           <p className="text-xs text-gray-400">
-            Terminal Kasir ASTAKIRA • Ciakar, Tasikmalaya
+            Terminal Kasir {cafeInfo.nama?.toUpperCase()} • {cafeInfo.alamat}
           </p>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { QrCode, LogOut, User, Clock, Bell } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
 
 export const KasirContext = createContext(null);
 export const useKasir = () => useContext(KasirContext);
@@ -22,7 +22,7 @@ export default function KasirLayout() {
     const userStr = localStorage.getItem("kasir_user");
     
     if (!token) {
-      navigate("/kasir/login", { replace: true });
+      navigate("/login", { replace: true });
       return;
     }
 
@@ -33,7 +33,7 @@ export default function KasirLayout() {
     } catch {
       localStorage.removeItem("kasir_token");
       localStorage.removeItem("kasir_user");
-      navigate("/kasir/login", { replace: true });
+      navigate("/login", { replace: true });
     }
   }, [navigate]);
 
@@ -66,7 +66,7 @@ export default function KasirLayout() {
   const handleLogout = () => {
     localStorage.removeItem("kasir_token");
     localStorage.removeItem("kasir_user");
-    navigate("/kasir/login", { replace: true });
+    navigate("/login", { replace: true });
   };
 
   const getAuthHeader = () => ({

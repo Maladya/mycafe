@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useAdmin } from "../AdminPanel";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
 
 /* --------------------------------------------------
    KELOLA KASIR — Admin Manage Kasir Users
@@ -31,6 +31,15 @@ export default function KelolaKasir() {
     Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
   });
 
+  // Get current admin user for cafe_id
+  const getCurrentAdmin = () => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  };
+
   // Fetch kasir users
   const fetchKasir = async () => {
     setLoading(true);
@@ -54,8 +63,9 @@ export default function KelolaKasir() {
 
   // Filter kasir by search
   const filteredKasir = kasirList.filter(k => 
-    k.nama?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    k.username?.toLowerCase().includes(searchTerm.toLowerCase())
+    k.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    k.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    k.nama?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Reset form
@@ -93,11 +103,20 @@ export default function KelolaKasir() {
     setSubmitting(true);
     
     try {
+      const admin = getCurrentAdmin();
+      const cafeId = admin?.cafe_id ?? admin?.id ?? "";
+      
+      if (!cafeId) {
+        showToast("Admin cafe ID tidak ditemukan", "error");
+        return;
+      }
+      
       const payload = {
         email: form.email,
-        username: form.email, // Backend requires username, use email as username
+        username: form.email,
         password: form.password,
         role: "kasir",
+        cafe_id: cafeId,
       };
 
       let res;
@@ -139,7 +158,7 @@ export default function KelolaKasir() {
     if (!deleteConfirm) return;
     
     try {
-      const res = await fetch(`${API_URL}/api/users/${deleteConfirm.id}`, {
+      const res = await fetch(`${API_URL}/api/kasir/${deleteConfirm.id}`, {
         method: "DELETE",
         headers: authHeaders(),
       });
@@ -275,13 +294,13 @@ export default function KelolaKasir() {
             {/* Form */}
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-bold text-gray-700">Email</label>
+                <label className="text-sm font-bold text-gray-700">Email (Gmail)</label>
                 <input
                   type="email"
                   required
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="email@example.com"
+                  placeholder="email@gmail.com"
                   className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-amber-500 transition-all"
                 />
               </div>

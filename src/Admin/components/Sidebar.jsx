@@ -3,12 +3,13 @@ import {
   Settings, LogOut, Tag, Coffee, X, Menu, Bell,
   CreditCard, Wallet, Users
 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { isPromoActive } from "../data/constants";
 
-export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen, menuItems, orders, promoCodes, onLogout }) {
+export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen, menuItems, orders, promoCodes, onLogout, cafeRaw }) {
   const navItems = [
     { id:"dashboard",  label:"Dashboard",   icon:<LayoutDashboard size={18}/> },
-    { id:"menu",       label:"Kelola Menu", icon:<UtensilsCrossed size={18}/>, badge:(menuItems ?? []).filter(m=>!m.stock).length||null },
+    { id:"menu",       label:"Kelola Menu", icon:<UtensilsCrossed size={18}/> },
     { id:"orders",     label:"Pesanan",     icon:<ClipboardList size={18}/>,   badge:(orders ?? []).filter(o=>o.status==="baru").length||null },
     { id:"kasir-users", label:"Kelola Kasir", icon:<Users size={18}/> },
     { id:"tables",     label:"Meja",        icon:<Table2 size={18}/> },
@@ -18,15 +19,23 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
     { id:"pengaturan", label:"Pengaturan",  icon:<Settings size={18}/> },
   ];
 
+  // Dynamic cafe info
+  const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || "ASTAKIRA";
+  const cafeLogo = cafeRaw?.logo_cafe || null;
+
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-5 py-5 flex items-center gap-3 border-b border-gray-800 flex-shrink-0">
-        <div className="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-          <Coffee size={18} className="text-white"/>
+        <div className="w-9 h-9 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0 overflow-hidden">
+          {cafeLogo ? (
+            <img src={cafeLogo} alt={cafeName} className="w-full h-full object-cover" />
+          ) : (
+            <Coffee size={18} className="text-white"/>
+          )}
         </div>
         <div>
-          <p className="font-black text-white text-sm leading-none">ASTAKIRA</p>
+          <p className="font-black text-white text-sm leading-none">{cafeName}</p>
           <p className="text-gray-500 text-[10px] mt-0.5">Admin Panel</p>
         </div>
         <button onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden text-gray-500 hover:text-white">
@@ -93,7 +102,7 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
   );
 }
 
-export function Header({ activePage, setSidebarOpen, orders, setActivePage }) {
+export function Header({ activePage, setSidebarOpen, orders, setActivePage, cafeRaw }) {
   const navLabels = {
     dashboard:  "Dashboard",
     menu:       "Kelola Menu",
@@ -107,6 +116,30 @@ export function Header({ activePage, setSidebarOpen, orders, setActivePage }) {
   };
 
   const newOrders = (orders ?? []).filter(o => o.status === "baru").length;
+  
+  // Dynamic cafe info from database
+  const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || "ASTAKIRA";
+  const cafeAddress = cafeRaw?.cafeAlamat || cafeRaw?.alamat || "";
+  const displaySubtitle = cafeAddress ? `${cafeName} · ${cafeAddress}` : cafeName;
+  
+  // Get actual user data from localStorage
+  const [userData, setUserData] = useState({ username: "Admin", nama: "" });
+  
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setUserData({
+          username: parsed.username || parsed.email || "Admin",
+          nama: parsed.nama || parsed.nama_cafe || "",
+        });
+      }
+    } catch {}
+  }, []);
+  
+  const displayName = userData.nama || userData.username || "Admin";
+  const avatarLetter = (displayName.charAt(0) || "A").toUpperCase();
 
   return (
     <header className="sticky top-0 z-20 bg-white border-b border-gray-100 shadow-sm flex-shrink-0">
@@ -122,7 +155,7 @@ export function Header({ activePage, setSidebarOpen, orders, setActivePage }) {
             <h2 className="font-bold text-gray-900 text-sm capitalize leading-none">
               {navLabels[activePage] || activePage}
             </h2>
-            <p className="text-gray-400 text-[11px] mt-0.5 hidden sm:block">ASTAKIRA · Ciakar, Tasikmalaya</p>
+            <p className="text-gray-400 text-[11px] mt-0.5 hidden sm:block">{displaySubtitle}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -139,9 +172,9 @@ export function Header({ activePage, setSidebarOpen, orders, setActivePage }) {
           )}
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
             <div className="w-6 h-6 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center">
-              <span className="text-white text-[10px] font-black">A</span>
+              <span className="text-white text-[10px] font-black">{avatarLetter}</span>
             </div>
-            <span className="text-xs font-semibold text-gray-700 hidden sm:block">Admin</span>
+            <span className="text-xs font-semibold text-gray-700 hidden sm:block">{displayName}</span>
           </div>
         </div>
       </div>

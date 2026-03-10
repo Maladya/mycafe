@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useAdmin } from "../AdminPanel";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",

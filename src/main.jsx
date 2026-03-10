@@ -42,8 +42,8 @@ function ProtectedRoute() {
 }
 
 function KasirProtectedRoute() {
-  const token = localStorage.getItem("token");
-  const userStr = localStorage.getItem("user");
+  const token = localStorage.getItem("kasir_token") || localStorage.getItem("token");
+  const userStr = localStorage.getItem("kasir_user") || localStorage.getItem("user");
   
   if (!token) return <Navigate to="/login" replace />;
   

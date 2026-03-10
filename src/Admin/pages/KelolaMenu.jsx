@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
 const PER_PAGE = 6;
 
 // ── Ambil logo dari objek kategori — cek semua kemungkinan field name ─────────
@@ -385,6 +385,31 @@ export default function KelolaMenu() {
     setDeleting(true);
     try {
       const token = localStorage.getItem("token");
+
+      const resVar = await fetch(`${API_URL}/api/variant?id_menu=${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (resVar.ok) {
+        const dataVar = await resVar.json();
+        const listVar = dataVar.data ?? dataVar.variants ?? dataVar.varian ?? dataVar ?? [];
+        const variantsToDelete = Array.isArray(listVar) ? listVar : [];
+        const delResults = await Promise.allSettled(
+          variantsToDelete.map(v =>
+            fetch(`${API_URL}/api/variant/${v.id}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            })
+          )
+        );
+
+        const anyFailed = delResults.some(r => r.status === "rejected" || (r.value && !r.value.ok));
+        if (anyFailed) {
+          showToast("Gagal menghapus varian menu", "error");
+          return;
+        }
+      }
+
       const res   = await fetch(`${API_URL}/api/menu/${id}`, {
         method:  "DELETE",
         headers: { Authorization: `Bearer ${token}` },
