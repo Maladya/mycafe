@@ -6,7 +6,7 @@ import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
-const PER_PAGE = 6;
+const PER_PAGE = 4;
 
 // ── Ambil logo dari objek kategori — cek semua kemungkinan field name ─────────
 const getCatLogo = (c) => c?.logo ?? c?.icon ?? "";
@@ -345,7 +345,7 @@ export default function KelolaMenu() {
     (catFilter === "all" || String(m.id_kategori) === catFilter || m.nama_kategori === catFilter) &&
     (m.nama_menu ?? "").toLowerCase().includes(search.toLowerCase())
   );
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paged      = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   // ── Simpan Menu ─────────────────────────────────────────────────────────
@@ -669,15 +669,27 @@ export default function KelolaMenu() {
         </div>
 
         {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
-            <p className="text-xs text-gray-400">{filtered.length} item · hal {page}/{totalPages}</p>
-            <div className="flex gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page===1} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-all"><ChevronLeft size={14}/></button>
-              {Array.from({length:totalPages},(_,i)=>i+1).map(p => (
-                <button key={p} onClick={() => setPage(p)} className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-all ${p===page?"bg-amber-500 text-white shadow-md":"border border-gray-200 hover:bg-gray-50"}`}>{p}</button>
-              ))}
-              <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page===totalPages} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50 transition-all"><ChevronRight size={14}/></button>
+          <div className="px-4 py-3 border-t border-gray-100">
+            <div className="flex items-center justify-center gap-3 bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <p className="text-sm font-bold text-gray-700">
+                Halaman {page} / {totalPages}
+              </p>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
+            <p className="text-center text-xs text-gray-400 mt-2">{filtered.length} item</p>
           </div>
         )}
       </div>

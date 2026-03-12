@@ -2,6 +2,8 @@ import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 
 import { useState, useEffect, useRef } from "react";
 
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
+
 import {
 
   ChevronLeft, CheckCircle, Copy, Download, Share2,
@@ -22,11 +24,33 @@ import {
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
 
+const FINGERPRINT_KEY = "astakira_fingerprint";
+
 const TOKEN_KEY = "astakira_token";
 
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
 
 const THEME_CACHE_KEY = "astakira_theme";
+
+
+
+async function getOrCreateFingerprint() {
+
+  let fingerprint = localStorage.getItem(FINGERPRINT_KEY);
+
+  if (fingerprint) return fingerprint;
+
+  const fp = await FingerprintJS.load();
+
+  const result = await fp.get();
+
+  fingerprint = result?.visitorId ?? "";
+
+  if (fingerprint) localStorage.setItem(FINGERPRINT_KEY, fingerprint);
+
+  return fingerprint;
+
+}
 
 
 
@@ -408,6 +432,16 @@ export default function RingkasanPesanan() {
 
       try {
 
+        let fingerprint = "";
+
+        try {
+          fingerprint = await getOrCreateFingerprint();
+        } catch (err) {
+          console.warn("fingerprint failed:", err);
+        }
+
+        const fingerprintHeader = fingerprint ? { "x-fingerprint": fingerprint } : {};
+
         // Jika datang dari flow "Tambah Pesanan", append ke order yang sudah ada
 
         if (existingOrderId) {
@@ -434,7 +468,7 @@ export default function RingkasanPesanan() {
 
             method:  "POST",
 
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...fingerprintHeader },
 
             body:    JSON.stringify(payloadTambah),
 
@@ -512,7 +546,7 @@ export default function RingkasanPesanan() {
 
           method:  "POST",
 
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...fingerprintHeader },
 
           body:    JSON.stringify(payload),
 

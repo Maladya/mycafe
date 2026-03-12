@@ -432,6 +432,7 @@ export default function Pembayaran() {
   const [form, setForm]                 = useState({ nama: "", meja: MEJA_ID });
   const [cafeName, setCafeName]         = useState("ASTAKIRA");
   const [snapClientKey, setSnapClientKey] = useState("");
+  const [showNameError, setShowNameError] = useState(false);
 
   const [pajakPersen, setPajakPersen] = useState(0);
 
@@ -494,7 +495,7 @@ export default function Pembayaran() {
 
   const handleOnlinePayment = useCallback(async () => {
     if (!form.nama.trim()) {
-      setPayError("Nama lengkap wajib diisi");
+      setShowNameError(true);
       return;
     }
 
@@ -573,7 +574,7 @@ export default function Pembayaran() {
 
   const handleBayar = () => {
     if (method === "kasir") {
-      if (!form.nama.trim()) { setPayError("Nama lengkap wajib diisi"); return; }
+      if (!form.nama.trim()) { setShowNameError(true); return; }
       setPayError("");
       // Tampilkan modal konfirmasi dulu untuk kasir
       setConfirmKasir(true);
@@ -863,6 +864,24 @@ export default function Pembayaran() {
 
       {showPromo && (
         <PromoCodeModal onClose={() => setShowPromo(false)} onApply={setAppliedPromo} subtotal={subtotal} cafeId={CAFE_ID} />
+      )}
+
+      {/* Modal peringatan nama wajib diisi */}
+      {showNameError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fadeIn" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+          <div className="bg-white rounded-[2rem] p-7 w-full max-w-sm text-center space-y-5 shadow-2xl animate-scaleIn">
+            <div className="w-20 h-20 mx-auto rounded-3xl flex items-center justify-center bg-red-100">
+              <span className="text-5xl">⚠️</span>
+            </div>
+            <div>
+              <h3 className="font-bold text-xl text-gray-900 mb-1">Nama Belum Diisi</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">Silakan masukkan nama lengkap Anda untuk melanjutkan pembayaran.</p>
+            </div>
+            <button onClick={() => setShowNameError(false)} className="w-full rounded-2xl py-3.5 font-bold shadow-lg transition-all bg-red-500 text-white hover:bg-red-600">
+              Mengerti
+            </button>
+          </div>
+        </div>
       )}
 
       <style>{`

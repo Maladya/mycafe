@@ -6,6 +6,8 @@ import {
   AlertCircle, RefreshCw, Image
 } from "lucide-react";
 
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
+
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = {
@@ -74,6 +76,8 @@ try {
 } catch {}
 
 const DEVICE_KEY = "astakira_device_id";
+const FINGERPRINT_KEY = "astakira_fingerprint";
+const VISITOR_COOKIE_KEY = "visitor_id";
 
 function getOrCreateDeviceId() {
   let deviceId = localStorage.getItem(DEVICE_KEY);
@@ -83,6 +87,39 @@ function getOrCreateDeviceId() {
     localStorage.setItem(DEVICE_KEY, deviceId);
   }
   return deviceId;
+}
+
+async function getOrCreateFingerprint() {
+  let fingerprint = localStorage.getItem(FINGERPRINT_KEY);
+  if (fingerprint) return fingerprint;
+
+  const fp = await FingerprintJS.load();
+  const result = await fp.get();
+
+  fingerprint = result?.visitorId ?? "";
+  if (fingerprint) localStorage.setItem(FINGERPRINT_KEY, fingerprint);
+
+  return fingerprint;
+}
+
+function setCookie(key, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
+  try {
+    const safeKey = encodeURIComponent(key);
+    const safeValue = encodeURIComponent(value);
+    document.cookie = `${safeKey}=${safeValue}; path=/; max-age=${maxAgeSeconds}; samesite=lax`;
+  } catch {}
+}
+
+function getCookie(key) {
+  try {
+    const nameEq = `${encodeURIComponent(key)}=`;
+    const parts = (document.cookie || "").split(";");
+    for (const part of parts) {
+      const v = part.trim();
+      if (v.startsWith(nameEq)) return decodeURIComponent(v.slice(nameEq.length));
+    }
+  } catch {}
+  return "";
 }
 
 const api = {
@@ -507,10 +544,26 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
 function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
   const [activeTab, setActiveTab] = useState("sedang");
   const { data: ordersRaw, loading, error, refetch } = useApi(
-    () => {
-      const deviceId = getOrCreateDeviceId();
-      if (!cafeId) return Promise.resolve([]);
-      return api.get(`api/orders?device_id=${deviceId}&cafe_id=${cafeId}`).then(r => r.data ?? r.orders ?? r);
+    async () => {
+      if (!cafeId) return [];
+
+      const visitorId = getCookie(VISITOR_COOKIE_KEY);
+
+      let fingerprint = "";
+      try {
+        fingerprint = await getOrCreateFingerprint();
+      } catch (err) {
+        console.warn("fingerprint failed:", err);
+      }
+
+      const qs = new URLSearchParams();
+      qs.set("cafe_id", String(cafeId));
+      qs.set("meja_id", String(mejaId ?? ""));
+      qs.set("meja", String(mejaId ?? ""));
+      if (visitorId) qs.set("visitor_id", visitorId);
+      if (fingerprint) qs.set("fingerprint", fingerprint);
+
+      return api.get(`api/client/riwayat-pembelian?${qs.toString()}`).then(r => r.data ?? r.orders ?? r);
     },
     [cafeId]
   );
@@ -521,16 +574,16 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
   }, []);
 
   const orders = (Array.isArray(ordersRaw) ? ordersRaw : []).map(o => ({
-    id:       o.id,
+    id:       o.id ?? o.order_id ?? o.orderId,
     status:   o.status ?? "proses",
     waktu:    formatWaktu(o.waktu ?? o.created_at ?? o.tanggal ?? ""),
     estimasi: o.estimasi ?? o.eta ?? "15 mnt",
     items: (o.items ?? o.detail ?? o.order_items ?? []).map(i => ({
-      name:    i.name    ?? i.nama_menu ?? i.nama   ?? "",
+      name:    i.name ?? i.nama_produk ?? i.nama_menu ?? i.nama ?? "",
       variant: i.variant ?? i.varian    ?? "",
       qty:     Number(i.qty ?? i.jumlah ?? 1),
-      price:   Number(i.price ?? i.harga ?? 0),
-      image:   fixImgUrl(i.image ?? i.image_url ?? i.foto ?? i.gambar ?? i.img ?? ""),
+      price:   Number(i.price ?? i.harga_produk ?? i.harga ?? 0),
+      image:   fixImgUrl(i.image ?? i.gambar_produk ?? i.image_url ?? i.foto ?? i.gambar ?? i.img ?? ""),
     })),
   }));
 
@@ -716,7 +769,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                         }}
                         className="w-full py-3 border-2 font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                         style={{ borderColor:"var(--p)", color:"var(--p)" }}>
-                        <RotateCcw size={15} /> 🔄 Pesan Lagi
+                        <RotateCcw size={15} /> Pesan Lagi
                       </button>
                     </div>
                   )}
@@ -815,12 +868,39 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
 ══════════════════════════════════════════════════════════ */
 export default function Home() {
   const navigate = useNavigate();
-  const { state: locationState } = useLocation(); // ✅ baca state dari navigate
+  const { state: locationState } = useLocation(); // 
   const [searchParams] = useSearchParams();
 
   const MEJA_ID = searchParams.get("table")   ?? "1";
   const CAFE_ID = searchParams.get("cafe_id") ?? "";
 
+  const initClientOnceRef = useRef(false);
+
+  useEffect(() => {
+    if (!CAFE_ID) return;
+    if (!MEJA_ID) return;
+    if (initClientOnceRef.current) return;
+    initClientOnceRef.current = true;
+
+    (async () => {
+      let fingerprint = "";
+      try {
+        fingerprint = await getOrCreateFingerprint();
+      } catch (err) {
+        console.warn("fingerprint failed:", err);
+      }
+
+      const fpParam = fingerprint ? `&fingerprint=${encodeURIComponent(fingerprint)}` : "";
+
+      try {
+        const res = await api.get(`api/client/init?cafe_id=${encodeURIComponent(CAFE_ID)}&meja=${encodeURIComponent(MEJA_ID)}&meja_id=${encodeURIComponent(MEJA_ID)}${fpParam}`);
+        const visitorId = res?.data?.visitor_id ?? res?.visitor_id ?? "";
+        if (visitorId) setCookie(VISITOR_COOKIE_KEY, visitorId);
+      } catch (err) {
+        console.warn("client/init failed:", err);
+      }
+    })();
+  }, [CAFE_ID, MEJA_ID]);
 
   const [activeCategory, setActiveCategory]       = useState("all");
   const [selectedItem, setSelectedItem]           = useState(null);

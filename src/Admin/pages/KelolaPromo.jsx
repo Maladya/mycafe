@@ -28,6 +28,7 @@ export default function KelolaPromo() {
   const [saving,     setSaving]     = useState(false);
   const [deleting,   setDeleting]   = useState(false);
   const [form,       setForm]       = useState(emptyForm);
+  const [page,       setPage]       = useState(1);
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -178,6 +179,16 @@ export default function KelolaPromo() {
 
   const activeCount = promos.filter(p => isPromoActive(normPromo(p))).length;
 
+  const PAGE_SIZE = 9;
+  const totalPages = Math.max(1, Math.ceil(promos.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const startIdx = (safePage - 1) * PAGE_SIZE;
+  const paginatedPromos = promos.slice(startIdx, startIdx + PAGE_SIZE);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
   const formPreview = () => {
     if (!form.startDate || !form.endDate) return null;
     if (form.startDate <= todayStr && todayStr <= form.endDate)
@@ -225,7 +236,7 @@ export default function KelolaPromo() {
       {/* Grid promo */}
       {!loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {promos.map(raw => {
+          {paginatedPromos.map(raw => {
             const promo  = normPromo(raw);
             const status = getPromoStatus(promo);
             const active = isPromoActive(promo);
@@ -278,6 +289,28 @@ export default function KelolaPromo() {
               <p className="font-semibold">Belum ada kode promo</p>
             </div>
           )}
+        </div>
+      )}
+
+      {!loading && promos.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+          >
+            Prev
+          </button>
+          <p className="text-sm font-bold text-gray-700">
+            Halaman {safePage} / {totalPages}
+          </p>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+          >
+            Next
+          </button>
         </div>
       )}
 

@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^5.1.0",
     "@tailwindcss/vite": "^4.1.18",
     "cally": "^0.9.1",
     "chart.js": "^4.5.1",
