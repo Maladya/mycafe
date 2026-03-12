@@ -12,7 +12,7 @@ import { Html5Qrcode } from "html5-qrcode";
 
 
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 const THEME_CACHE_KEY = "astakira_admin_theme";
 
 
@@ -63,7 +63,7 @@ try {
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
-  Authorization: `Bearer ${localStorage.getItem("kasir_token") ?? ""}`,
+  Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
 });
 
 function parseDateFlexible(raw) {
@@ -147,7 +147,7 @@ export default function Kasir() {
   const normalizePaymentDetail = (payload) => payload?.data ?? payload;
 
   const handleLogout = () => {
-    localStorage.removeItem("kasir_token");
+    localStorage.removeItem("token");
     localStorage.removeItem("kasir_user");
     navigate("/login", { replace: true });
   };
@@ -204,6 +204,11 @@ export default function Kasir() {
   // ─── processPayment ───────────────────────────────────────────────────────
   const processPayment = async () => {
     if (!currentOrder) return;
+    // DEBUG: cek token
+  const token = localStorage.getItem("kasir_token");
+  console.log("Token:", token);
+  console.log("Order ID:", currentOrder.id);
+  console.log("Headers:", authHeaders());
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/orders/kasir/${currentOrder.id}/status`, {

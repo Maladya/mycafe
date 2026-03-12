@@ -12,7 +12,7 @@ import { useAdmin } from "../AdminPanel";
 
 
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
 
 
@@ -462,6 +462,8 @@ export default function Pengaturan() {
 
     notifOrder: true, notifLowStock: true, autoAccept: false,
 
+    pajakPersen: "",
+
   });
 
 
@@ -501,6 +503,8 @@ export default function Pengaturan() {
     pwd:   { saving: false, saved: false },
 
     notif: { saving: false, saved: false },
+
+    pajak: { saving: false, saved: false },
 
   });
 
@@ -582,6 +586,44 @@ export default function Pengaturan() {
 
 
 
+  const fetchPajakAdmin = useCallback(async () => {
+
+    const res = await fetch(`${API_URL}/api/pajak/admin`, { headers: authHeaders() })
+
+      .catch(err => { throw new Error(`Tidak bisa terhubung ke server: ${err.message}`); });
+
+    const data = await safeJson(res);
+
+    if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`);
+
+    const raw = data.data ?? data.pajak ?? data ?? {};
+
+    const d = Array.isArray(raw) ? (raw[0] ?? {}) : raw;
+
+    const val =
+
+      (typeof d === "number" ? d : null)
+
+      ?? (typeof d?.pajak === "number" ? d.pajak : null)
+
+      ?? (typeof d?.pajak === "string" ? Number(d.pajak) : null)
+
+      ?? (typeof d?.pajak_persen === "number" ? d.pajak_persen : null)
+
+      ?? (typeof d?.pajak_persen === "string" ? Number(d.pajak_persen) : null)
+
+      ?? (typeof d?.pajak_persen === "string" ? Number(String(d.pajak_persen).replace(/%/g, "")) : null)
+
+      ?? null;
+
+    if (val === null || Number.isNaN(val)) return;
+
+    setS(prev => ({ ...prev, pajakPersen: String(val) }));
+
+  }, []);
+
+
+
   const fetchSettings = useCallback(async (silent = false) => {
 
     if (!silent) setLoading(true);
@@ -625,6 +667,8 @@ export default function Pengaturan() {
             notifLowStock: Boolean(d.notif_low_stock ?? prev.notifLowStock),
 
             autoAccept:    Boolean(d.auto_accept     ?? prev.autoAccept),
+
+            pajakPersen:   String((d.pajak ?? prev.pajakPersen) ?? ""),
 
           }));
 
@@ -682,6 +726,8 @@ export default function Pengaturan() {
 
           autoAccept:    Boolean(d.auto_accept     ?? prev.autoAccept),
 
+          pajakPersen:   String((d.pajak ?? prev.pajakPersen) ?? ""),
+
         }));
 
         setLogoPreview("");
@@ -707,6 +753,8 @@ export default function Pengaturan() {
         } catch {}
 
       }
+
+      try { await fetchPajakAdmin(); } catch (err) { console.log("[PAJAK] GET /api/pajak/admin error:", err); }
 
     } catch (err) {
 
@@ -995,6 +1043,68 @@ export default function Pengaturan() {
     } catch (err) { handleError(err, "/api/pengaturan"); }
 
     finally       { setSecState("notif", { saving: false }); }
+
+  };
+
+
+
+  const handleSavePajak = async () => {
+
+    const n = Number(s.pajakPersen);
+
+    if (s.pajakPersen === "" || Number.isNaN(n)) {
+
+      showToast("Persen pajak wajib diisi", "error");
+
+      return;
+
+    }
+
+    if (n < 0 || n > 100) {
+
+      showToast("Persen pajak harus 0 - 100", "error");
+
+      return;
+
+    }
+
+    setSecState("pajak", { saving: true });
+
+    try {
+
+      const payload = {
+
+        pajak: n,
+
+      };
+
+      console.log("[PAJAK] PUT /api/pajak/admin payload:", payload);
+
+      const res = await fetch(`${API_URL}/api/pajak/admin`, {
+
+        method: "PUT",
+
+        headers: authHeaders(),
+
+        body: JSON.stringify(payload),
+
+      }).catch(err => { throw new Error(`Tidak bisa terhubung ke server: ${err.message}`); });
+
+      const data = res.status === 204 ? { success: true } : await safeJson(res);
+
+      console.log("[PAJAK] response:", { status: res.status, data });
+
+      if (!res.ok || data.success === false) throw new Error(data.message ?? `HTTP ${res.status}`);
+
+      flashSaved("pajak");
+
+      showToast("Pengaturan pajak disimpan!", "success");
+
+      await fetchSettings(true);
+
+    } catch (err) { handleError(err, "/api/pajak/admin"); }
+
+    finally       { setSecState("pajak", { saving: false }); }
 
   };
 
@@ -1336,7 +1446,61 @@ export default function Pengaturan() {
 
       </div>
 
+{/* ── 4. Notifikasi & Otomasi ────────────────────────────────────────── */}
 
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+
+        <SectionHeader
+
+          icon={<Sliders size={16} className="text-white" />}
+
+          iconClass="bg-gradient-to-br from-gray-700 to-gray-900"
+
+          title="Pajak"
+
+          subtitle="Atur persentase pajak untuk transaksi"
+
+        >
+
+          <SaveButton onClick={handleSavePajak} saving={sec.pajak.saving} saved={sec.pajak.saved} label="Simpan Pajak" />
+
+        </SectionHeader>
+
+
+
+        <div className="space-y-4">
+
+          <div>
+
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Pajak (%)</label>
+
+            <input
+
+              type="number"
+
+              min={0}
+
+              max={100}
+
+              step={0.1}
+
+              value={s.pajakPersen}
+
+              onChange={(e) => set("pajakPersen", e.target.value)}
+
+              placeholder="10"
+
+              className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"
+
+            />
+
+            <p className="text-[11px] text-gray-400 mt-1">Contoh: 10 = 10% pajak</p>
+
+          </div>
+
+        </div>
+
+      </div>
 
       {/* ── 3. Ganti Password ──────────────────────────────────────────────── */}
 
@@ -1418,63 +1582,10 @@ export default function Pengaturan() {
 
 
 
-      {/* ── 4. Notifikasi & Otomasi ────────────────────────────────────────── */}
-
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-
-        <SectionHeader
-
-          icon={<Bell size={16} className="text-white" />}
-
-          iconClass="bg-gradient-to-br from-green-500 to-emerald-600"
-
-          title="Notifikasi & Otomasi"
-
-        >
-
-          <SaveButton onClick={handleSaveNotif} saving={sec.notif.saving} saved={sec.notif.saved} label="Simpan Notif" />
-
-        </SectionHeader>
+      
 
 
-
-        <div className="space-y-3">
-
-          {[
-
-            { k: "notifOrder",    l: "Notifikasi pesanan masuk", sub: "Alert saat ada pesanan baru" },
-
-            { k: "notifLowStock", l: "Notifikasi stok habis",    sub: "Alert ketika menu tidak tersedia" },
-
-            { k: "autoAccept",    l: "Auto-terima pesanan",      sub: "Pesanan langsung masuk ke antrian proses" },
-
-          ].map(({ k, l, sub }) => (
-
-            <div key={k} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-
-              <div>
-
-                <p className="text-sm font-semibold text-gray-900">{l}</p>
-
-                <p className="text-xs text-gray-400">{sub}</p>
-
-              </div>
-
-              <button onClick={() => set(k, !s[k])}
-
-                className={`w-12 h-6 rounded-full transition-all duration-300 relative flex-shrink-0 ${s[k] ? "bg-amber-500" : "bg-gray-200"}`}>
-
-                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${s[k] ? "left-[26px]" : "left-0.5"}`} />
-
-              </button>
-
-            </div>
-
-          ))}
-
-        </div>
-
-      </div>
+      
 
     </div>
 

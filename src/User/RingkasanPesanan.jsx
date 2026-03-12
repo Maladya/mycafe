@@ -20,7 +20,7 @@ import {
 
    ──────────────────────────────────────────── */
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
 
 const TOKEN_KEY = "astakira_token";
 
@@ -136,6 +136,8 @@ export default function RingkasanPesanan() {
 
   const total     = state?.total     || subtotal;
 
+  const pajakPersenState = state?.pajakPersen;
+
   const form      = state?.form      || {};
 
   const method    = state?.method    || "online";
@@ -147,6 +149,28 @@ export default function RingkasanPesanan() {
   const orderedItems = items.filter(i => (cart[i.id] || 0) > 0);
 
   const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
+
+
+
+  const [pajakPersen, setPajakPersen] = useState(
+
+    typeof pajakPersenState === "number" ? pajakPersenState : (Number(pajakPersenState) || 0)
+
+  );
+
+
+
+  const totalSebelumPajakView = Number(subtotal || 0) - Number(discount || 0);
+
+  const pajakNominalView = Math.max(
+
+    0,
+
+    Math.round(totalSebelumPajakView * (Number(pajakPersen) || 0) / 100)
+
+  );
+
+  const totalView = totalSebelumPajakView + pajakNominalView;
 
 
 
@@ -176,7 +200,7 @@ export default function RingkasanPesanan() {
 
       String(discount || 0),
 
-      String(total || 0),
+      String(totalView || 0),
 
       itemsSig,
 
@@ -281,6 +305,28 @@ export default function RingkasanPesanan() {
       .catch(() => {});
 
   }, [CAFE_ID]);
+
+  useEffect(() => {
+    if (!CAFE_ID) return;
+    if ((Number(pajakPersen) || 0) > 0) return;
+    fetch(`${BASE_URL}/api/pajak/public/${CAFE_ID}`, {
+      headers: { "Content-Type": "application/json" },
+    })
+      .then(r => r.json())
+      .then(r => {
+        const raw = r?.data ?? r;
+        const d = Array.isArray(raw) ? (raw[0] ?? {}) : raw;
+        const val =
+          (typeof d === "number" ? d : null)
+          ?? (typeof d?.pajak === "number" ? d.pajak : null)
+          ?? (typeof d?.pajak === "string" ? Number(d.pajak) : null)
+          ?? (typeof d?.pajak_persen === "string" ? Number(String(d.pajak_persen).replace(/%/g, "")) : null)
+          ?? null;
+        if (val === null || Number.isNaN(val)) return;
+        setPajakPersen(val);
+      })
+      .catch(() => {});
+  }, [CAFE_ID, pajakPersen]);
 
 
 
@@ -416,6 +462,20 @@ export default function RingkasanPesanan() {
 
 
 
+        const totalSebelumPajak = Number(subtotal || 0) - Number(discount || 0);
+
+        const pajakNominal = Math.max(
+
+          0,
+
+          Math.round(totalSebelumPajak * (Number(pajakPersen) || 0) / 100)
+
+        );
+
+        const totalAkhir = totalSebelumPajak + pajakNominal;
+
+
+
         const payload = {
 
           cafe_id:  CAFE_ID,
@@ -424,7 +484,7 @@ export default function RingkasanPesanan() {
 
           nama:     form?.nama ?? "",
 
-          total:    total,
+          total:    totalAkhir,
 
           note:     note,
 
@@ -765,6 +825,18 @@ export default function RingkasanPesanan() {
 
         </div>
 
+        {pajakNominalView > 0 && (
+
+          <div className="flex justify-between text-sm">
+
+            <span className="text-gray-500">Pajak ({Number(pajakPersen) || 0}%)</span>
+
+            <span className="font-semibold">Rp{pajakNominalView.toLocaleString()}</span>
+
+          </div>
+
+        )}
+
         <div className="h-px bg-gray-200" />
 
         <div className="flex justify-between items-center">
@@ -773,7 +845,7 @@ export default function RingkasanPesanan() {
 
           <span className="font-extrabold text-lg" style={{ color: accentColor || "var(--p)" }}>
 
-            Rp{total.toLocaleString()}
+            Rp{totalView.toLocaleString()}
 
           </span>
 

@@ -2,7 +2,7 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { QrCode, LogOut, User, Clock, Bell } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
 export const KasirContext = createContext(null);
 export const useKasir = () => useContext(KasirContext);

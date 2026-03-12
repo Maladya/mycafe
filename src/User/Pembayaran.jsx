@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 /* ─────────────────────────────────────────────
    Config
    ──────────────────────────────────────────── */
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.14:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
 
@@ -433,6 +433,8 @@ export default function Pembayaran() {
   const [cafeName, setCafeName]         = useState("ASTAKIRA");
   const [snapClientKey, setSnapClientKey] = useState("");
 
+  const [pajakPersen, setPajakPersen] = useState(0);
+
   const [paying, setPaying]     = useState(false);
   const [payError, setPayError] = useState("");
 
@@ -457,6 +459,24 @@ export default function Pembayaran() {
       .catch(() => {});
   }, [CAFE_ID]);
 
+  useEffect(() => {
+    if (!CAFE_ID) return;
+    api.get(`api/pajak/public/${CAFE_ID}`)
+      .then(r => {
+        const raw = r?.data ?? r;
+        const d = Array.isArray(raw) ? (raw[0] ?? {}) : raw;
+        const val =
+          (typeof d === "number" ? d : null)
+          ?? (typeof d?.pajak === "number" ? d.pajak : null)
+          ?? (typeof d?.pajak === "string" ? Number(d.pajak) : null)
+          ?? (typeof d?.pajak_persen === "string" ? Number(String(d.pajak_persen).replace(/%/g, "")) : null)
+          ?? null;
+        if (val === null || Number.isNaN(val)) return;
+        setPajakPersen(val);
+      })
+      .catch(() => {});
+  }, [CAFE_ID]);
+
   const calculateDiscount = () => {
     if (!appliedPromo) return 0;
     if (appliedPromo.discountType === "percent")
@@ -468,7 +488,9 @@ export default function Pembayaran() {
     return parseInt(raw.replace(/\D/g, "")) || 0;
   };
   const discount = calculateDiscount();
-  const total = subtotal - discount;
+  const totalSebelumPajak = subtotal - discount;
+  const pajakNominal = Math.max(0, Math.round(totalSebelumPajak * (Number(pajakPersen) || 0) / 100));
+  const total = totalSebelumPajak + pajakNominal;
 
   const handleOnlinePayment = useCallback(async () => {
     if (!form.nama.trim()) {
@@ -508,7 +530,9 @@ export default function Pembayaran() {
           setPaying(false);
           navigate("/ringkasanpesanan", {
             state: {
-              cart, items, note, itemNotes, subtotal, discount, total,
+              cart, items, note, itemNotes, subtotal, discount,
+              pajakPersen, pajakNominal, totalSebelumPajak,
+              total,
               form, method, cafeId: CAFE_ID, mejaId: MEJA_ID,
               orderId,
               midtrans: { status: "success", orderId, result },
@@ -519,7 +543,9 @@ export default function Pembayaran() {
           setPaying(false);
           navigate("/ringkasanpesanan", {
             state: {
-              cart, items, note, itemNotes, subtotal, discount, total,
+              cart, items, note, itemNotes, subtotal, discount,
+              pajakPersen, pajakNominal, totalSebelumPajak,
+              total,
               form, method, cafeId: CAFE_ID, mejaId: MEJA_ID,
               orderId,
               midtrans: { status: "pending", orderId, result },
@@ -758,6 +784,12 @@ export default function Pembayaran() {
               <span className="text-gray-500">Biaya layanan</span>
               <span className="font-semibold text-green-600">Gratis</span>
             </div>
+            {pajakNominal > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Pajak ({Number(pajakPersen) || 0}%)</span>
+                <span className="font-semibold text-gray-900">Rp{pajakNominal.toLocaleString()}</span>
+              </div>
+            )}
             <div className="h-px bg-gray-100" />
             <div className="flex justify-between items-center rounded-xl px-3 py-2.5" style={{ background: "var(--bg-soft)" }}>
               <span className="font-bold text-gray-900 text-sm">Total Pembayaran</span>
