@@ -80,7 +80,7 @@ function OrderItemsList({ itemList, itemNotes }) {
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
 
 const POLL_INTERVAL = 15000; // polling setiap 15 detik
 

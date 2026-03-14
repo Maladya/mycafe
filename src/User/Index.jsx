@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useNavigate, useSearchParams, useLocation } from "react-router-dom"; // ✅ tambah useLocation
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   Search, ShoppingBag, ArrowLeft, Heart, Share2, Plus, Minus,
   Clock, MapPin, Flame, Leaf, Check, ExternalLink, RotateCcw,
-  AlertCircle, RefreshCw, Image
+  AlertCircle, RefreshCw, Image, MessageSquare
 } from "lucide-react";
 
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = {
   get:   ()  => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
@@ -69,7 +69,6 @@ function applyThemeVars(theme) {
   document.documentElement.setAttribute("style", vars);
 }
 
-// Inject tema dari cache SEBELUM render pertama
 try {
   const cached = localStorage.getItem(THEME_CACHE_KEY);
   if (cached) applyThemeVars(JSON.parse(cached));
@@ -82,7 +81,6 @@ const VISITOR_COOKIE_KEY = "visitor_id";
 function getOrCreateDeviceId() {
   let deviceId = localStorage.getItem(DEVICE_KEY);
   if (!deviceId) {
-    // Generate unique device ID
     deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     localStorage.setItem(DEVICE_KEY, deviceId);
   }
@@ -92,13 +90,10 @@ function getOrCreateDeviceId() {
 async function getOrCreateFingerprint() {
   let fingerprint = localStorage.getItem(FINGERPRINT_KEY);
   if (fingerprint) return fingerprint;
-
   const fp = await FingerprintJS.load();
   const result = await fp.get();
-
   fingerprint = result?.visitorId ?? "";
   if (fingerprint) localStorage.setItem(FINGERPRINT_KEY, fingerprint);
-
   return fingerprint;
 }
 
@@ -177,6 +172,15 @@ function normalizeCategory(cat) {
 
 function normalizeMenuItem(item) {
   const rawCatId = item.category_id ?? item.kategori_id ?? item.id_kategori ?? item.cat_id ?? null;
+
+  // Kumpulkan nama_group unik dari variants untuk fetch per grup
+  const variantRaw = item.variants ?? item.varian ?? item.variant ?? item.varian_menu ?? [];
+  const namaGroups = [...new Set(
+    variantRaw
+      .map(v => v.nama_group ?? v.nama_grup ?? v.namaGroup ?? v.group ?? "")
+      .filter(Boolean)
+  )];
+
   return {
     id:            item.id,
     name:          item.name         ?? item.nama_menu  ?? item.nama   ?? "",
@@ -195,10 +199,13 @@ function normalizeMenuItem(item) {
     isVegan:       item.isVegan      ?? item.vegan      ?? false,
     volume:        item.volume       ?? item.ukuran     ?? "",
     ingredients:   item.ingredients  ?? item.bahan      ?? [],
-    variants:      (item.variants ?? item.varian ?? []).map(v => ({
-      label: v.label ?? v.nama ?? v.ukuran ?? "",
-      price: Number(v.price ?? v.harga ?? 0),
-      image: fixImgUrl(v.image ?? v.foto ?? item.image_url ?? item.image ?? item.foto ?? ""),
+    namaGroups,   // array nama grup untuk fetch varian
+    variants:      variantRaw.map(v => ({
+      label:       v.label ?? v.nama ?? v.ukuran ?? "",
+      price:       Number(v.price ?? v.harga ?? 0),
+      hargaVariant: Number(v.harga_variant ?? 0),
+      namaGroup:   v.nama_group ?? v.nama_grup ?? v.namaGroup ?? v.group ?? "",
+      image:       fixImgUrl(v.image ?? v.foto ?? item.image_url ?? item.image ?? item.foto ?? ""),
     })),
     related: item.related ?? item.related_menu ?? [],
   };
@@ -237,20 +244,12 @@ function parseDateFlexible(raw) {
   if (raw instanceof Date) return raw;
   const str = String(raw).trim();
   if (!str) return null;
-
-  // Handle format: "YYYY-MM-DD HH:mm:ss" (tanpa timezone)
   const m = str.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
   if (m) {
-    const y = Number(m[1]);
-    const mo = Number(m[2]);
-    const d = Number(m[3]);
-    const hh = Number(m[4]);
-    const mm = Number(m[5]);
-    const ss = Number(m[6] ?? 0);
-    // Anggap input adalah WIB (UTC+7)
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const hh = Number(m[4]), mm = Number(m[5]), ss = Number(m[6] ?? 0);
     return new Date(Date.UTC(y, mo - 1, d, hh - 7, mm, ss));
   }
-
   const dt = new Date(str);
   return isNaN(dt.getTime()) ? null : dt;
 }
@@ -321,21 +320,218 @@ function ErrorState({ message, onRetry }) {
   );
 }
 
-function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem }) {
-  const [qty, setQty]                         = useState(1);
-  const [selectedVariant, setSelectedVariant] = useState(0);
-  const [isWishlisted, setIsWishlisted]       = useState(false);
-  const [addedToCart, setAddedToCart]         = useState(false);
+// ─────────────────────────────────────────────────────────────────────────────
+// VARIANT GROUP CHECKBOX — tampilan seperti referensi gambar
+// ─────────────────────────────────────────────────────────────────────────────
+const DUMMY_VARIANT_GROUPS = ["LEVEL PEDAS", "UKURAN"]; 
+const DUMMY_VARIANTS_BY_GROUP = {
+  "LEVEL PEDAS": [
+    { id: "pedas_0", label: "LEVEL 0", harga_variant: 0, id_menu: "*" },
+    { id: "pedas_1", label: "LEVEL 1", harga_variant: 0, id_menu: "*" },
+    { id: "pedas_2", label: "LEVEL 2", harga_variant: 0, id_menu: "*" },
+    { id: "pedas_3", label: "LEVEL 3", harga_variant: 0, id_menu: "*" },
+    { id: "pedas_4", label: "LEVEL 4", harga_variant: 0, id_menu: "*" },
+    { id: "pedas_6", label: "LEVEL 6", harga_variant: 910, id_menu: "*" },
+    { id: "pedas_8", label: "LEVEL 8", harga_variant: 910, id_menu: "*" },
+  ],
+  "UKURAN": [
+    { id: "uk_s", label: "Small", harga_variant: 0, id_menu: "*" },
+    { id: "uk_m", label: "Medium", harga_variant: 2000, id_menu: "*" },
+    { id: "uk_l", label: "Large", harga_variant: 4000, id_menu: "*" },
+  ],
+};
 
-  const hasVariants  = item.variants?.length > 0;
-  const currentPrice = hasVariants ? (item.variants[selectedVariant]?.price ?? item.price) : item.price;
-  const totalPrice   = currentPrice * qty;
+function VariantGroupSection({ namaGroup, menuId, basePrice, selectedId, onSelect }) {
+  const [variants, setVariants]   = useState([]);
+  const [loading,  setLoading]    = useState(true);
+  const [error,    setError]      = useState("");
+
+  useEffect(() => {
+    setLoading(true); setError("");
+    const token = tokenManager.get();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    fetch(`${BASE_URL}/api/variant/by-nama-group/${encodeURIComponent(namaGroup)}`, { headers })
+      .then(r => r.json())
+      .then(data => {
+        const list = data.data ?? data.variants ?? data.varian ?? data ?? [];
+        const allVariants = Array.isArray(list) ? list : [];
+        const filtered = menuId
+          ? allVariants.filter(v => String(v.id_menu) === String(menuId))
+          : allVariants;
+        if (filtered.length > 0) {
+          setVariants(filtered);
+          return;
+        }
+        const dummy = DUMMY_VARIANTS_BY_GROUP[namaGroup] ?? [];
+        setVariants(dummy);
+      })
+      .catch(() => {
+        const dummy = DUMMY_VARIANTS_BY_GROUP[namaGroup] ?? [];
+        if (dummy.length > 0) setVariants(dummy);
+        else setError("Gagal memuat varian");
+      })
+      .finally(() => setLoading(false));
+  }, [namaGroup, menuId]);
+
+  return (
+    <div className="mb-1">
+      {/* Judul grup */}
+      <div className="px-5 pt-5 pb-2">
+        <p className="text-base font-extrabold text-gray-900 uppercase tracking-wide">
+          {namaGroup}
+        </p>
+        <p className="text-xs font-semibold mt-0.5" style={{ color: "var(--p)" }}>
+          Harus dipilih maks. 1
+        </p>
+      </div>
+
+      {/* Divider */}
+      <div className="h-px mx-5 bg-gray-100 mb-1" />
+
+      {loading && (
+        <div className="px-5 py-4 space-y-3">
+          {[1,2,3].map(i => (
+            <div key={i} className="flex items-center justify-between animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-32" />
+              <div className="w-6 h-6 bg-gray-200 rounded-md" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <p className="px-5 py-3 text-xs text-red-400">{error}</p>
+      )}
+
+      {!loading && !error && variants.map((v, idx) => {
+        const vid          = v.id ?? idx;
+        const isSelected   = selectedId === vid;
+        const hargaVariant = Number(v.harga_variant ?? 0);
+        const label        = v.label ?? v.nama ?? "";
+
+        return (
+          <div key={vid}>
+            <button
+              onClick={() => onSelect(isSelected ? null : vid, v)}
+              className="w-full flex items-center justify-between px-5 py-4 transition-colors hover:bg-gray-50 active:bg-gray-100"
+            >
+              {/* Label + harga tambahan */}
+              <span className="text-sm font-semibold text-gray-800">
+                {label}
+                {hargaVariant > 0 && (
+                  <span className="ml-2 font-bold" style={{ color: "var(--p)" }}>
+                    (+ Rp {hargaVariant.toLocaleString("id-ID")})
+                  </span>
+                )}
+              </span>
+
+              {/* Checkbox */}
+              <div
+                className="w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                style={isSelected
+                  ? { background: "var(--p)", borderColor: "var(--p)" }
+                  : { background: "white", borderColor: "#d1d5db" }
+                }
+              >
+                {isSelected && <Check size={13} className="text-white" strokeWidth={3} />}
+              </div>
+            </button>
+            {/* Divider tipis antar item */}
+            {idx < variants.length - 1 && (
+              <div className="h-px mx-5 bg-gray-100" />
+            )}
+          </div>
+        );
+      })}
+
+      {/* Divider bawah grup */}
+      <div className="h-2 bg-gray-50 mt-2" />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MENU DETAIL SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem }) {
+  const [qty, setQty]               = useState(1);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [addedToCart, setAddedToCart]   = useState(false);
+  const [catatan, setCatatan]           = useState("");
+
+  // selectedVariants: { [namaGroup]: { id, variantObj } }
+  const [selectedVariants, setSelectedVariants] = useState({});
+
+  // Fetch semua varian milik menu ini → extract nama_group unik
+  const [namaGroups, setNamaGroups]   = useState([]);
+  const [varFetched, setVarFetched]   = useState(false);
+
+  useEffect(() => {
+    if (!item?.id) return;
+    setVarFetched(false);
+
+    const groupsFromItem = Array.isArray(item.namaGroups) && item.namaGroups.length > 0
+      ? item.namaGroups
+      : [];
+
+    if (groupsFromItem.length > 0) {
+      setNamaGroups(groupsFromItem);
+      setVarFetched(true);
+      return;
+    }
+
+    const token = tokenManager.get();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    fetch(`${BASE_URL}/api/variant`, { headers })
+      .then(r => r.json())
+      .then(data => {
+        const list = data.data ?? data.variants ?? data.varian ?? data ?? [];
+        const arr  = Array.isArray(list) ? list : [];
+        const mine = arr.filter(v => String(v.id_menu) === String(item.id));
+        const groups = [...new Set(
+          mine.map(v => v.nama_group ?? v.nama_grup ?? v.namaGroup ?? v.group ?? "").filter(Boolean)
+        )];
+        setNamaGroups(groups.length > 0 ? groups : DUMMY_VARIANT_GROUPS);
+      })
+      .catch(() => setNamaGroups(DUMMY_VARIANT_GROUPS))
+      .finally(() => setVarFetched(true));
+  }, [item?.id, item?.namaGroups]);
+
   const relatedItems = Object.values(menuDatabase).filter(m => item.related?.includes(m.id));
-  const heroImage    = hasVariants ? (item.variants[selectedVariant]?.image || item.image_url) : item.image_url;
+
+  // Hitung total harga: harga menu + semua harga_variant yang dipilih
+  const extraPrice = Object.values(selectedVariants).reduce((sum, sel) => {
+    return sum + Number(sel?.variantObj?.harga_variant ?? sel?.variantObj?.hargaVariant ?? 0);
+  }, 0);
+  const currentPrice = item.price + extraPrice;
+  const totalPrice   = currentPrice * qty;
+
+  const handleSelect = (namaGroup, variantId, variantObj) => {
+    setSelectedVariants(prev => ({
+      ...prev,
+      [namaGroup]: variantId === null ? null : { id: variantId, variantObj },
+    }));
+  };
 
   const handleAdd = () => {
     setAddedToCart(true);
-    onAddToCart(item.id, qty, currentPrice);
+    const pickedVariants = Object.entries(selectedVariants)
+      .filter(([, v]) => v !== null)
+      .map(([namaGroup, v]) => ({
+        namaGroup,
+        id:          v.id,
+        label:       v.variantObj?.label ?? "",
+        hargaVariant: Number(v.variantObj?.harga_variant ?? v.variantObj?.hargaVariant ?? 0),
+      }));
+
+    onAddToCart(item.id, qty, currentPrice, {
+      variants: pickedVariants,
+      catatan: catatan.trim(),
+    });
     setTimeout(() => { setAddedToCart(false); onClose(); }, 1200);
   };
 
@@ -349,9 +545,12 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
       style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)" }} onClick={onClose}>
       <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[2rem] animate-slideUp overflow-hidden"
         style={{ maxHeight:"92vh" }} onClick={e => e.stopPropagation()}>
+
         <div className="overflow-y-auto scrollbar-hide" style={{ maxHeight:"92vh", paddingBottom:"160px" }}>
+
+          {/* Hero Image */}
           <div className="relative h-72 flex-shrink-0" style={{ background:"var(--bg-soft)" }}>
-            <MenuImage src={heroImage} alt={item.name} className="w-full h-full object-cover transition-all duration-500" />
+            <MenuImage src={item.image_url} alt={item.name} className="w-full h-full object-cover transition-all duration-500" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/30" />
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
               <button onClick={onClose} className="w-11 h-11 flex items-center justify-center bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl shadow-xl hover:bg-white/30 transition-all">
@@ -373,35 +572,26 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
                 </span>
               </div>
             )}
-            {hasVariants && item.variants.length > 1 && (
-              <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2 z-10">
-                {item.variants.map((v, i) => (
-                  <button key={i} onClick={() => setSelectedVariant(i)}
-                    className={`relative w-14 h-14 rounded-2xl overflow-hidden transition-all duration-200 ${selectedVariant===i ? "scale-110 shadow-xl" : "opacity-65 hover:opacity-90"}`}
-                    style={selectedVariant===i ? { outline:"2px solid var(--p)", outlineOffset:"2px" } : {}}>
-                    <MenuImage src={v.image} alt={v.label} />
-                    <div className="absolute inset-x-0 bottom-0 text-center text-[8px] font-bold leading-tight py-0.5"
-                      style={selectedVariant===i ? { background:"var(--p)", color:"var(--on-p)" } : { background:"rgba(0,0,0,0.5)", color:"rgba(255,255,255,0.8)" }}>
-                      {v.label?.split(" ")[0]}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
+          {/* Info dasar */}
           <div className="px-5 pt-5">
             {item.category && <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color:"var(--p)" }}>{item.category}</p>}
             <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{item.name}</h1>
             {item.tagline && <p className="text-sm text-gray-400 mt-1 italic mb-4">{item.tagline}</p>}
+
+            {/* Badge info */}
             <div className="flex gap-2 mb-5 flex-wrap">
               {item.prepTime && (<div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5"><Clock size={13} className="text-orange-500" /><span className="text-xs font-semibold text-orange-700">{item.prepTime}</span></div>)}
               {item.calories > 0 && (<div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-xl px-3 py-1.5"><Flame size={13} className="text-red-500" /><span className="text-xs font-semibold text-red-700">{item.calories} kal</span></div>)}
               {item.isVegan && (<div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-xl px-3 py-1.5"><Leaf size={13} className="text-green-500" /><span className="text-xs font-semibold text-green-700">Vegan</span></div>)}
               {item.volume && (<div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-xl px-3 py-1.5"><span className="text-xs font-semibold text-blue-700">🥤 {item.volume}</span></div>)}
             </div>
+
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
+
             {item.description && <p className="text-sm text-gray-600 leading-relaxed mb-5">{item.description}</p>}
+
             {item.ingredients?.length > 0 && (
               <div className="mb-6">
                 <h2 className="text-base font-bold text-gray-900 mb-2">Bahan</h2>
@@ -410,66 +600,102 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
                 </div>
               </div>
             )}
-            {hasVariants && item.variants.length > 1 && (
-              <div className="mb-6">
-                <h2 className="text-base font-bold text-gray-900 mb-3">Pilih Varian</h2>
-                <div className="flex gap-3">
-                  {item.variants.map((v, i) => (
-                    <button key={i} onClick={() => setSelectedVariant(i)}
-                      className={`flex-1 rounded-2xl font-bold text-sm border-2 transition-all overflow-hidden ${selectedVariant===i ? "shadow-lg scale-105" : "border-gray-200"}`}
-                      style={selectedVariant===i ? { borderColor:"var(--p)" } : {}}>
-                      <div className="relative h-20 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
-                        <MenuImage src={v.image} alt={v.label} />
-                        <div className="absolute inset-0 bg-black/10" />
-                        {selectedVariant===i && (
-                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow" style={{ background:"var(--p)" }}>
-                            <Check size={11} className="text-white" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="px-3 py-2 text-center"
-                        style={selectedVariant===i ? { background:"var(--p)", color:"var(--on-p)" } : { background:"white" }}>
-                        <div className="font-bold text-sm" style={selectedVariant!==i ? { color:"#374151" } : {}}>{v.label}</div>
-                        <div className="text-xs mt-0.5 font-semibold"
-                          style={selectedVariant===i ? { color:"var(--on-p)", opacity:0.85 } : { color:"var(--p)" }}>
-                          Rp{v.price.toLocaleString()}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {relatedItems.length > 0 && (
-              <>
-                <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
-                <div className="mb-6">
-                  <h2 className="text-base font-bold text-gray-900 mb-4">Menu Lainnya</h2>
-                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                    {relatedItems.map(rel => (
-                      <div key={rel.id} onClick={() => onOpenItem(rel)}
-                        className="flex-shrink-0 w-36 bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer">
-                        <div className="h-24 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
-                          <MenuImage src={rel.image_url} alt={rel.name} />
-                        </div>
-                        <div className="p-3">
-                          <p className="font-bold text-gray-900 text-xs line-clamp-1">{rel.name}</p>
-                          <p className="font-bold text-xs mt-1" style={{ color:"var(--p)" }}>Rp{rel.price.toLocaleString()}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
           </div>
+
+          {/* ── VARIAN per grup — tampilan checkbox list ── */}
+          {!varFetched && (
+            <div className="border-t border-gray-100 px-5 py-6 space-y-4">
+              {[1,2,3].map(i => (
+                <div key={i} className="flex items-center justify-between animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-36" />
+                  <div className="w-6 h-6 bg-gray-200 rounded-md" />
+                </div>
+              ))}
+            </div>
+          )}
+          {varFetched && namaGroups.length > 0 && (
+            <div className="border-t border-gray-100">
+              {namaGroups.map(namaGroup => (
+                <VariantGroupSection
+                  key={namaGroup}
+                  namaGroup={namaGroup}
+                  menuId={item.id}
+                  basePrice={item.price}
+                  selectedId={selectedVariants[namaGroup]?.id ?? null}
+                  onSelect={(variantId, variantObj) => handleSelect(namaGroup, variantId, variantObj)}
+                />
+              ))}
+            </div>
+          )}
+          {varFetched && namaGroups.length === 0 && null}
+
+          {/* ── CATATAN ── */}
+          <div className="px-5 py-5 border-t border-gray-100">
+            <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <MessageSquare size={16} style={{ color:"var(--p)" }} />
+              Catatan
+              <span className="text-xs font-normal text-gray-400">(opsional)</span>
+            </h2>
+            <div
+              className="relative rounded-2xl border-2 overflow-hidden transition-all"
+              style={{ borderColor: catatan ? "var(--p)" : "#e5e7eb" }}
+            >
+              <textarea
+                value={catatan}
+                onChange={e => setCatatan(e.target.value)}
+                placeholder="Contoh: Tidak pakai bawang, pedas sedang, es banyak..."
+                maxLength={200}
+                rows={3}
+                className="w-full px-4 py-3 text-sm text-gray-700 placeholder-gray-400 resize-none outline-none bg-white"
+                style={{ fontFamily:"inherit" }}
+              />
+              {catatan && (
+                <button
+                  onClick={() => setCatatan("")}
+                  className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 transition-all"
+                >
+                  <span className="text-gray-500 text-xs font-bold leading-none">×</span>
+                </button>
+              )}
+              <div className="px-4 pb-1.5 text-right">
+                <span className="text-[10px] text-gray-400">{catatan.length}/200</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Related items */}
+          {relatedItems.length > 0 && (
+            <div className="px-5 pb-6 border-t border-gray-100">
+              <h2 className="text-base font-bold text-gray-900 mb-4 pt-5">Menu Lainnya</h2>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {relatedItems.map(rel => (
+                  <div key={rel.id} onClick={() => onOpenItem(rel)}
+                    className="flex-shrink-0 w-36 bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer">
+                    <div className="h-24 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
+                      <MenuImage src={rel.image_url} alt={rel.name} />
+                    </div>
+                    <div className="p-3">
+                      <p className="font-bold text-gray-900 text-xs line-clamp-1">{rel.name}</p>
+                      <p className="font-bold text-xs mt-1" style={{ color:"var(--p)" }}>Rp{rel.price.toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* Bottom action bar */}
         <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-5 py-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Total Harga</p>
               <p className="text-2xl font-extrabold text-gray-900">Rp{totalPrice.toLocaleString()}</p>
+              {extraPrice > 0 && (
+                <p className="text-[10px] text-gray-400">
+                  Rp{item.price.toLocaleString()} + Rp{extraPrice.toLocaleString()} varian
+                </p>
+              )}
               {item.originalPrice && <p className="text-xs text-gray-400 line-through">Rp{Number(item.originalPrice).toLocaleString()}</p>}
             </div>
             <div className="flex items-center gap-3 rounded-2xl px-3 py-2 border-2"
@@ -479,13 +705,13 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
               </button>
               <span className="font-extrabold text-gray-900 text-lg w-6 text-center">{qty}</span>
               <button onClick={() => setQty(q => q+1)} className="w-8 h-8 flex items-center justify-center rounded-xl shadow-sm hover:shadow-md transition-all"
-                style={{ background:"var(--grad)" }}>
+                style={{ background:"var(--grad)", color:"var(--on-p)" }}>
                 <Plus size={16} style={{ color:"var(--on-p)" }} />
               </button>
             </div>
           </div>
           <button onClick={handleAdd}
-            className="w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:scale-[1.02]"
+            className="w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-lg hover:scale-[1.02]"
             style={addedToCart ? { background:"#22c55e", color:"#fff" } : { background:"var(--grad)", color:"var(--on-p)" }}>
             {addedToCart ? <><Check size={20} /> Ditambahkan!</> : <><ShoppingBag size={20} /> Tambah ke Pesanan</>}
           </button>
@@ -520,19 +746,15 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
         </div>
         <div className="mt-2" onClick={e => e.stopPropagation()}>
           {qty === 0 ? (
-            <button onClick={onAdd}
+            <button onClick={onClick}
               className="w-full text-xs font-bold py-1.5 rounded-xl hover:shadow-md hover:scale-105 transition-all"
-              style={{ background:"var(--grad)", color:"var(--on-p)" }}>
-              + Tambah
-            </button>
+              style={{ background:"var(--grad)", color:"var(--on-p)" }}>+ Tambah</button>
           ) : (
             <div className="flex items-center justify-between rounded-xl px-2 py-1 border"
               style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
-              <button onClick={onRemove} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs"
-                style={{ background:"var(--p)" }}>−</button>
+              <button onClick={onRemove} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background:"var(--p)" }}>−</button>
               <span className="font-bold text-xs" style={{ color:"var(--s)" }}>{qty}</span>
-              <button onClick={onAdd} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs"
-                style={{ background:"var(--p)" }}>+</button>
+              <button onClick={onAdd} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background:"var(--p)" }}>+</button>
             </div>
           )}
         </div>
@@ -546,23 +768,15 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
   const { data: ordersRaw, loading, error, refetch } = useApi(
     async () => {
       if (!cafeId) return [];
-
       const visitorId = getCookie(VISITOR_COOKIE_KEY);
-
       let fingerprint = "";
-      try {
-        fingerprint = await getOrCreateFingerprint();
-      } catch (err) {
-        console.warn("fingerprint failed:", err);
-      }
-
+      try { fingerprint = await getOrCreateFingerprint(); } catch {}
       const qs = new URLSearchParams();
       qs.set("cafe_id", String(cafeId));
       qs.set("meja_id", String(mejaId ?? ""));
       qs.set("meja", String(mejaId ?? ""));
       if (visitorId) qs.set("visitor_id", visitorId);
       if (fingerprint) qs.set("fingerprint", fingerprint);
-
       return api.get(`api/client/riwayat-pembelian?${qs.toString()}`).then(r => r.data ?? r.orders ?? r);
     },
     [cafeId]
@@ -589,7 +803,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
 
   const isSedang  = s => ["sedang","proses","pending","waiting","processing"].includes(String(s).toLowerCase());
   const isSelesai = s => ["selesai","done","completed","success","paid"].includes(String(s).toLowerCase());
-
   const sedangOrders  = orders.filter(o => isSedang(o.status));
   const selesaiOrders = orders.filter(o => isSelesai(o.status));
   const displayed     = activeTab === "sedang" ? sedangOrders : selesaiOrders;
@@ -607,9 +820,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
             <p className="text-xs text-gray-400 mt-0.5">Meja Nomor {mejaId} · {cafeName}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={refetch}
-              className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
-              title="Refresh">
+            <button onClick={refetch} className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
               <RefreshCw size={14} className={`text-gray-500 ${loading ? "animate-spin" : ""}`} />
             </button>
             <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
@@ -617,7 +828,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
             </button>
           </div>
         </div>
-
         <div className="px-5 mb-4">
           <div className="flex bg-gray-100 rounded-2xl p-1">
             <button onClick={() => setActiveTab("sedang")}
@@ -638,7 +848,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
             </button>
           </div>
         </div>
-
         <div className="overflow-y-auto scrollbar-hide px-5 pb-8" style={{ maxHeight:"calc(88vh - 185px)" }}>
           {loading && (
             <div className="space-y-4">
@@ -658,9 +867,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
               ))}
             </div>
           )}
-
           {error && !loading && <ErrorState message={error} onRetry={refetch} />}
-
           {!loading && !error && displayed.length === 0 && (
             <div className="text-center py-16">
               <div className="text-5xl mb-3">🛍️</div>
@@ -670,7 +877,6 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
               </p>
             </div>
           )}
-
           {!loading && !error && displayed.length > 0 && (
             <div className="space-y-4">
               {displayed.map(order => (
@@ -682,10 +888,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg flex items-center justify-center"
                         style={{ background: isSelesai(order.status) ? "#22c55e" : "var(--p)" }}>
-                        {isSelesai(order.status)
-                          ? <Check size={14} className="text-white" />
-                          : <Clock size={14} className="text-white" />
-                        }
+                        {isSelesai(order.status) ? <Check size={14} className="text-white" /> : <Clock size={14} className="text-white" />}
                       </div>
                       <div>
                         <p className="text-xs font-extrabold text-gray-700">{order.id}</p>
@@ -705,15 +908,12 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                       </div>
                     )}
                   </div>
-
                   <div className="px-4 py-3 space-y-3">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100"
-                          style={{ background:"var(--bg-soft)" }}>
+                        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 border border-gray-100" style={{ background:"var(--bg-soft)" }}>
                           {item.image ? (
-                            <img src={item.image} alt={item.name} className="w-full h-full object-cover"
-                              onError={e => { e.currentTarget.style.display = "none"; }} />
+                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
                               <Image size={16} style={{ color:"var(--p)", opacity:0.3 }} />
@@ -722,9 +922,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.name}</p>
-                          <p className="text-xs text-gray-400">
-                            {item.variant ? `${item.variant} · ` : ""}{item.qty}×
-                          </p>
+                          <p className="text-xs text-gray-400">{item.variant ? `${item.variant} · ` : ""}{item.qty}×</p>
                         </div>
                         <p className="font-extrabold text-sm flex-shrink-0" style={{ color:"var(--p)" }}>
                           Rp{(item.price * item.qty).toLocaleString()}
@@ -732,19 +930,13 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                       </div>
                     ))}
                   </div>
-
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                    <p className="text-xs text-gray-500">
-                      {order.items.reduce((s,i) => s+i.qty, 0)} item
-                    </p>
+                    <p className="text-xs text-gray-500">{order.items.reduce((s,i) => s+i.qty, 0)} item</p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-gray-500">Total:</p>
-                      <p className="font-extrabold text-gray-900 text-sm">
-                        Rp{getTotal(order.items).toLocaleString()}
-                      </p>
+                      <p className="font-extrabold text-gray-900 text-sm">Rp{getTotal(order.items).toLocaleString()}</p>
                     </div>
                   </div>
-
                   {isSedang(order.status) && (
                     <div className="px-4 pb-4 pt-1">
                       <button
@@ -753,7 +945,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                           onClose();
                           onNavigateToPesanan({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]), orderId:order.id });
                         }}
-                        className="w-full py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                        className="w-full py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:scale-[1.02]"
                         style={{ background:"var(--grad)", color:"var(--on-p)" }}>
                         <ExternalLink size={15} /> Lihat Detail Pesanan
                       </button>
@@ -767,7 +959,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                           onClose();
                           onReorder({ cart:c, items:Object.values(menuDatabase).filter(m=>c[m.id]) });
                         }}
-                        className="w-full py-3 border-2 font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                        className="w-full py-3 border-2 font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2"
                         style={{ borderColor:"var(--p)", color:"var(--p)" }}>
                         <RotateCcw size={15} /> Pesan Lagi
                       </button>
@@ -802,8 +994,7 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
         style={{ maxHeight:"85vh" }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0"
-              style={{ background:"var(--grad)" }}>
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0" style={{ background:"var(--grad)" }}>
               <CatLogo logo={section.logo} size={28} />
             </div>
             <div>
@@ -840,7 +1031,7 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
                     </div>
                     <div className="mt-2" onClick={e => e.stopPropagation()}>
                       {qty === 0 ? (
-                        <button onClick={() => onAdd(item.id)}
+                        <button onClick={() => { onItemClick(item); onClose(); }}
                           className="w-full text-xs font-bold py-1.5 rounded-xl hover:shadow-md hover:scale-105 transition-all"
                           style={{ background:"var(--grad)", color:"var(--on-p)" }}>+ Tambah</button>
                       ) : (
@@ -848,7 +1039,7 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
                           style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
                           <button onClick={() => onRemove(item.id)} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background:"var(--p)" }}>−</button>
                           <span className="font-bold text-xs" style={{ color:"var(--s)" }}>{qty}</span>
-                          <button onClick={() => onAdd(item.id)} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background:"var(--p)" }}>+</button>
+                          <button onClick={() => { onItemClick(item); onClose(); }} className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background:"var(--p)" }}>+</button>
                         </div>
                       )}
                     </div>
@@ -868,7 +1059,7 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
 ══════════════════════════════════════════════════════════ */
 export default function Home() {
   const navigate = useNavigate();
-  const { state: locationState } = useLocation(); // 
+  const { state: locationState } = useLocation();
   const [searchParams] = useSearchParams();
 
   const MEJA_ID = searchParams.get("table")   ?? "1";
@@ -877,28 +1068,17 @@ export default function Home() {
   const initClientOnceRef = useRef(false);
 
   useEffect(() => {
-    if (!CAFE_ID) return;
-    if (!MEJA_ID) return;
-    if (initClientOnceRef.current) return;
+    if (!CAFE_ID || !MEJA_ID || initClientOnceRef.current) return;
     initClientOnceRef.current = true;
-
     (async () => {
       let fingerprint = "";
-      try {
-        fingerprint = await getOrCreateFingerprint();
-      } catch (err) {
-        console.warn("fingerprint failed:", err);
-      }
-
+      try { fingerprint = await getOrCreateFingerprint(); } catch {}
       const fpParam = fingerprint ? `&fingerprint=${encodeURIComponent(fingerprint)}` : "";
-
       try {
         const res = await api.get(`api/client/init?cafe_id=${encodeURIComponent(CAFE_ID)}&meja=${encodeURIComponent(MEJA_ID)}&meja_id=${encodeURIComponent(MEJA_ID)}${fpParam}`);
         const visitorId = res?.data?.visitor_id ?? res?.visitor_id ?? "";
         if (visitorId) setCookie(VISITOR_COOKIE_KEY, visitorId);
-      } catch (err) {
-        console.warn("client/init failed:", err);
-      }
+      } catch {}
     })();
   }, [CAFE_ID, MEJA_ID]);
 
@@ -906,17 +1086,12 @@ export default function Home() {
   const [selectedItem, setSelectedItem]           = useState(null);
   const [lihatSemuaSection, setLihatSemuaSection] = useState(null);
   const [showRiwayat, setShowRiwayat]             = useState(false);
-
-  const [paramError, setParamError] = useState("");
-  const [tableValidating, setTableValidating] = useState(false);
-  const [tableOk, setTableOk] = useState(null);
-  const [validateKey, setValidateKey] = useState(0);
-
-
-  // ✅ FIX UTAMA: Saat kembali dari Pesanan, pakai existingCart agar item tidak hilang
-  const [cart, setCart] = useState(locationState?.existingCart ?? {});
-
-  const sectionRefs = useRef({});
+  const [paramError, setParamError]               = useState("");
+  const [tableValidating, setTableValidating]     = useState(false);
+  const [tableOk, setTableOk]                     = useState(null);
+  const [validateKey, setValidateKey]             = useState(0);
+  const [cart, setCart]                           = useState(locationState?.existingCart ?? {});
+  const sectionRefs                               = useRef({});
 
   const { data: menuRaw, loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
     () => CAFE_ID ? api.get(`api/menu/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
@@ -926,93 +1101,47 @@ export default function Home() {
     () => CAFE_ID ? api.get(`api/kategori/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve([]),
     [CAFE_ID]
   );
-
   const { data: cafeRaw, loading: cafeLoading, error: cafeError, refetch: refetchCafe } = useApi(
     () => CAFE_ID ? api.get(`api/pengaturan/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve(null),
     [CAFE_ID]
   );
 
   useEffect(() => {
-    setParamError("");
-    setTableOk(null);
-    setTableValidating(false);
-
-
-    if (!CAFE_ID) {
-      setParamError("Cafe tidak ditemukan");
-      return;
-    }
-
+    setParamError(""); setTableOk(null); setTableValidating(false);
+    if (!CAFE_ID) { setParamError("Cafe tidak ditemukan"); return; }
     const mejaN = Number(MEJA_ID);
-    if (!Number.isFinite(mejaN) || mejaN <= 0) {
-      setParamError("Meja tidak ditemukan");
-      return;
-    }
-
+    if (!Number.isFinite(mejaN) || mejaN <= 0) { setParamError("Meja tidak ditemukan"); return; }
     setTableValidating(true);
     const token = tokenManager.get() || localStorage.getItem("token") || "";
     fetch(`${BASE_URL}/api/tables`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     })
       .then(r => r.json())
       .then(r => {
-        console.log("Tables API response:", r);
         const list = r?.data ?? r?.tables ?? r ?? [];
-        const arr = Array.isArray(list) ? list : [];
-        console.log("Parsed tables array:", arr);
-        console.log("Looking for meja:", mejaN, "cafe:", CAFE_ID);
-        
+        const arr  = Array.isArray(list) ? list : [];
         const exists = arr.some(t => {
           const no = Number(t.nomor_meja ?? t.no_meja ?? t.meja ?? t.id);
           const tCafe = t.cafe_id ?? t.cafeId ?? t.cafe ?? null;
-          console.log("Checking table:", { no, tCafe, raw: t });
           if (no !== mejaN) return false;
-          if (tCafe == null) return true; // Kalau tidak ada cafe_id, anggap valid
-          return String(tCafe) === String(CAFE_ID);
+          return tCafe == null || String(tCafe) === String(CAFE_ID);
         });
-        
-        console.log("Table exists:", exists);
-        
-        // Bypass validasi untuk dev/testing - anggap meja valid
-        if (!exists && arr.length > 0) {
-          console.warn("Meja tidak ditemukan di API, tapi bypass validasi");
-        }
-        
-        setTableOk(true); // Selalu true untuk bypass
-        // setTableOk(exists);
-        // if (!exists) setParamError("Meja tidak ditemukan");
-      })
-      .catch((err) => {
-        console.error("Tables API error:", err);
-        // Bypass error - tetap izinkan akses
+        if (!exists && arr.length > 0) console.warn("Meja tidak ditemukan di API, bypass validasi");
         setTableOk(true);
-        // setTableOk(false);
-        // setParamError("Meja tidak ditemukan");
       })
+      .catch(() => setTableOk(true))
       .finally(() => setTableValidating(false));
   }, [CAFE_ID, MEJA_ID, validateKey]);
 
-
   useEffect(() => {
-    if (!CAFE_ID) return;
-    if (cafeLoading) return;
-    if (cafeError) {
-      setParamError("Cafe tidak ditemukan");
-      return;
-    }
-    if (!cafeRaw) {
-      setParamError("Cafe tidak ditemukan");
-    }
+    if (!CAFE_ID || cafeLoading) return;
+    if (cafeError || !cafeRaw) setParamError("Cafe tidak ditemukan");
   }, [CAFE_ID, cafeLoading, cafeError, cafeRaw]);
 
-
   const cafeProfile = useMemo(() => ({
-    nama:    cafeRaw?.nama_cafe  ?? cafeRaw?.nama    ?? cafeRaw?.name   ?? "ASTAKIRA",
-    alamat:  cafeRaw?.alamat     ?? cafeRaw?.address ?? cafeRaw?.lokasi ?? "",
-    logo:    fixImgUrl(cafeRaw?.logo_cafe ?? cafeRaw?.logo ?? cafeRaw?.foto ?? cafeRaw?.icon ?? ""),
+    nama:   cafeRaw?.nama_cafe  ?? cafeRaw?.nama    ?? cafeRaw?.name   ?? "ASTAKIRA",
+    alamat: cafeRaw?.alamat     ?? cafeRaw?.address ?? cafeRaw?.lokasi ?? "",
+    logo:   fixImgUrl(cafeRaw?.logo_cafe ?? cafeRaw?.logo ?? cafeRaw?.foto ?? cafeRaw?.icon ?? ""),
   }), [cafeRaw]);
 
   const theme = useMemo(() => parseTheme(cafeRaw?.tema_colors), [cafeRaw]);
@@ -1028,7 +1157,6 @@ export default function Home() {
   const categorySections = useMemo(() => buildCategorySections(normalizedCats, menuDatabase), [normalizedCats, menuDatabase]);
   const categories       = useMemo(() => [{ id:"all", label:"Semua", logo:"" }, ...normalizedCats], [normalizedCats]);
 
-
   const allItems   = Object.values(menuDatabase);
   const totalQty   = Object.values(cart).reduce((a, b) => a + b, 0);
   const totalPrice = allItems.reduce((sum, item) => sum + (cart[item.id] || 0) * item.price, 0);
@@ -1039,9 +1167,7 @@ export default function Home() {
   if (tableValidating || cafeLoading) {
     return (
       <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
-        <div className="max-w-md mx-auto">
-          <><SkeletonSection /><SkeletonSection /><SkeletonSection /></>
-        </div>
+        <div className="max-w-md mx-auto"><SkeletonSection /><SkeletonSection /><SkeletonSection /></div>
       </div>
     );
   }
@@ -1050,59 +1176,28 @@ export default function Home() {
     return (
       <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
         <div className="max-w-md mx-auto px-4 py-8">
-          <ErrorState
-            message={paramError}
-            onRetry={() => {
-              setParamError("");
-              setValidateKey(k => k + 1);
-              if (refetchCafe) refetchCafe();
-              refetchMenu();
-              refetchCat();
-            }}
-          />
+          <ErrorState message={paramError} onRetry={() => { setParamError(""); setValidateKey(k => k+1); refetchCafe(); refetchMenu(); refetchCat(); }} />
         </div>
       </div>
     );
   }
 
+  const openItemSheet = (item) => setSelectedItem(item);
 
   const addItem    = (id) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+1 }));
   const removeItem = (id) => setCart(prev => { const u={...prev}; if(u[id]>1) u[id]--; else delete u[id]; return u; });
   const handleSheetAdd = (id, qty) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+qty }));
 
-  const handleCheckout = () => navigate("/pesanan", {
-    state: {
-      cart,
-      items:   cartItems,
-      cafeId:  CAFE_ID,
-      mejaId:  MEJA_ID,
-    }
-  });
+  const handleCheckout = () => navigate("/pesanan", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } });
 
-  const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) => navigate("/pesanan", {
-    state: {
-      cart:        oc,
-      items:       oi,
-      cafeId:      CAFE_ID,
-      mejaId:      MEJA_ID,
-      fromRiwayat: true,
-      orderId,
-    }
-  });
+  const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) =>
+    navigate("/pesanan", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
 
   const handleReorder = ({ cart: rc }) => {
     const merged = { ...cart };
     Object.entries(rc).forEach(([id, qty]) => { merged[id] = (merged[id]||0)+qty; });
     setCart(merged);
-    navigate("/pesanan", {
-      state: {
-        cart:      merged,
-        items:     Object.values(menuDatabase).filter(m => merged[m.id]),
-        cafeId:    CAFE_ID,
-        mejaId:    MEJA_ID,
-        isReorder: true,
-      }
-    });
+    navigate("/pesanan", { state: { cart: merged, items: Object.values(menuDatabase).filter(m => merged[m.id]), cafeId: CAFE_ID, mejaId: MEJA_ID, isReorder: true } });
   };
 
   const handleCategoryClick = (catId) => {
@@ -1114,25 +1209,20 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
-
       {/* NAVBAR */}
       <div className="sticky top-0 z-40 bg-white shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-md flex-shrink-0"
-                style={{ background:"var(--grad)" }}>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-md flex-shrink-0" style={{ background:"var(--grad)" }}>
                 {cafeProfile.logo ? (
                   <img src={cafeProfile.logo} alt={cafeProfile.nama} className="w-full h-full object-cover"
                     onError={e => {
                       e.currentTarget.style.display = "none";
-                      e.currentTarget.parentElement.innerHTML =
-                        `<span style="color:var(--on-p);font-weight:800;font-size:1.125rem">${cafeProfile.nama.charAt(0).toUpperCase()}</span>`;
+                      e.currentTarget.parentElement.innerHTML = `<span style="color:var(--on-p);font-weight:800;font-size:1.125rem">${cafeProfile.nama.charAt(0).toUpperCase()}</span>`;
                     }} />
                 ) : (
-                  <span style={{ color:"var(--on-p)", fontWeight:800, fontSize:"1.125rem" }}>
-                    {cafeProfile.nama.charAt(0).toUpperCase()}
-                  </span>
+                  <span style={{ color:"var(--on-p)", fontWeight:800, fontSize:"1.125rem" }}>{cafeProfile.nama.charAt(0).toUpperCase()}</span>
                 )}
               </div>
               <div>
@@ -1171,8 +1261,7 @@ export default function Home() {
 
         {/* MEJA BANNER */}
         <div className="px-4 pt-4 mb-5">
-          <div className="rounded-2xl px-5 py-3.5 flex items-center justify-center shadow-lg"
-            style={{ background:"var(--grad)" }}>
+          <div className="rounded-2xl px-5 py-3.5 flex items-center justify-center shadow-lg" style={{ background:"var(--grad)" }}>
             <p className="font-bold text-base" style={{ color:"var(--on-p)" }}>Meja Nomor {MEJA_ID}</p>
           </div>
         </div>
@@ -1197,10 +1286,10 @@ export default function Home() {
                       className="flex-shrink-0 flex flex-col items-center gap-1.5">
                       <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center transition-all duration-200"
                         style={{
-                          background:    "var(--grad)",
-                          transform:     isActive ? "scale(1.1)" : "scale(1)",
-                          boxShadow:     isActive ? `0 8px 20px var(--p-20)` : "0 1px 4px rgba(0,0,0,0.08)",
-                          outline:       isActive ? "2px solid var(--p)" : "none",
+                          background: "var(--grad)",
+                          transform:  isActive ? "scale(1.1)" : "scale(1)",
+                          boxShadow:  isActive ? `0 8px 20px var(--p-20)` : "0 1px 4px rgba(0,0,0,0.08)",
+                          outline:    isActive ? "2px solid var(--p)" : "none",
                           outlineOffset: "2px",
                         }}>
                         {cat.id === "all" ? (
@@ -1246,28 +1335,24 @@ export default function Home() {
                 className="mb-8">
                 <div className="px-4 flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0"
-                      style={{ background:"var(--grad)" }}>
+                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0" style={{ background:"var(--grad)" }}>
                       {section.logo ? (
-                        <img src={section.logo} alt={section.label} className="w-full h-full object-cover"
-                          onError={e => { e.currentTarget.style.display = "none"; }} />
+                        <img src={section.logo} alt={section.label} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
                       ) : (
                         <Image size={16} style={{ color:"var(--on-p)" }} />
                       )}
                     </div>
                     <h2 className="text-base font-bold text-gray-900">{section.label}</h2>
                   </div>
-                  <button onClick={() => setLihatSemuaSection(section)}
-                    className="text-xs font-semibold transition-colors"
-                    style={{ color:"var(--p)" }}>
+                  <button onClick={() => setLihatSemuaSection(section)} className="text-xs font-semibold transition-colors" style={{ color:"var(--p)" }}>
                     Lihat Semua →
                   </button>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-4">
                   {sectionItems.map(item => (
                     <MenuCard key={item.id} item={item} qty={cart[item.id]||0}
-                      onAdd={() => addItem(item.id)} onRemove={() => removeItem(item.id)}
-                      onClick={() => setSelectedItem(item)} />
+                      onAdd={() => openItemSheet(item)} onRemove={() => removeItem(item.id)}
+                      onClick={() => openItemSheet(item)} />
                   ))}
                 </div>
               </div>
@@ -1295,8 +1380,7 @@ export default function Home() {
                       <p className="text-xl font-bold" style={{ color:"var(--on-p)" }}>Rp{totalPrice.toLocaleString()}</p>
                     </div>
                   </div>
-                  <div className="bg-white px-6 py-3 rounded-2xl font-bold shadow-xl whitespace-nowrap"
-                    style={{ color:"var(--p)" }}>Checkout →</div>
+                  <div className="bg-white px-6 py-3 rounded-2xl font-bold shadow-xl whitespace-nowrap" style={{ color:"var(--p)" }}>Checkout →</div>
                 </div>
               </button>
             </div>
@@ -1304,16 +1388,11 @@ export default function Home() {
         )}
       </div>
 
+      {/* MODALS */}
       {showRiwayat && (
-        <RiwayatPesananSheet
-          menuDatabase={menuDatabase}
-          mejaId={MEJA_ID}
-          cafeId={CAFE_ID}
-          cafeName={cafeProfile.nama}
-          onClose={() => setShowRiwayat(false)}
-          onNavigateToPesanan={handleNavigateToPesanan}
-          onReorder={handleReorder}
-        />
+        <RiwayatPesananSheet menuDatabase={menuDatabase} mejaId={MEJA_ID} cafeId={CAFE_ID}
+          cafeName={cafeProfile.nama} onClose={() => setShowRiwayat(false)}
+          onNavigateToPesanan={handleNavigateToPesanan} onReorder={handleReorder} />
       )}
       {lihatSemuaSection && (
         <LihatSemuaPopup section={lihatSemuaSection} cart={cart} menuDatabase={menuDatabase}

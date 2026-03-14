@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000";
 const PER_PAGE = 4;
 
 // ── Ambil logo dari objek kategori — cek semua kemungkinan field name ─────────

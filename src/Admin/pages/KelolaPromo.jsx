@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import { ConfirmDialog } from "../components/SharedComponents";
 
 // FIX: IP diperbaiki dari .13 ke .3
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",

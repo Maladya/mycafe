@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Coffee, AlertCircle, Eye, EyeOff, Building2, Mail, User, Lock, CheckCircle2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000";
 
 /* ── Success Overlay ─────────────────────────────────────────────── */
 function SuccessOverlay({ visible }) {

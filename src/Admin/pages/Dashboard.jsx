@@ -9,7 +9,7 @@ import {
 import { useAdmin } from "../AdminPanel";
 import { getCatColor, isPromoActive } from "../data/constants";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DASHBOARD
