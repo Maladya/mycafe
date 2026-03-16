@@ -10,6 +10,7 @@ import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
+const KNOWN_GROUPS_KEY = "known_variant_groups";
 const tokenManager = {
   get:   ()  => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
   set:   (t) => localStorage.setItem(TOKEN_KEY, t),
@@ -118,23 +119,44 @@ function getCookie(key) {
 }
 
 const api = {
-  get: async (path) => {
+  get: async (path, opts = {}) => {
     const token = tokenManager.get();
     const headers = { "Content-Type": "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const deviceId = getOrCreateDeviceId();
-    const url = path.includes('?') ? `${path}&device_id=${deviceId}` : `${path}?device_id=${deviceId}`;
+    const withDeviceId = opts?.withDeviceId !== false;
+    const url = withDeviceId
+      ? (() => {
+          const deviceId = getOrCreateDeviceId();
+          return path.includes('?') ? `${path}&device_id=${deviceId}` : `${path}?device_id=${deviceId}`;
+        })()
+      : path;
     const res = await fetch(`${BASE_URL}/${url}`, { headers });
     if (res.status === 401) { tokenManager.clear(); throw new Error("Sesi habis."); }
     if (res.status === 403) { throw new Error("Akses ditolak (403)."); }
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     return res.json();
   },
+  tryGet: async (paths, opts = {}) => {
+    const list = Array.isArray(paths) ? paths : [paths];
+    let lastErr = null;
+    for (const p of list) {
+      try {
+        return await api.get(p, opts);
+      } catch (e) {
+        lastErr = e;
+        const msg = String(e?.message ?? e ?? "");
+        if (msg.startsWith("HTTP 404")) continue;
+        throw e;
+      }
+    }
+    throw lastErr ?? new Error("Tidak menemukan endpoint.");
+  },
   post: async (path, body) => {
     const token = tokenManager.get();
     const headers = { "Content-Type": "application/json" };
     if (token) headers["Authorization"] = `Bearer ${token}`;
     const deviceId = getOrCreateDeviceId();
+
     const url = path.includes('?') ? `${path}&device_id=${deviceId}` : `${path}?device_id=${deviceId}`;
     const res = await fetch(`${BASE_URL}/${url}`, {
       method: "POST",
@@ -343,34 +365,51 @@ const DUMMY_VARIANTS_BY_GROUP = {
 
 function VariantGroupSection({ namaGroup, menuId, basePrice, selectedId, onSelect }) {
   const [variants, setVariants]   = useState([]);
-  const [loading,  setLoading]    = useState(true);
-  const [error,    setError]      = useState("");
+  const [loading, setLoading]    = useState(true);
+  const [error, setError]      = useState("");
 
   useEffect(() => {
+    console.log(`[VariantGroupSection] Fetching variants for group "${namaGroup}" and menu ID: ${menuId}`);
     setLoading(true); setError("");
-    const token = tokenManager.get();
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    fetch(`${BASE_URL}/api/variant/by-nama-group/${encodeURIComponent(namaGroup)}`, { headers })
-      .then(r => r.json())
+    // Gunakan api.get yang sudah include device_id
+    api.tryGet([
+      `by-nama-group/${encodeURIComponent(namaGroup)}`,
+      `api/variant/by-nama-group/${encodeURIComponent(namaGroup)}`,
+    ], { withDeviceId: false })
       .then(data => {
         const list = data.data ?? data.variants ?? data.varian ?? data ?? [];
         const allVariants = Array.isArray(list) ? list : [];
+        console.log(`[VariantGroupSection] Total variants fetched for "${namaGroup}":`, allVariants.length);
+        console.log(`[VariantGroupSection] All variants:`, allVariants.map(v => ({ id: v.id, label: v.label, id_menu: v.id_menu })));
+        
+        // Filter varian yang hanya milik menu ini
         const filtered = menuId
           ? allVariants.filter(v => String(v.id_menu) === String(menuId))
           : allVariants;
+        
+        console.log(`[VariantGroupSection] Filtered variants for menu ${menuId}:`, filtered.map(v => ({ id: v.id, label: v.label, harga_variant: v.harga_variant })));
+        console.log(`[VariantGroupSection] Count: ${filtered.length} variants for menu ${menuId} in group "${namaGroup}"`);
+        
         if (filtered.length > 0) {
+          try {
+            const raw = localStorage.getItem(KNOWN_GROUPS_KEY);
+            const prev = raw ? JSON.parse(raw) : [];
+            const next = Array.from(new Set([...(Array.isArray(prev) ? prev : []), namaGroup]));
+            localStorage.setItem(KNOWN_GROUPS_KEY, JSON.stringify(next));
+          } catch {
+            // ignore
+          }
           setVariants(filtered);
-          return;
+        } else {
+          console.log(`[VariantGroupSection] No variants found for menu ${menuId} in group "${namaGroup}"`);
+          setVariants([]);
         }
-        const dummy = DUMMY_VARIANTS_BY_GROUP[namaGroup] ?? [];
-        setVariants(dummy);
       })
-      .catch(() => {
-        const dummy = DUMMY_VARIANTS_BY_GROUP[namaGroup] ?? [];
-        if (dummy.length > 0) setVariants(dummy);
-        else setError("Gagal memuat varian");
+      .catch((err) => {
+        console.error(`[VariantGroupSection] Error fetching variants for "${namaGroup}":`, err);
+        setError("Gagal memuat varian");
+        setVariants([]);
       })
       .finally(() => setLoading(false));
   }, [namaGroup, menuId]);
@@ -403,6 +442,12 @@ function VariantGroupSection({ namaGroup, menuId, basePrice, selectedId, onSelec
 
       {error && (
         <p className="px-5 py-3 text-xs text-red-400">{error}</p>
+      )}
+
+      {!loading && !error && variants.length === 0 && (
+        <p className="px-5 py-3 text-xs text-gray-400">
+          Tidak ada varian untuk grup ini
+        </p>
       )}
 
       {!loading && !error && variants.map((v, idx) => {
@@ -452,9 +497,6 @@ function VariantGroupSection({ namaGroup, menuId, basePrice, selectedId, onSelec
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MENU DETAIL SHEET
-// ─────────────────────────────────────────────────────────────────────────────
 function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem }) {
   const [qty, setQty]               = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
@@ -472,34 +514,82 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
     if (!item?.id) return;
     setVarFetched(false);
 
+    console.log(`[MenuDetailSheet] Menu item:`, { id: item.id, name: item.name, namaGroups: item.namaGroups, variants: item.variants });
+    console.log(`[MenuDetailSheet] Menu raw keys:`, Object.keys(item?._raw ?? {}));
+    console.log(`[MenuDetailSheet] Menu raw object:`, item?._raw ?? null);
+
+    // Gunakan namaGroups dari item jika tersedia (dari normalizeMenuItem)
     const groupsFromItem = Array.isArray(item.namaGroups) && item.namaGroups.length > 0
       ? item.namaGroups
       : [];
 
     if (groupsFromItem.length > 0) {
+      console.log(`[MenuDetailSheet] Using namaGroups from item:`, groupsFromItem);
       setNamaGroups(groupsFromItem);
       setVarFetched(true);
       return;
     }
 
-    const token = tokenManager.get();
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    // Jika tidak ada namaGroups tapi ada variants, extract dari variants
+    if (Array.isArray(item.variants) && item.variants.length > 0) {
+      const groups = [...new Set(
+        item.variants
+          .map(v => v.namaGroup ?? v.nama_group ?? v.nama_grup ?? v.group ?? "")
+          .filter(Boolean)
+      )];
+      console.log(`[MenuDetailSheet] Extracted namaGroups from variants:`, groups);
+      setNamaGroups(groups);
+      setVarFetched(true);
+      return;
+    }
 
-    fetch(`${BASE_URL}/api/variant`, { headers })
-      .then(r => r.json())
-      .then(data => {
-        const list = data.data ?? data.variants ?? data.varian ?? data ?? [];
-        const arr  = Array.isArray(list) ? list : [];
-        const mine = arr.filter(v => String(v.id_menu) === String(item.id));
-        const groups = [...new Set(
-          mine.map(v => v.nama_group ?? v.nama_grup ?? v.namaGroup ?? v.group ?? "").filter(Boolean)
-        )];
-        setNamaGroups(groups.length > 0 ? groups : DUMMY_VARIANT_GROUPS);
-      })
-      .catch(() => setNamaGroups(DUMMY_VARIANT_GROUPS))
-      .finally(() => setVarFetched(true));
-  }, [item?.id, item?.namaGroups]);
+    (async () => {
+      let cached = [];
+      try {
+        const raw = localStorage.getItem(KNOWN_GROUPS_KEY);
+        cached = raw ? JSON.parse(raw) : [];
+      } catch {
+        cached = [];
+      }
+
+      const groupCandidates = Array.from(new Set([
+        ...(Array.isArray(cached) ? cached : []),
+        ...DUMMY_VARIANT_GROUPS,
+      ])).filter(Boolean);
+
+      console.log(`[MenuDetailSheet] Probing groups via /by-nama-group. Candidates:`, groupCandidates);
+
+      const found = [];
+      for (const gName of groupCandidates) {
+        try {
+          console.log(`[MenuDetailSheet] Probe group: GET /by-nama-group/${gName}`);
+          const data = await api.tryGet([
+            `by-nama-group/${encodeURIComponent(gName)}`,
+            `api/variant/by-nama-group/${encodeURIComponent(gName)}`,
+          ], { withDeviceId: false });
+          const list = data?.data ?? data?.variants ?? data?.varian ?? data ?? [];
+          const arr = Array.isArray(list) ? list : [];
+          const mine = arr.filter(v => String(v?.id_menu) === String(item.id));
+          console.log(`[MenuDetailSheet] Probe result for group "${gName}": total=${arr.length} mine=${mine.length}`);
+
+          if (mine.length > 0) found.push(gName);
+        } catch (e) {
+          console.error(`[MenuDetailSheet] Probe failed for group "${gName}":`, e);
+        }
+      }
+
+      if (found.length > 0) {
+        console.log(`[MenuDetailSheet] Groups for menu ${item.id} found via probing:`, found);
+        setNamaGroups(found);
+        setVarFetched(true);
+        return;
+      }
+
+      console.log(`[MenuDetailSheet] No variants available for menu ${item.id}`);
+      setNamaGroups([]);
+      setVarFetched(true);
+    })();
+  }, [item?.id, item?.namaGroups, item?.variants]);
 
   const relatedItems = Object.values(menuDatabase).filter(m => item.related?.includes(m.id));
 

@@ -289,7 +289,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
   }, []);
 
   // ── Helper: build variantGroups dari array varian flat ────────────────────
-  const buildGroupsFromFlat = (arr, menuHarga, activeIds = new Set()) => {
+  const buildGroupsFromFlat = (arr, menuHarga, activeIds = new Set(), menuId = null) => {
     const grouped = {};
     arr.forEach(v => {
       // API mengembalikan nama_grup
@@ -297,17 +297,43 @@ export default function MenuForm({ item, onSave, onCancel }) {
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(v);
     });
-    return Object.entries(grouped).map(([namaVarian, items]) => ({
-      id:         `grp_${namaVarian}_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
-      namaVarian,
-      aktif:      items.some(v => activeIds.has(String(v.id))),
-      pilihan:    items.map(v => ({
-        id:           v.id,
-        label:        v.label ?? "",
-        hargaVariant: String(Number(v.harga_variant) || 0),
-        isTemp:       false,
-      })),
-    }));
+    
+    // Cek localStorage untuk grup aktif yang tersimpan
+    const savedActiveGroup = menuId ? localStorage.getItem(`active_variant_group_${menuId}`) : null;
+    console.log(`[buildGroups] Menu ID: ${menuId}, savedActiveGroup from localStorage: "${savedActiveGroup}"`);
+    
+    let foundActive = false;
+    return Object.entries(grouped).map(([namaVarian, items]) => {
+      const hasActive = items.some(v => activeIds.has(String(v.id)));
+      
+      // Jika ada grup yang tersimpan di localStorage, gunakan itu
+      // Jika tidak, default ke grup pertama yang memiliki varian untuk menu ini
+      let aktif = false;
+      if (hasActive && !foundActive) {
+        if (savedActiveGroup) {
+          // Gunakan grup dari localStorage jika cocok
+          aktif = (namaVarian === savedActiveGroup);
+        } else {
+          // Default ke grup pertama
+          aktif = true;
+        }
+        if (aktif) foundActive = true;
+      }
+      
+      console.log(`[buildGroups] Grup "${namaVarian}": hasActive=${hasActive}, aktif=${aktif}`);
+      
+      return {
+        id:         `grp_${namaVarian}_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
+        namaVarian,
+        aktif,
+        pilihan:    items.map(v => ({
+          id:           v.id,
+          label:        v.label ?? "",
+          hargaVariant: String(Number(v.harga_variant) || 0),
+          isTemp:       false,
+        })),
+      };
+    });
   };
 
   // ── Fetch semua varian dari DB → tampilkan sebagai grup ──────────────────
@@ -335,7 +361,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
         }
 
         // 3. Build semua grup, aktif = yang sudah dimiliki menu
-        const groups = buildGroupsFromFlat(arrAll, item?.harga ?? 0, activeIds);
+        const groups = buildGroupsFromFlat(arrAll, item?.harga ?? 0, activeIds, item?.id);
         setVariantGroups(groups);
       } catch {
         setVarErr("Gagal memuat data varian");
@@ -446,8 +472,29 @@ export default function MenuForm({ item, onSave, onCancel }) {
   };
 
   const toggleGroupAktif = (groupId) => {
+    const group = variantGroups.find(g => g.id === groupId);
+    const groupName = group?.namaVarian || "Unknown";
+    const isActivating = !group?.aktif;
+    
+    if (isActivating) {
+      console.log(`[toggleGroup] Mengganti varian: Grup "${groupName}" akan DIAKTIFKAN, grup lain akan DINONAKTIFKAN`);
+      const currentActive = variantGroups.find(g => g.aktif);
+      if (currentActive) {
+        console.log(`[toggleGroup] Varian sebelumnya "${currentActive.namaVarian}" -> DINONAKTIFKAN`);
+        console.log(`[toggleGroup] Varian baru "${groupName}" -> DIAKTIFKAN`);
+      }
+      // Simpan grup aktif ke localStorage
+      const menuId = item?.id ?? form.id;
+      if (menuId) {
+        localStorage.setItem(`active_variant_group_${menuId}`, groupName);
+        console.log(`[toggleGroup] Simpan ke localStorage: active_variant_group_${menuId} = "${groupName}"`);
+      }
+    } else {
+      console.log(`[toggleGroup] Grup "${groupName}" akan DINONAKTIFKAN`);
+    }
+    
     setVariantGroups(prev => prev.map(g =>
-      g.id === groupId ? { ...g, aktif: !g.aktif } : g
+      g.id === groupId ? { ...g, aktif: !g.aktif } : { ...g, aktif: false }
     ));
   };
 
@@ -527,6 +574,14 @@ export default function MenuForm({ item, onSave, onCancel }) {
       const newId   = created?.id;
       if (!newId) { setVarErr("Menu tersimpan tapi ID tidak ditemukan."); return null; }
       setForm(p => ({ ...p, id: newId }));
+      
+      // Simpan grup aktif ke localStorage untuk menu baru
+      const activeGroup = variantGroups.find(g => g.aktif);
+      if (activeGroup) {
+        localStorage.setItem(`active_variant_group_${newId}`, activeGroup.namaVarian);
+        console.log(`[ensureMenuSaved] Menu baru ID:${newId} - Simpan varian aktif ke localStorage: "${activeGroup.namaVarian}"`);
+      }
+      
       return newId;
     } catch { setVarErr("Gagal terhubung ke server"); return null; }
   };
@@ -543,9 +598,16 @@ export default function MenuForm({ item, onSave, onCancel }) {
 
       const errors = [];
 
+      // Log grup yang aktif dan nonaktif saat simpan
+      const activeGroups = variantGroups.filter(g => g.aktif);
+      const inactiveGroups = variantGroups.filter(g => !g.aktif && g.namaVarian.trim());
+      console.log(`[saveVariants] === MENYIMPAN VARIAN UNTUK MENU ID: ${menuId} ===`);
+      console.log(`[saveVariants] Grup AKTIF (${activeGroups.length}):`, activeGroups.map(g => `"${g.namaVarian}" (${g.pilihan.length} pilihan)`));
+      console.log(`[saveVariants] Grup NONAKTIF (${inactiveGroups.length}):`, inactiveGroups.map(g => `"${g.namaVarian}" (${g.pilihan.length} pilihan)`));
+
       for (const group of variantGroups) {
-        // Lewati grup nonaktif atau tanpa nama
-        if (!group.aktif || !group.namaVarian.trim()) continue;
+        // Lewati grup tanpa nama
+        if (!group.namaVarian.trim()) continue;
 
         for (const p of group.pilihan) {
           if (!p.label.trim()) continue;
@@ -561,7 +623,8 @@ export default function MenuForm({ item, onSave, onCancel }) {
 
           try {
             let res, rawText, data;
-            if (isNew) {
+            if (isNew && group.aktif) {
+              // Hanya buat varian baru kalau grupnya aktif
               console.log("[variant POST] payload ->", JSON.stringify(payload));
               res     = await fetch(`${API_URL}/api/variant`, {
                 method: "POST",
@@ -571,14 +634,15 @@ export default function MenuForm({ item, onSave, onCancel }) {
               rawText = await res.text();
               console.log("[variant POST] status:", res.status, "| body:", rawText);
               try { data = JSON.parse(rawText); } catch { data = { message: rawText }; }
-            } else {
+            } else if (!isNew && group.aktif) {
+              // Hanya update varian dari grup yang AKTIF
               const putBody = {
                 label:         payload.label,
                 harga_variant: payload.harga_variant,
                 nama_group:    payload.nama_group,
-                id_menu: payload.id_menu
+                id_menu:       payload.id_menu
               };
-              console.log("[variant PUT] id:", p.id, "payload ->", JSON.stringify(putBody));
+              console.log(`[variant PUT] Grup "${group.namaVarian}" AKTIF -> update varian id:`, p.id, "label:", putBody.label);
               res     = await fetch(`${API_URL}/api/variant/${p.id}`, {
                 method: "PUT",
                 headers: authHeaders(),
@@ -587,10 +651,14 @@ export default function MenuForm({ item, onSave, onCancel }) {
               rawText = await res.text();
               console.log("[variant PUT] status:", res.status, "| body:", rawText);
               try { data = JSON.parse(rawText); } catch { data = { message: rawText }; }
+            } else if (!isNew && !group.aktif) {
+              // Grup NONAKTIF - tidak perlu update, biarkan tetap terhubung ke menu
+              console.log(`[variant SKIP] Grup "${group.namaVarian}" NONAKTIF - skip update varian id:`, p.id);
+              continue; // Skip ke pilihan berikutnya
             }
 
-            if (!res.ok || data.success === false) {
-              errors.push(`"${p.label}": ${data.message ?? "HTTP " + res.status}`);
+            if (res && !res.ok || data && data.success === false) {
+              errors.push(`"${p.label}": ${data?.message ?? "HTTP " + res?.status}`);
             }
           } catch (e) {
             console.error("[variant] network error:", e);
@@ -634,6 +702,14 @@ export default function MenuForm({ item, onSave, onCancel }) {
             nama_group:   g.namaVarian,
           }))
       );
+
+    // Simpan grup aktif ke localStorage sebelum kirim ke parent
+    const activeGroup = variantGroups.find(g => g.aktif);
+    if (activeGroup && (item?.id || form.id)) {
+      const menuId = item?.id ?? form.id;
+      localStorage.setItem(`active_variant_group_${menuId}`, activeGroup.namaVarian);
+      console.log(`[handleSave] Simpan grup aktif ke localStorage: "${activeGroup.namaVarian}" untuk menu ID:${menuId}`);
+    }
 
     onSave({
       ...form,
