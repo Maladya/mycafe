@@ -102,7 +102,7 @@ export default function KelolaMeja() {
 
   // Fetch hanya sekali saat mount — [] dependency yang benar-benar stabil
 
-  useEffect(() => { fetchTables(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchTables(); }, []);  
 
 
 

@@ -6,6 +6,8 @@ import {
   AlertCircle, RefreshCw, Image, MessageSquare
 } from "lucide-react";
 
+import ActionConfirmModal from "../components/ActionConfirmModal";
+
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
@@ -363,19 +365,26 @@ const DUMMY_VARIANTS_BY_GROUP = {
   ],
 };
 
-function VariantGroupSection({ namaGroup, menuId, basePrice, selectedId, onSelect }) {
-  const [variants, setVariants]   = useState([]);
-  const [loading, setLoading]    = useState(true);
+function VariantGroupSection({ namaGroup, menuId, basePrice, selectedId, onSelect, variants: propVariants }) {
+  const [variants, setVariants]   = useState(propVariants || []);
+  const [loading, setLoading]    = useState(!propVariants);
   const [error, setError]      = useState("");
 
   useEffect(() => {
+    // Kalau variants sudah di-pass dari parent, pakai langsung tanpa fetch
+    if (propVariants && propVariants.length > 0) {
+      setVariants(propVariants);
+      setLoading(false);
+      return;
+    }
+    
+    // Kalau tidak ada prop variants, fetch dari API (fallback)
     console.log(`[VariantGroupSection] Fetching variants for group "${namaGroup}" and menu ID: ${menuId}`);
     setLoading(true); setError("");
 
     // Gunakan api.get yang sudah include device_id
     api.tryGet([
       `by-nama-group/${encodeURIComponent(namaGroup)}`,
-      `api/variant/by-nama-group/${encodeURIComponent(namaGroup)}`,
     ], { withDeviceId: false })
       .then(data => {
         const list = data.data ?? data.variants ?? data.varian ?? data ?? [];
@@ -497,11 +506,15 @@ function VariantGroupSection({ namaGroup, menuId, basePrice, selectedId, onSelec
   );
 }
 
-function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem }) {
+function MenuDetailSheet({ item, menuDatabase, cafeId, onClose, onAddToCart, onOpenItem }) {
   const [qty, setQty]               = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [addedToCart, setAddedToCart]   = useState(false);
   const [catatan, setCatatan]           = useState("");
+
+  const [detailItem, setDetailItem]     = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError]   = useState("");
 
   // selectedVariants: { [namaGroup]: { id, variantObj } }
   const [selectedVariants, setSelectedVariants] = useState({});
@@ -511,16 +524,54 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
   const [varFetched, setVarFetched]   = useState(false);
 
   useEffect(() => {
-    if (!item?.id) return;
+    if (!item?.id) { setDetailItem(null); return; }
+    let alive = true;
+
+    setDetailLoading(true);
+    setDetailError("");
+
+    api.tryGet([
+      `api/menu/user/${cafeId}/${encodeURIComponent(item.id)}`,
+    ], { withDeviceId: false })
+      .then(data => {
+        if (!alive) return;
+        const raw = data?.data ?? data?.menu ?? data;
+        if (!raw || typeof raw !== "object") { setDetailItem(null); return; }
+
+        const normalized = normalizeMenuItem(raw);
+        setDetailItem({
+          ...item,
+          ...normalized,
+          image_url: normalized.image_url || item.image_url,
+          _raw: raw,
+        });
+      })
+      .catch(err => {
+        if (!alive) return;
+        setDetailError(err?.message ? String(err.message) : "Gagal memuat detail menu");
+        setDetailItem(null);
+      })
+      .finally(() => {
+        if (!alive) return;
+        setDetailLoading(false);
+      });
+
+    return () => { alive = false; };
+  }, [item?.id, cafeId]);
+
+  const activeItem = detailItem ?? item;
+
+  useEffect(() => {
+    if (!activeItem?.id) return;
     setVarFetched(false);
 
-    console.log(`[MenuDetailSheet] Menu item:`, { id: item.id, name: item.name, namaGroups: item.namaGroups, variants: item.variants });
-    console.log(`[MenuDetailSheet] Menu raw keys:`, Object.keys(item?._raw ?? {}));
-    console.log(`[MenuDetailSheet] Menu raw object:`, item?._raw ?? null);
+    console.log(`[MenuDetailSheet] Menu item:`, { id: activeItem.id, name: activeItem.name, namaGroups: activeItem.namaGroups, variants: activeItem.variants });
+    console.log(`[MenuDetailSheet] Menu raw keys:`, Object.keys(activeItem?._raw ?? {}));
+    console.log(`[MenuDetailSheet] Menu raw object:`, activeItem?._raw ?? null);
 
     // Gunakan namaGroups dari item jika tersedia (dari normalizeMenuItem)
-    const groupsFromItem = Array.isArray(item.namaGroups) && item.namaGroups.length > 0
-      ? item.namaGroups
+    const groupsFromItem = Array.isArray(activeItem.namaGroups) && activeItem.namaGroups.length > 0
+      ? activeItem.namaGroups
       : [];
 
     if (groupsFromItem.length > 0) {
@@ -531,9 +582,9 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
     }
 
     // Jika tidak ada namaGroups tapi ada variants, extract dari variants
-    if (Array.isArray(item.variants) && item.variants.length > 0) {
+    if (Array.isArray(activeItem.variants) && activeItem.variants.length > 0) {
       const groups = [...new Set(
-        item.variants
+        activeItem.variants
           .map(v => v.namaGroup ?? v.nama_group ?? v.nama_grup ?? v.group ?? "")
           .filter(Boolean)
       )];
@@ -544,60 +595,20 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
     }
 
     (async () => {
-      let cached = [];
-      try {
-        const raw = localStorage.getItem(KNOWN_GROUPS_KEY);
-        cached = raw ? JSON.parse(raw) : [];
-      } catch {
-        cached = [];
-      }
-
-      const groupCandidates = Array.from(new Set([
-        ...(Array.isArray(cached) ? cached : []),
-        ...DUMMY_VARIANT_GROUPS,
-      ])).filter(Boolean);
-
-      console.log(`[MenuDetailSheet] Probing groups via /by-nama-group. Candidates:`, groupCandidates);
-
-      const found = [];
-      for (const gName of groupCandidates) {
-        try {
-          console.log(`[MenuDetailSheet] Probe group: GET /by-nama-group/${gName}`);
-          const data = await api.tryGet([
-            `by-nama-group/${encodeURIComponent(gName)}`,
-            `api/variant/by-nama-group/${encodeURIComponent(gName)}`,
-          ], { withDeviceId: false });
-          const list = data?.data ?? data?.variants ?? data?.varian ?? data ?? [];
-          const arr = Array.isArray(list) ? list : [];
-          const mine = arr.filter(v => String(v?.id_menu) === String(item.id));
-          console.log(`[MenuDetailSheet] Probe result for group "${gName}": total=${arr.length} mine=${mine.length}`);
-
-          if (mine.length > 0) found.push(gName);
-        } catch (e) {
-          console.error(`[MenuDetailSheet] Probe failed for group "${gName}":`, e);
-        }
-      }
-
-      if (found.length > 0) {
-        console.log(`[MenuDetailSheet] Groups for menu ${item.id} found via probing:`, found);
-        setNamaGroups(found);
-        setVarFetched(true);
-        return;
-      }
-
-      console.log(`[MenuDetailSheet] No variants available for menu ${item.id}`);
+      // Variants sudah tersedia dari response detail menu, tidak perlu probing
+      console.log(`[MenuDetailSheet] Using variants from detail response for menu ${activeItem.id}`);
       setNamaGroups([]);
       setVarFetched(true);
     })();
-  }, [item?.id, item?.namaGroups, item?.variants]);
+  }, [activeItem?.id, activeItem?.namaGroups, activeItem?.variants]);
 
-  const relatedItems = Object.values(menuDatabase).filter(m => item.related?.includes(m.id));
+  const relatedItems = Object.values(menuDatabase).filter(m => activeItem.related?.includes(m.id));
 
   // Hitung total harga: harga menu + semua harga_variant yang dipilih
   const extraPrice = Object.values(selectedVariants).reduce((sum, sel) => {
     return sum + Number(sel?.variantObj?.harga_variant ?? sel?.variantObj?.hargaVariant ?? 0);
   }, 0);
-  const currentPrice = item.price + extraPrice;
+  const currentPrice = activeItem.price + extraPrice;
   const totalPrice   = currentPrice * qty;
 
   const handleSelect = (namaGroup, variantId, variantObj) => {
@@ -618,7 +629,7 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
         hargaVariant: Number(v.variantObj?.harga_variant ?? v.variantObj?.hargaVariant ?? 0),
       }));
 
-    onAddToCart(item.id, qty, currentPrice, {
+    onAddToCart(activeItem.id, qty, currentPrice, {
       variants: pickedVariants,
       catatan: catatan.trim(),
     });
@@ -640,9 +651,10 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
 
           {/* Hero Image */}
           <div className="relative h-72 flex-shrink-0" style={{ background:"var(--bg-soft)" }}>
-            <MenuImage src={item.image_url} alt={item.name} className="w-full h-full object-cover transition-all duration-500" />
+            <MenuImage src={activeItem.image_url} alt={activeItem.name} className="w-full h-full object-cover transition-all duration-500" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/30" />
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
+
               <button onClick={onClose} className="w-11 h-11 flex items-center justify-center bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl shadow-xl hover:bg-white/30 transition-all">
                 <ArrowLeft size={20} className="text-white" />
               </button>
@@ -655,10 +667,12 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
                 </button>
               </div>
             </div>
-            {item.badge && (
+            {activeItem.badge && (
               <div className="absolute top-20 left-4 z-10">
-                <span className={`text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg ${item.badge==="Promo" ? "bg-gradient-to-r from-red-500 to-pink-500" : "bg-gradient-to-r from-purple-500 to-pink-500"}`}>
-                  {item.badge==="Promo" && item.discount ? `-${item.discount}` : item.badge}
+                <span
+                  className={`text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg ${activeItem.badge === "Promo" ? "bg-gradient-to-r from-red-500 to-pink-500" : "bg-gradient-to-r from-purple-500 to-pink-500"}`}
+                >
+                  {activeItem.badge==="Promo" && activeItem.discount ? `-${activeItem.discount}` : activeItem.badge}
                 </span>
               </div>
             )}
@@ -666,27 +680,34 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
 
           {/* Info dasar */}
           <div className="px-5 pt-5">
-            {item.category && <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color:"var(--p)" }}>{item.category}</p>}
-            <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{item.name}</h1>
-            {item.tagline && <p className="text-sm text-gray-400 mt-1 italic mb-4">{item.tagline}</p>}
+            {activeItem.category && <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color:"var(--p)" }}>{activeItem.category}</p>}
+            <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{activeItem.name}</h1>
+            {activeItem.tagline && <p className="text-sm text-gray-400 mt-1 italic mb-4">{activeItem.tagline}</p>}
+
+            {detailLoading && (
+              <p className="text-xs text-gray-400 mt-1">Memuat detail...</p>
+            )}
+            {!detailLoading && detailError && (
+              <p className="text-xs text-red-400 mt-1">{detailError}</p>
+            )}
 
             {/* Badge info */}
             <div className="flex gap-2 mb-5 flex-wrap">
-              {item.prepTime && (<div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5"><Clock size={13} className="text-orange-500" /><span className="text-xs font-semibold text-orange-700">{item.prepTime}</span></div>)}
-              {item.calories > 0 && (<div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-xl px-3 py-1.5"><Flame size={13} className="text-red-500" /><span className="text-xs font-semibold text-red-700">{item.calories} kal</span></div>)}
-              {item.isVegan && (<div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-xl px-3 py-1.5"><Leaf size={13} className="text-green-500" /><span className="text-xs font-semibold text-green-700">Vegan</span></div>)}
-              {item.volume && (<div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-xl px-3 py-1.5"><span className="text-xs font-semibold text-blue-700">🥤 {item.volume}</span></div>)}
+              {activeItem.prepTime && (<div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5"><Clock size={13} className="text-orange-500" /><span className="text-xs font-semibold text-orange-700">{activeItem.prepTime}</span></div>)}
+              {activeItem.calories > 0 && (<div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-xl px-3 py-1.5"><Flame size={13} className="text-red-500" /><span className="text-xs font-semibold text-red-700">{activeItem.calories} kal</span></div>)}
+              {activeItem.isVegan && (<div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-xl px-3 py-1.5"><Leaf size={13} className="text-green-500" /><span className="text-xs font-semibold text-green-700">Vegan</span></div>)}
+              {activeItem.volume && (<div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-xl px-3 py-1.5"><span className="text-xs font-semibold text-blue-700">🥤 {activeItem.volume}</span></div>)}
             </div>
 
             <div className="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-5" />
 
-            {item.description && <p className="text-sm text-gray-600 leading-relaxed mb-5">{item.description}</p>}
+            {activeItem.description && <p className="text-sm text-gray-600 leading-relaxed mb-5">{activeItem.description}</p>}
 
-            {item.ingredients?.length > 0 && (
+            {activeItem.ingredients?.length > 0 && (
               <div className="mb-6">
                 <h2 className="text-base font-bold text-gray-900 mb-2">Bahan</h2>
                 <div className="flex flex-wrap gap-2">
-                  {item.ingredients.map((ing, i) => <span key={i} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">{ing}</span>)}
+                  {activeItem.ingredients.map((ing, i) => <span key={i} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">{ing}</span>)}
                 </div>
               </div>
             )}
@@ -709,10 +730,13 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
                 <VariantGroupSection
                   key={namaGroup}
                   namaGroup={namaGroup}
-                  menuId={item.id}
-                  basePrice={item.price}
+                  menuId={activeItem.id}
+                  basePrice={activeItem.price}
                   selectedId={selectedVariants[namaGroup]?.id ?? null}
                   onSelect={(variantId, variantObj) => handleSelect(namaGroup, variantId, variantObj)}
+                  variants={activeItem.variants?.filter(v => 
+                    (v.namaGroup ?? v.nama_group ?? v.nama_grup ?? v.group ?? "") === namaGroup
+                  )}
                 />
               ))}
             </div>
@@ -783,10 +807,10 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
               <p className="text-2xl font-extrabold text-gray-900">Rp{totalPrice.toLocaleString()}</p>
               {extraPrice > 0 && (
                 <p className="text-[10px] text-gray-400">
-                  Rp{item.price.toLocaleString()} + Rp{extraPrice.toLocaleString()} varian
+                  Rp{activeItem.price.toLocaleString()} + Rp{extraPrice.toLocaleString()} varian
                 </p>
               )}
-              {item.originalPrice && <p className="text-xs text-gray-400 line-through">Rp{Number(item.originalPrice).toLocaleString()}</p>}
+              {activeItem.originalPrice && <p className="text-xs text-gray-400 line-through">Rp{Number(activeItem.originalPrice).toLocaleString()}</p>}
             </div>
             <div className="flex items-center gap-3 rounded-2xl px-3 py-2 border-2"
               style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
@@ -1006,7 +1030,7 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
                             <img src={item.image} alt={item.name} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <Image size={16} style={{ color:"var(--p)", opacity:0.3 }} />
+                              <Image size={16} className={`text-gray-400 ${item.image ? "" : "opacity-50"}`} />
                             </div>
                           )}
                         </div>
@@ -1085,7 +1109,11 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0" style={{ background:"var(--grad)" }}>
-              <CatLogo logo={section.logo} size={28} />
+              {section.logo ? (
+                <img src={section.logo} alt={section.label} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
+              ) : (
+                <Image size={16} style={{ color:"var(--on-p)" }} />
+              )}
             </div>
             <div>
               <h2 className="text-lg font-extrabold text-gray-900">{section.label}</h2>
@@ -1181,6 +1209,8 @@ export default function Home() {
   const [tableOk, setTableOk]                     = useState(null);
   const [validateKey, setValidateKey]             = useState(0);
   const [cart, setCart]                           = useState(locationState?.existingCart ?? {});
+  const [showEmptyCartConfirm, setShowEmptyCartConfirm] = useState(false);
+  const [pendingReplace, setPendingReplace] = useState(null);
   const sectionRefs                               = useRef({});
 
   const { data: menuRaw, loading: menuLoading, error: menuError, refetch: refetchMenu } = useApi(
@@ -1248,9 +1278,16 @@ export default function Home() {
   const categories       = useMemo(() => [{ id:"all", label:"Semua", logo:"" }, ...normalizedCats], [normalizedCats]);
 
   const allItems   = Object.values(menuDatabase);
-  const totalQty   = Object.values(cart).reduce((a, b) => a + b, 0);
-  const totalPrice = allItems.reduce((sum, item) => sum + (cart[item.id] || 0) * item.price, 0);
-  const cartItems  = allItems.filter(item => (cart[item.id] || 0) > 0);
+  const totalQty   = Object.values(cart).reduce((a, b) => a + (b?.qty || 0), 0);
+  const totalPrice = Object.entries(cart).reduce((sum, [id, item]) => {
+    const menuItem = menuDatabase[id];
+    if (!menuItem) return sum;
+    const qty = item?.qty || 0;
+    const basePrice = menuItem.price || 0;
+    const variantsPrice = (item?.variants || []).reduce((vsum, v) => vsum + (v?.hargaVariant || 0), 0);
+    return sum + (qty * (basePrice + variantsPrice));
+  }, 0);
+  const cartItems  = allItems.filter(item => (cart[item.id]?.qty || 0) > 0);
   const isLoading  = menuLoading || catLoading;
   const hasError   = (menuError || catError) && !isLoading;
 
@@ -1274,11 +1311,75 @@ export default function Home() {
 
   const openItemSheet = (item) => setSelectedItem(item);
 
-  const addItem    = (id) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+1 }));
-  const removeItem = (id) => setCart(prev => { const u={...prev}; if(u[id]>1) u[id]--; else delete u[id]; return u; });
-  const handleSheetAdd = (id, qty) => setCart(prev => ({ ...prev, [id]: (prev[id]||0)+qty }));
+  const addItem = (id) => setCart(prev => {
+    const existingItem = prev[id] || {};
+    return {
+      ...prev,
+      [id]: {
+        qty: (existingItem.qty || 0) + 1,
+        variants: existingItem.variants || [],
+        catatan: existingItem.catatan || "",
+        currentPrice: existingItem.currentPrice || 0
+      }
+    };
+  });
 
-  const handleCheckout = () => navigate("/pesanan", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } });
+  const removeItem = (id) => setCart(prev => {
+    const u = { ...prev };
+    if (u[id]?.qty > 1) {
+      u[id] = { ...u[id], qty: u[id].qty - 1 };
+    } else {
+      delete u[id];
+    }
+    return u;
+  });
+
+  const handleSheetAdd = (id, qty, currentPrice, { variants, catatan }) => {
+    setCart(prev => {
+      const existing = prev?.[id] || null;
+
+      const nextVariants = variants || [];
+      const nextCatatan = catatan || "";
+
+      const existingVariantSig = JSON.stringify((existing?.variants || []).map(v => ({
+        idVariant: v?.idVariant ?? v?.id,
+        namaGroup: v?.namaGroup,
+        label: v?.label,
+        hargaVariant: v?.hargaVariant ?? 0,
+      })));
+      const nextVariantSig = JSON.stringify(nextVariants.map(v => ({
+        idVariant: v?.idVariant ?? v?.id,
+        namaGroup: v?.namaGroup,
+        label: v?.label,
+        hargaVariant: v?.hargaVariant ?? 0,
+      })));
+
+      const willReplace = !!existing && ((existingVariantSig !== nextVariantSig) || String(existing?.catatan || "") !== String(nextCatatan));
+
+      if (willReplace) {
+        setPendingReplace({ id, qty, currentPrice, variants: nextVariants, catatan: nextCatatan });
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [id]: {
+          qty: (prev[id]?.qty || 0) + qty,
+          variants: nextVariants,
+          catatan: nextCatatan,
+          currentPrice: currentPrice || 0,
+        }
+      };
+    });
+  };
+
+  const handleCheckout = () => {
+    if (totalQty <= 0) {
+      setShowEmptyCartConfirm(true);
+      return;
+    }
+    navigate("/pesanan", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } });
+  };
 
   const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) =>
     navigate("/pesanan", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
@@ -1440,7 +1541,7 @@ export default function Home() {
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-4">
                   {sectionItems.map(item => (
-                    <MenuCard key={item.id} item={item} qty={cart[item.id]||0}
+                    <MenuCard key={item.id} item={item} qty={cart[item.id]?.qty || 0}
                       onAdd={() => openItemSheet(item)} onRemove={() => removeItem(item.id)}
                       onClick={() => openItemSheet(item)} />
                   ))}
@@ -1490,18 +1591,46 @@ export default function Home() {
           onClose={() => setLihatSemuaSection(null)} />
       )}
       {selectedItem && (
-        <MenuDetailSheet item={selectedItem} menuDatabase={menuDatabase}
+        <MenuDetailSheet item={selectedItem} menuDatabase={menuDatabase} cafeId={CAFE_ID}
           onClose={() => setSelectedItem(null)} onAddToCart={handleSheetAdd}
           onOpenItem={item => setSelectedItem(item)} />
       )}
 
+      <ActionConfirmModal
+        open={showEmptyCartConfirm}
+        icon="🛒"
+        title="Keranjang kosong"
+        message="Tambahkan menu dulu sebelum checkout."
+        cancelText="Tutup"
+        confirmText="Oke"
+        onCancel={() => setShowEmptyCartConfirm(false)}
+        onConfirm={() => setShowEmptyCartConfirm(false)}
+      />
+
+      <ActionConfirmModal
+        open={!!pendingReplace}
+        icon="🧾"
+        title="Ganti pilihan varian?"
+        message="Menu ini sudah ada di keranjang. Jika kamu lanjut, varian/catatan sebelumnya akan diganti mengikuti pilihan terbaru."
+        cancelText="Batal"
+        confirmText="Ganti"
+        onCancel={() => setPendingReplace(null)}
+        onConfirm={() => {
+          const p = pendingReplace;
+          if (!p) return;
+          setCart(prev => ({
+            ...prev,
+            [p.id]: {
+              qty: (prev[p.id]?.qty || 0) + (p.qty || 0),
+              variants: p.variants || [],
+              catatan: p.catatan || "",
+              currentPrice: p.currentPrice || 0,
+            }
+          }));
+          setPendingReplace(null);
+        }}
+      />
       <style>{`
-        .scrollbar-hide::-webkit-scrollbar { display:none; }
-        .scrollbar-hide { -ms-overflow-style:none; scrollbar-width:none; }
-        @keyframes slideUp { from { transform:translateY(100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
-        @keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
-        .animate-slideUp { animation:slideUp 0.4s cubic-bezier(0.16,1,0.3,1); }
-        .animate-fadeIn  { animation:fadeIn 0.3s ease-out; }
         .line-clamp-1 { display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
         .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
       `}</style>

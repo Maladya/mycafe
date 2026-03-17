@@ -170,9 +170,9 @@ export default function RingkasanPesanan() {
 
 
 
-  const orderedItems = items.filter(i => (cart[i.id] || 0) > 0);
+  const orderedItems = items.filter(i => (cart[i.id]?.qty || 0) > 0);
 
-  const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
+  const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id]?.qty || 0), 0);
 
 
 
@@ -202,7 +202,7 @@ export default function RingkasanPesanan() {
 
     const itemsSig = orderedItems
 
-      .map(i => `${i.id}:${cart[i.id] || 0}`)
+      .map(i => `${i.id}:${cart[i.id]?.qty || 0}`)
 
       .sort()
 
@@ -448,17 +448,17 @@ export default function RingkasanPesanan() {
 
           const payloadTambah = {
 
-            items: orderedItems.map(item => ({
-
-              nama_menu: item.name ?? item.nama_menu ?? item.nama ?? "",
-
-              qty:       cart[item.id] || 0,
-
-              harga:     item.price ?? item.harga ?? 0,
-
-              catatan:   itemNotes?.[item.id] ?? "",
-
-            })),
+            items: orderedItems.map(item => {
+              const cartItem = cart[item.id] || {};
+              const variantsPrice = (cartItem.variants || []).reduce((s, v) => s + (v?.hargaVariant || 0), 0);
+              return {
+                nama_menu: item.name ?? item.nama_menu ?? item.nama ?? "",
+                qty:       cartItem.qty || 0,
+                harga:     (item.price ?? item.harga ?? 0) + variantsPrice,
+                catatan:   itemNotes?.[item.id] ?? cartItem.catatan ?? "",
+                variants:  cartItem.variants || [],
+              };
+            }),
 
           };
 
@@ -526,17 +526,17 @@ export default function RingkasanPesanan() {
 
           estimasi: "15 mnt",
 
-          items:    orderedItems.map(item => ({
-
-            nama_menu: item.name ?? item.nama_menu ?? item.nama ?? "",
-
-            qty:       cart[item.id] || 0,
-
-            harga:     item.price ?? item.harga ?? 0,
-
-            catatan:   itemNotes?.[item.id] ?? "",
-
-          })),
+          items:    orderedItems.map(item => {
+            const cartItem = cart[item.id] || {};
+            const variantsPrice = (cartItem.variants || []).reduce((s, v) => s + (v?.hargaVariant || 0), 0);
+            return {
+              nama_menu: item.name ?? item.nama_menu ?? item.nama ?? "",
+              qty:       cartItem.qty || 0,
+              harga:     (item.price ?? item.harga ?? 0) + variantsPrice,
+              catatan:   itemNotes?.[item.id] ?? cartItem.catatan ?? "",
+              variants:  cartItem.variants || [],
+            };
+          }),
 
         };
 
@@ -592,7 +592,7 @@ export default function RingkasanPesanan() {
 
     buatPesanan();
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
 
   }, []);
 
@@ -780,31 +780,31 @@ export default function RingkasanPesanan() {
             </div>
 
             <div className="flex-1 min-w-0">
-
               <p className="font-semibold text-gray-900 text-sm line-clamp-1">
-
                 {item.name ?? item.nama_menu ?? item.nama}
-
               </p>
-
-              {itemNotes[item.id] && (
-
-                <p className="text-[10px]" style={{ color: "var(--p)" }}> Catatan: {itemNotes[item.id]}</p>
-
+              {(cart[item.id]?.variants?.length > 0 || cart[item.id]?.catatan || itemNotes[item.id]) && (
+                <div className="space-y-0.5 mt-0.5">
+                  {cart[item.id]?.variants?.map((v, idx) => (
+                    <p key={idx} className="text-[10px] text-gray-500">
+                      • {v.namaGroup}: {v.label}
+                      {v.hargaVariant > 0 && <span className="text-gray-400"> (+Rp{v.hargaVariant.toLocaleString()})</span>}
+                    </p>
+                  ))}
+                  {cart[item.id]?.catatan && (
+                    <p className="text-[10px] text-gray-500 italic"> {cart[item.id].catatan}</p>
+                  )}
+                  {itemNotes[item.id] && (
+                    <p className="text-[10px]" style={{ color: "var(--p)" }}> Catatan: {itemNotes[item.id]}</p>
+                  )}
+                </div>
               )}
-
             </div>
-
             <div className="text-right flex-shrink-0">
-
-              <p className="text-[10px] text-gray-400">{cart[item.id]}×</p>
-
+              <p className="text-[10px] text-gray-400">{cart[item.id]?.qty || 0}×</p>
               <p className="text-sm font-bold text-gray-800">
-
-                Rp{((cart[item.id] || 0) * (item.price ?? item.harga ?? 0)).toLocaleString()}
-
+                Rp{(((cart[item.id]?.qty || 0) * (item.price ?? item.harga ?? 0)) + (cart[item.id]?.variants || []).reduce((s, v) => s + ((v.hargaVariant || 0) * (cart[item.id]?.qty || 0)), 0)).toLocaleString()}
               </p>
-
             </div>
 
           </div>

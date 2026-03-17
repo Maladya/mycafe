@@ -402,14 +402,20 @@ export default function Pembayaran() {
   const note       = state?.note       || "";
   const itemNotes  = state?.itemNotes  || {};
 
-  const orderedItems = items.filter(i => (cart[i.id] || 0) > 0);
-  const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id] || 0), 0);
+  const orderedItems = items.filter(i => (cart[i.id]?.qty || 0) > 0);
+  const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id]?.qty || 0), 0);
 
   // ── Hitung subtotal LANGSUNG dari items di sini — single source of truth ──
   const subtotalFromItems = useMemo(
-    () => orderedItems.reduce((sum, item) => sum + (item.price * (cart[item.id] || 0)), 0),
+    () => orderedItems.reduce((sum, item) => {
+      const cartItem = cart[item.id] || {};
+      const qty = cartItem.qty || 0;
+      const basePrice = item.price || 0;
+      const variantsPrice = (cartItem.variants || []).reduce((vsum, v) => vsum + (v?.hargaVariant || 0), 0);
+      return sum + (qty * (basePrice + variantsPrice));
+    }, 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [orderedItems.map(i => `${i.id}:${cart[i.id]}`).join(",")]
+    [orderedItems.map(i => `${i.id}:${cart[i.id]?.qty}`).join(",")]
   );
 
   // Gunakan subtotalFromItems sebagai subtotal utama
@@ -420,6 +426,10 @@ export default function Pembayaran() {
   const [confirmKasir, setConfirmKasir] = useState(false);
   const [showPromo, setShowPromo]       = useState(false);
   const [appliedPromo, setAppliedPromo] = useState(null);
+  const [confirmOnline, setConfirmOnline] = useState(false);
+  const [pendingPromo, setPendingPromo] = useState(null);
+  const [confirmRemovePromo, setConfirmRemovePromo] = useState(false);
+
   const [form, setForm]                 = useState({ nama: "", meja: MEJA_ID });
   const [cafeName, setCafeName]         = useState("ASTAKIRA");
   const [snapClientKey, setSnapClientKey] = useState("");
@@ -490,7 +500,13 @@ export default function Pembayaran() {
 
     try {
       // ── Hitung ulang semua nilai sesaat sebelum POST — tidak bergantung pada stale state ──
-      const freshSubtotal     = orderedItems.reduce((s, i) => s + (i.price * (cart[i.id] || 0)), 0);
+      const freshSubtotal = orderedItems.reduce((s, i) => {
+        const cartItem = cart[i.id] || {};
+        const qty = cartItem.qty || 0;
+        const basePrice = i.price || 0;
+        const variantsPrice = (cartItem.variants || []).reduce((vsum, v) => vsum + (v?.hargaVariant || 0), 0);
+        return s + (qty * (basePrice + variantsPrice));
+      }, 0);
       const freshDiscount     = hitungDiskon(freshSubtotal, appliedPromo);
       const freshSebelumPajak = freshSubtotal - freshDiscount;
       const freshPajak        = Math.floor(freshSebelumPajak * (Number(pajakPersen) || 0) / 100);
@@ -507,13 +523,20 @@ export default function Pembayaran() {
         pajak:        freshPajak,
         pajak_persen: Number(pajakPersen) || 0,
         total:        freshTotal,
-        items: orderedItems.map(item => ({
-          id:       item.id,
-          name:     item.name,
-          price:    item.price,
-          quantity: cart[item.id] || 0,
-          subtotal: item.price * (cart[item.id] || 0), // ← tambahan agar backend bisa validasi per-item
-        })),
+        items: orderedItems.map(item => {
+          const cartItem = cart[item.id] || {};
+          const qty = cartItem.qty || 0;
+          const variantsPrice = (cartItem.variants || []).reduce((vsum, v) => vsum + (v?.hargaVariant || 0), 0);
+          return {
+            id:       item.id,
+            name:     item.name,
+            price:    item.price + variantsPrice,
+            quantity: qty,
+            subtotal: (item.price + variantsPrice) * qty,
+            variants: cartItem.variants || [],
+            catatan:  cartItem.catatan || "",
+          };
+        }),
       };
 
       console.log("[Pembayaran] Payload →", payload); // debug
@@ -573,7 +596,8 @@ export default function Pembayaran() {
       setPayError("");
       setConfirmKasir(true);
     } else {
-      handleOnlinePayment();
+      if (!form.nama.trim()) { setShowNameError(true); return; }
+      setConfirmOnline(true);
     }
   };
 
@@ -626,16 +650,29 @@ export default function Pembayaran() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm line-clamp-1">{item.name}</p>
-                    {itemNotes[item.id] && (
-                      <p className="text-[10px] line-clamp-1" style={{ color: "var(--p)" }}>
-                        Catatan: {itemNotes[item.id]}
-                      </p>
+                    {(cart[item.id]?.variants?.length > 0 || cart[item.id]?.catatan || itemNotes[item.id]) && (
+                      <div className="space-y-0.5 mt-0.5">
+                        {cart[item.id]?.variants?.map((v, idx) => (
+                          <p key={idx} className="text-[10px] text-gray-500">
+                            • {v.namaGroup}: {v.label}
+                            {v.hargaVariant > 0 && <span className="text-gray-400"> (+Rp{v.hargaVariant.toLocaleString()})</span>}
+                          </p>
+                        ))}
+                        {cart[item.id]?.catatan && (
+                          <p className="text-[10px] text-gray-500 italic"> {cart[item.id].catatan}</p>
+                        )}
+                        {itemNotes[item.id] && (
+                          <p className="text-[10px] line-clamp-1" style={{ color: "var(--p)" }}>
+                            Catatan: {itemNotes[item.id]}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-xs text-gray-400">{cart[item.id]}×</p>
+                    <p className="text-xs text-gray-400">{cart[item.id]?.qty || 0}×</p>
                     <p className="text-sm font-bold" style={{ color: "var(--p)" }}>
-                      Rp{(cart[item.id] * item.price).toLocaleString()}
+                      Rp{((cart[item.id]?.qty || 0) * item.price + (cart[item.id]?.variants || []).reduce((s, v) => s + ((v.hargaVariant || 0) * (cart[item.id]?.qty || 0)), 0)).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -767,7 +804,7 @@ export default function Pembayaran() {
             <div className="flex items-center gap-2">
               {appliedPromo && (
                 <button
-                  onClick={e => { e.stopPropagation(); setAppliedPromo(null); }}
+                  onClick={e => { e.stopPropagation(); setConfirmRemovePromo(true); }}
                   className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center hover:bg-red-200 transition-all"
                   title="Hapus promo"
                 >
@@ -900,11 +937,57 @@ export default function Pembayaran() {
       {showPromo && (
         <PromoCodeModal
           onClose={() => setShowPromo(false)}
-          onApply={setAppliedPromo}
+          onApply={(p) => {
+            if (!p) return;
+            setPendingPromo(p);
+          }}
           subtotal={subtotal}
           cafeId={CAFE_ID}
         />
       )}
+
+      <ActionConfirmModal
+        open={confirmOnline}
+        icon="💳"
+        title="Konfirmasi Pembayaran"
+        message={`Total pembayaran Rp${total.toLocaleString()}. Lanjutkan ke pembayaran online?`}
+        cancelText="Cek Lagi"
+        confirmText="Bayar"
+        onCancel={() => setConfirmOnline(false)}
+        onConfirm={() => {
+          setConfirmOnline(false);
+          handleOnlinePayment();
+        }}
+      />
+
+      <ActionConfirmModal
+        open={!!pendingPromo}
+        icon="🎟️"
+        title="Gunakan promo?"
+        message={`Promo akan diterapkan dan total pembayaran akan berubah.`}
+        cancelText="Batal"
+        confirmText="Pakai"
+        onCancel={() => setPendingPromo(null)}
+        onConfirm={() => {
+          setAppliedPromo(pendingPromo);
+          setPendingPromo(null);
+        }}
+      />
+
+      <ActionConfirmModal
+        open={confirmRemovePromo}
+        icon="🧾"
+        title="Hapus promo?"
+        message="Promo akan dihapus dan total pembayaran akan berubah."
+        cancelText="Batal"
+        confirmText="Hapus"
+        confirmStyle={{ background: "#ef4444", color: "#fff" }}
+        onCancel={() => setConfirmRemovePromo(false)}
+        onConfirm={() => {
+          setAppliedPromo(null);
+          setConfirmRemovePromo(false);
+        }}
+      />
 
       {/* ── Modal Nama Wajib ── */}
       {showNameError && (
