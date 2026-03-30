@@ -1,11 +1,12 @@
 import { ChevronLeft, CreditCard, Wallet, Check, Gift, Info, X, Tag, Image } from "lucide-react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import ActionConfirmModal from "../components/ActionConfirmModal";
 
 /* ─────────────────────────────────────────────
    Config
    ──────────────────────────────────────────── */
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
 
@@ -132,7 +133,7 @@ function normalisePromo(raw) {
   if (!discountType && discountLabel) {
     if (String(discountLabel).includes("%")) {
       discountType  = "percent";
-      discountValue = parseFloat(discountLabel); // ← pakai parseFloat bukan parseInt untuk preserve desimal
+      discountValue = parseFloat(discountLabel);
     } else {
       discountType  = "fixed";
       discountValue = parseInt(String(discountLabel).replace(/\D/g, ""));
@@ -157,19 +158,16 @@ const isPromoActive = (p) => {
 };
 
 /* ─────────────────────────────────────────────
-   Kalkulasi diskon — satu fungsi, dipakai di mana-mana
-   Ini memastikan frontend dan payload ke backend selalu identik
+   Kalkulasi diskon
    ──────────────────────────────────────────── */
 function hitungDiskon(subtotal, promo) {
   if (!promo) return 0;
   if (promo.discountType === "percent") {
-    // Gunakan Math.floor agar konsisten — tidak ada rounding naik yang bikin backend reject
     return Math.floor(subtotal * Number(promo.discountValue) / 100);
   }
   if (promo.discountType === "fixed") {
     return Math.min(Number(promo.discountValue), subtotal);
   }
-  // Fallback: parse dari label
   const raw = String(promo.discountLabel ?? "");
   if (raw.includes("%")) return Math.floor(subtotal * parseFloat(raw) / 100);
   return Math.min(parseInt(raw.replace(/\D/g, "")) || 0, subtotal);
@@ -405,7 +403,6 @@ export default function Pembayaran() {
   const orderedItems = items.filter(i => (cart[i.id]?.qty || 0) > 0);
   const totalQty     = orderedItems.reduce((s, i) => s + (cart[i.id]?.qty || 0), 0);
 
-  // ── Hitung subtotal LANGSUNG dari items di sini — single source of truth ──
   const subtotalFromItems = useMemo(
     () => orderedItems.reduce((sum, item) => {
       const cartItem = cart[item.id] || {};
@@ -418,8 +415,6 @@ export default function Pembayaran() {
     [orderedItems.map(i => `${i.id}:${cart[i.id]?.qty}`).join(",")]
   );
 
-  // Gunakan subtotalFromItems sebagai subtotal utama
-  // (state.subtotal tetap disimpan sebagai fallback kalau items kosong)
   const subtotal = subtotalFromItems > 0 ? subtotalFromItems : (state?.subtotal || 0);
 
   const [method, setMethod]             = useState("online");
@@ -478,13 +473,11 @@ export default function Pembayaran() {
       .catch(() => {});
   }, [CAFE_ID]);
 
-  // ── Semua kalkulasi menggunakan hitungDiskon() yang sama ──
   const discount             = hitungDiskon(subtotal, appliedPromo);
   const totalSebelumPajak    = subtotal - discount;
   const pajakNominal         = Math.floor(totalSebelumPajak * (Number(pajakPersen) || 0) / 100);
   const total                = totalSebelumPajak + pajakNominal;
 
-  // Label diskon untuk tampilan (agar tidak double-hitung)
   const discountDisplayLabel = appliedPromo
     ? `Hemat Rp${discount.toLocaleString()}!`
     : "";
@@ -499,7 +492,6 @@ export default function Pembayaran() {
     setPayError("");
 
     try {
-      // ── Hitung ulang semua nilai sesaat sebelum POST — tidak bergantung pada stale state ──
       const freshSubtotal = orderedItems.reduce((s, i) => {
         const cartItem = cart[i.id] || {};
         const qty = cartItem.qty || 0;
@@ -538,8 +530,6 @@ export default function Pembayaran() {
           };
         }),
       };
-
-      console.log("[Pembayaran] Payload →", payload); // debug
 
       const res = await api.post("api/midtrans/create", payload);
       const snapToken = res?.snap_token ?? res?.data?.snap_token;

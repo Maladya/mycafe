@@ -50,7 +50,7 @@ function OrderItemsList({ itemList, itemNotes }) {
               <span className="text-sm text-gray-700">{item.qty}× {item.name}</span>
               {itemNotes?.[item.name] && (
                 <p className="text-[10px] text-orange-500 font-medium mt-0.5">
-                  📝 {itemNotes[item.name]}
+                  {itemNotes[item.name]}
                 </p>
               )}
             </div>
@@ -80,7 +80,7 @@ function OrderItemsList({ itemList, itemNotes }) {
 
 /* ─── Config ─────────────────────────────────────────────────────────────── */
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
 
 const POLL_INTERVAL = 15000; // polling setiap 15 detik
 
@@ -181,7 +181,7 @@ function normalizeOrder(o) {
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
-export default function KelolaOrders() {
+export default function KelolaOrders({ tokenKey = "token", endpointPath = "/api/orders/admin" }) {
 
   const [orders,   setOrders]   = useState([]);
 
@@ -212,9 +212,9 @@ export default function KelolaOrders() {
 
     try {
 
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem(tokenKey) ?? localStorage.getItem("token");
 
-      const res = await fetch(`${API_URL}/api/orders/admin`, {
+      const res = await fetch(`${API_URL}${endpointPath}`, {
 
         headers: { Authorization: `Bearer ${token}` },
 
@@ -261,7 +261,7 @@ export default function KelolaOrders() {
 
     }
 
-  }, []);
+  }, [endpointPath, tokenKey]);
 
 
   /* ── Initial fetch + polling ──────────────────────────────────────────── */

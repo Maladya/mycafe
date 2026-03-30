@@ -5,7 +5,7 @@ import { LogOut, X } from "lucide-react";
 import { Toast } from "./components/SharedComponents";
 import { Sidebar, Header } from "./components/Sidebar";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
 const THEME_CACHE_KEY = "astakira_admin_theme";
 
 // Theme utilities

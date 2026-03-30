@@ -104,6 +104,7 @@ const router = createBrowserRouter([
         element: <KasirProtectedRoute />,
         children: [
           { path: "/kasir", element: <Kasir /> },
+          { path: "/kasir/orders", element: <KelolaOrders tokenKey="kasir_token" endpointPath="/api/orders/admin" /> },
         ],
       },
     ],

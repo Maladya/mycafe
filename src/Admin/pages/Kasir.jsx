@@ -12,7 +12,7 @@ import { Html5Qrcode } from "html5-qrcode";
 
 
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
 const THEME_CACHE_KEY = "astakira_admin_theme";
 
 
@@ -369,12 +369,20 @@ export default function Kasir() {
             <h1 className="text-xl lg:text-2xl font-black text-gray-900">Kasir</h1>
             <p className="text-gray-400 text-sm">Scan QR atau cari pesanan untuk pembayaran</p>
           </div>
-          <button
-            onClick={() => setScanning(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl px-4 py-2.5 font-bold shadow-lg hover:shadow-xl transition-all text-sm"
-          >
-            <ScanLine size={18} /> Scan QR
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/kasir/orders")}
+              className="flex items-center gap-2 bg-white text-gray-800 rounded-xl px-4 py-2.5 font-bold shadow-sm hover:shadow-md transition-all text-sm border border-gray-200"
+            >
+              <Receipt size={18} /> Kelola Pesanan
+            </button>
+            <button
+              onClick={() => setScanning(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl px-4 py-2.5 font-bold shadow-lg hover:shadow-xl transition-all text-sm"
+            >
+              <ScanLine size={18} /> Scan QR
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">

@@ -16,11 +16,27 @@ import {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.16:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
 
 const TOKEN_KEY = "astakira_token";
 
 const DEVICE_KEY = "astakira_device_id";
+
+const CLIENT_FINGERPRINT_KEY = "astakira_client_fingerprint";
+
+const VISITOR_COOKIE_KEY = "visitor_id";
+
+function getCookie(key) {
+  try {
+    const nameEq = `${encodeURIComponent(key)}=`;
+    const parts = (document.cookie || "").split(";");
+    for (const part of parts) {
+      const v = part.trim();
+      if (v.startsWith(nameEq)) return decodeURIComponent(v.slice(nameEq.length));
+    }
+  } catch {}
+  return "";
+}
 
 
 
@@ -837,13 +853,17 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
   const { data: ordersRaw, loading, error, refetch } = useApi(
 
     () => {
-
-      const deviceId = getOrCreateDeviceId();
-
       if (!cafeId) return Promise.resolve([]);
-
-      return api.get(`api/orders?device_id=${deviceId}&cafe_id=${cafeId}`).then(r => r.data ?? r);
-
+      const visitorId = getCookie(VISITOR_COOKIE_KEY);
+      const clientFingerprint = localStorage.getItem(CLIENT_FINGERPRINT_KEY);
+      if (!visitorId || !clientFingerprint) return Promise.resolve([]);
+      const qs = new URLSearchParams();
+      qs.set("cafe_id", String(cafeId));
+      qs.set("meja_id", String(mejaId ?? ""));
+      qs.set("meja", String(mejaId ?? ""));
+      if (visitorId) qs.set("visitor_id", visitorId);
+      if (clientFingerprint) qs.set("fingerprint", clientFingerprint);
+      return api.get(`api/client/riwayat-pembelian?${qs.toString()}`).then(r => r.data ?? r.orders ?? r);
     },
 
     [cafeId]
