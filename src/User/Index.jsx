@@ -10,7 +10,7 @@ import ActionConfirmModal from "../components/ActionConfirmModal";
 
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const KNOWN_GROUPS_KEY = "known_variant_groups";
 const tokenManager = {
@@ -62,7 +62,7 @@ function ha(hex, a) {
 const THEME_CACHE_KEY = "astakira_theme";
 
 function applyThemeVars(theme) {
-  const onP = contrast(theme.primary);
+  const onP = "#ffffff";
   const vars = [
     `--p:${theme.primary}`, `--s:${theme.secondary}`, `--bg:${theme.bg}`, `--tx:${theme.text}`,
     `--on-p:${onP}`, `--p-20:${ha(theme.primary, 0.2)}`,
@@ -1449,12 +1449,6 @@ export default function Home() {
       </div>
 
       <div className="max-w-md mx-auto">
-        {/* HERO */}
-        <div className="relative h-44 overflow-hidden">
-          <img src="https://images.unsplash.com/photo-1765894711260-9d881459ddb4?w=800&auto=format" alt="Hero" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-        </div>
-
         {/* MEJA BANNER */}
         <div className="px-4 pt-4 mb-5">
           <div className="rounded-2xl px-5 py-3.5 flex items-center justify-center shadow-lg" style={{ background:"var(--grad)" }}>
@@ -1502,59 +1496,56 @@ export default function Home() {
                         )}
                       </div>
                       <span className="text-[11px] font-semibold whitespace-nowrap"
-                        style={{ color: isActive ? "var(--p)" : "#6b7280" }}>
+                        style={{ color: "white" }}>
                         {cat.label}
                       </span>
                     </button>
                   );
-                })
-            }
+                })}
           </div>
         </div>
 
         {/* MENU SECTIONS */}
-        <div className="pb-36 mt-2">
-          {hasError && <ErrorState message={menuError || catError} onRetry={() => { refetchMenu(); refetchCat(); }} />}
-          {isLoading && <><SkeletonSection /><SkeletonSection /><SkeletonSection /></>}
-          {!isLoading && !hasError && categorySections.length === 0 && (
-            <div className="text-center py-16 px-8">
-              <div className="text-5xl mb-3">🍽️</div>
-              <p className="text-gray-500 font-semibold">Menu belum tersedia</p>
-            </div>
-          )}
-          {!isLoading && !hasError && categorySections.map(section => {
-            const sectionItems = section.items.map(id => menuDatabase[id]).filter(Boolean);
-            if (!sectionItems.length) return null;
-            return (
-              <div key={section.id} id={`section-${section.id}`}
-                ref={el => { sectionRefs.current[String(section.id)] = el; }}
-                className="mb-8">
-                <div className="px-4 flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0" style={{ background:"var(--grad)" }}>
-                      {section.logo ? (
-                        <img src={section.logo} alt={section.label} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
-                      ) : (
-                        <Image size={16} style={{ color:"var(--on-p)" }} />
-                      )}
-                    </div>
-                    <h2 className="text-base font-bold text-gray-900">{section.label}</h2>
+        {hasError && <ErrorState message={menuError || catError} onRetry={() => { refetchMenu(); refetchCat(); }} />}
+        {isLoading && <><SkeletonSection /><SkeletonSection /><SkeletonSection /></>}
+        {!isLoading && !hasError && categorySections.length === 0 && (
+          <div className="text-center py-16 px-8">
+            <div className="text-5xl mb-3">🍽️</div>
+            <p className="text-gray-500 font-semibold">Menu belum tersedia</p>
+          </div>
+        )}
+        {!isLoading && !hasError && categorySections.map(section => {
+          const sectionItems = section.items.map(id => menuDatabase[id]).filter(Boolean);
+          if (!sectionItems.length) return null;
+          return (
+            <div key={section.id} id={`section-${section.id}`}
+              ref={el => { sectionRefs.current[String(section.id)] = el; }}
+              className="mb-8">
+              <div className="px-4 flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-sm flex-shrink-0" style={{ background:"var(--grad)" }}>
+                    {section.logo ? (
+                      <img src={section.logo} alt={section.label} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = "none"; }} />
+                    ) : (
+                      <Image size={16} style={{ color:"var(--on-p)" }} />
+                    )}
                   </div>
-                  <button onClick={() => setLihatSemuaSection(section)} className="text-xs font-semibold transition-colors" style={{ color:"var(--p)" }}>
-                    Lihat Semua →
-                  </button>
+                  <h2 className="text-base font-bold text-gray-900">{section.label}</h2>
                 </div>
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-4">
-                  {sectionItems.map(item => (
-                    <MenuCard key={item.id} item={item} qty={cart[item.id]?.qty || 0}
-                      onAdd={() => openItemSheet(item)} onRemove={() => removeItem(item.id)}
-                      onClick={() => openItemSheet(item)} />
-                  ))}
-                </div>
+                <button onClick={() => setLihatSemuaSection(section)} className="text-xs font-semibold transition-colors" style={{ color:"var(--p)" }}>
+                  Lihat Semua →
+                </button>
               </div>
-            );
-          })}
-        </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide px-4">
+                {sectionItems.map(item => (
+                  <MenuCard key={item.id} item={item} qty={cart[item.id]?.qty || 0}
+                    onAdd={() => openItemSheet(item)} onRemove={() => removeItem(item.id)}
+                    onClick={() => openItemSheet(item)} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
 
         {/* FLOATING CHECKOUT */}
         {totalQty > 0 && !selectedItem && (

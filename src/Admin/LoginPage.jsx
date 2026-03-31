@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Coffee, AlertCircle, Eye, EyeOff, User, Lock, CheckCircle2 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 /* ── Success Overlay ─────────────────────────────────────────────── */
 function SuccessOverlay({ visible, role }) {

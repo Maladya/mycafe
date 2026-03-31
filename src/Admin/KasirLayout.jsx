@@ -18,8 +18,8 @@ export default function KasirLayout() {
 
   // Load kasir user data
   useEffect(() => {
-    const token = localStorage.getItem("kasir_token");
-    const userStr = localStorage.getItem("kasir_user");
+    const token = localStorage.getItem("kasir_token") || localStorage.getItem("token");
+    const userStr = localStorage.getItem("kasir_user") || localStorage.getItem("user");
     
     if (!token) {
       navigate("/login", { replace: true });
@@ -31,9 +31,7 @@ export default function KasirLayout() {
         setKasirUser(JSON.parse(userStr));
       }
     } catch {
-      localStorage.removeItem("kasir_token");
-      localStorage.removeItem("kasir_user");
-      navigate("/login", { replace: true });
+      setKasirUser(null);
     }
   }, [navigate]);
 
@@ -41,15 +39,22 @@ export default function KasirLayout() {
   useEffect(() => {
     const fetchPending = async () => {
       try {
-        const token = localStorage.getItem("kasir_token");
-        const res = await fetch(`${API_URL}/api/orders?status=baru,pending`, {
+        const token = localStorage.getItem("kasir_token") || localStorage.getItem("token");
+        if (!token) return;
+        const res = await fetch(`${API_URL}/api/orders/admin`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (!res.ok) return;
         const data = await res.json();
         const orders = data.data ?? data.orders ?? data ?? [];
-        setPendingCount(orders.filter(o => o.payment_method === "kasir").length);
+        setPendingCount(orders.filter(o => {
+          const paymentMethod = String(o.payment_method ?? o.paymentMethod ?? "").toLowerCase();
+          const status = String(o.status ?? "").toLowerCase();
+          const isActive = status !== "selesai" && status !== "done" && status !== "completed";
+          return paymentMethod === "kasir" && isActive;
+        }).length);
       } catch {
-        // Silent fail
+        setPendingCount(0);
       }
     };
 
@@ -71,7 +76,7 @@ export default function KasirLayout() {
 
   const getAuthHeader = () => ({
     "Content-Type": "application/json",
-    Authorization: `Bearer ${localStorage.getItem("kasir_token") ?? ""}`,
+    Authorization: `Bearer ${localStorage.getItem("kasir_token") || localStorage.getItem("token") || ""}`,
   });
 
   return (

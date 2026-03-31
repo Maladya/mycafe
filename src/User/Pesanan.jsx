@@ -10,7 +10,7 @@ import ActionConfirmModal from "../components/ActionConfirmModal";
 /* ─────────────────────────────────────────────
    Helpers yang sama persis dengan Home.jsx
    ──────────────────────────────────────────── */
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = {
   get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
@@ -59,7 +59,7 @@ function ha(hex, a) {
 const THEME_CACHE_KEY = "astakira_theme";
 
 function applyThemeVars(theme) {
-  const onP = contrast(theme.primary);
+  const onP = "#ffffff";
   const vars = [
     `--p:${theme.primary}`,
     `--s:${theme.secondary}`,

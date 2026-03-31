@@ -26,6 +26,7 @@ import Pengaturan   from "./Admin/pages/Pengaturan.jsx";
 import Billing      from "./Admin/pages/KelolaBilling.jsx";
 import Kasir        from "./Admin/pages/Kasir.jsx";
 import KelolaKasir  from "./Admin/pages/KelolaKasir.jsx";
+import KasirLayout  from "./Admin/KasirLayout.jsx";
 
 // ── User ──────────────────────────────────────────────────────────────────────
 import Home                 from "./User/Index.jsx";
@@ -104,7 +105,24 @@ const router = createBrowserRouter([
         element: <KasirProtectedRoute />,
         children: [
           { path: "/kasir", element: <Kasir /> },
-          { path: "/kasir/orders", element: <KelolaOrders tokenKey="kasir_token" endpointPath="/api/orders/admin" /> },
+          {
+            element: <KasirLayout />,
+            children: [
+              {
+                path: "/kasir/orders",
+                element: (
+                  <KelolaOrders
+                    tokenKey="kasir_token"
+                    endpointPath="/api/orders/admin"
+                    statusMode="active"
+                    allowMarkSelesai
+                    pageTitle="Kelola Pesanan Kasir"
+                    pageSubtitle="Pantau pesanan aktif dan selesaikan langsung dari terminal kasir"
+                  />
+                ),
+              },
+            ],
+          },
         ],
       },
     ],

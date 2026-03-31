@@ -1,22 +1,97 @@
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import {
   UtensilsCrossed,
   RefreshCw,
-  Loader2,
   Table2,
   Tag,
 } from "lucide-react";
 import { useAdmin } from "../AdminPanel";
-import { getCatColor, isPromoActive } from "../data/constants";
+import { isPromoActive } from "../data/constants";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
+
+function DashboardReportLoader({ cafeRaw, label = "Memuat laporan..." }) {
+  const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || cafeRaw?.nama || "Cafe";
+  const cafeLogo = cafeRaw?.logo_cafe || cafeRaw?.logo || cafeRaw?.foto || "";
+  const cafeInitial = (cafeName.charAt(0) || "C").toUpperCase();
+
+  return (
+    <div className="relative overflow-hidden rounded-[28px] border border-amber-100 bg-white px-6 py-10 shadow-[0_24px_80px_rgba(245,158,11,0.12)]">
+      <motion.div
+        className="absolute inset-0 opacity-60"
+        style={{
+          background: "radial-gradient(circle at top, rgba(251,191,36,0.22), transparent 45%), radial-gradient(circle at bottom right, rgba(249,115,22,0.18), transparent 30%)",
+        }}
+        animate={{ opacity: [0.45, 0.75, 0.45], scale: [1, 1.04, 1] }}
+        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className="relative flex flex-col items-center justify-center text-center">
+        <motion.div
+          className="relative flex items-center justify-center"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+        >
+          <motion.div
+            className="absolute h-28 w-28 rounded-full border border-amber-200/80"
+            animate={{ scale: [1, 1.12, 1], opacity: [0.45, 0.15, 0.45] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="absolute h-36 w-36 rounded-full border border-orange-200/70"
+            animate={{ scale: [0.94, 1.08, 0.94], opacity: [0.22, 0.08, 0.22] }}
+            transition={{ duration: 3.1, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] border-4 border-white bg-gradient-to-br from-amber-500 to-orange-500 shadow-2xl"
+            animate={{ y: [0, -5, 0], boxShadow: ["0 18px 40px rgba(245,158,11,0.28)", "0 24px 52px rgba(249,115,22,0.32)", "0 18px 40px rgba(245,158,11,0.28)"] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          >
+            {cafeLogo ? (
+              <img src={cafeLogo} alt={cafeName} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-3xl font-black text-white">{cafeInitial}</span>
+            )}
+          </motion.div>
+        </motion.div>
+
+        <motion.p
+          className="mt-7 text-lg font-black text-gray-900"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+        >
+          Loading...
+        </motion.p>
+        <motion.p
+          className="mt-1 text-sm font-semibold text-amber-600"
+          animate={{ opacity: [0.55, 1, 0.55] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+        >
+          {label}
+        </motion.p>
+
+        <div className="mt-6 flex items-center gap-2">
+          {[0, 1, 2].map((dot) => (
+            <motion.span
+              key={dot}
+              className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+              animate={{ y: [0, -8, 0], opacity: [0.35, 1, 0.35], scale: [0.92, 1.12, 0.92] }}
+              transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut", delay: dot * 0.14 }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   // ── Ambil data dari AdminContext (sudah di-fetch di AdminPanel) ─────────
-  const { orders, menuItems, promoCodes, tables, loading, fetchAll } = useAdmin();
+  const { orders, menuItems, promoCodes, tables, loading, fetchAll, cafeRaw } = useAdmin();
   
   // Laporan state
   const [period, setPeriod] = useState("hari");
@@ -54,8 +129,8 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      <div className="p-4 lg:p-6">
+        <DashboardReportLoader cafeRaw={cafeRaw} label="Menyiapkan dashboard cafe..." />
       </div>
     );
   }
@@ -150,10 +225,7 @@ export default function Dashboard() {
       {/* Laporan (di bawah) */}
 
       {laporanLoading && !laporanError && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 size={40} className="animate-spin text-amber-500 mb-3" />
-          <p className="text-sm text-gray-400">Memuat laporan...</p>
-        </div>
+        <DashboardReportLoader cafeRaw={cafeRaw} label={`Memuat laporan ${period}...`} />
       )}
 
       {/* Laporan Error */}

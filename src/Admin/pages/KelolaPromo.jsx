@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import { ConfirmDialog } from "../components/SharedComponents";
 
 // FIX: IP diperbaiki dari .13 ke .3
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -194,7 +194,7 @@ export default function KelolaPromo() {
     if (form.startDate <= todayStr && todayStr <= form.endDate)
       return { cls:"bg-green-50 border-green-200", iconCls:"text-green-600", msg:"✓ Promo akan langsung aktif saat disimpan" };
     if (todayStr < form.startDate)
-      return { cls:"bg-blue-50 border-blue-200", iconCls:"text-blue-500", msg:`⏳ Akan aktif mulai ${form.startDate}` };
+      return { cls:"bg-amber-50 border-amber-200", iconCls:"text-amber-500", msg:`⏳ Akan aktif mulai ${form.startDate}` };
     return { cls:"bg-gray-50 border-gray-200", iconCls:"text-gray-400", msg:"✕ Tanggal berakhir sudah lewat" };
   };
   const preview = formPreview();
@@ -211,18 +211,18 @@ export default function KelolaPromo() {
         </div>
         <button
           onClick={openAdd}
-          className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl px-4 py-2.5 font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm"
+          className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl px-4 py-2.5 font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm"
         >
           <Plus size={16}/> Tambah Promo
         </button>
       </div>
 
       {/* Info banner */}
-      <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-start gap-3">
-        <CalendarCheck size={18} className="text-purple-500 flex-shrink-0 mt-0.5"/>
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+        <CalendarCheck size={18} className="text-amber-500 flex-shrink-0 mt-0.5"/>
         <div>
-          <p className="font-semibold text-purple-900 text-sm">Promo otomatis aktif/nonaktif sesuai tanggal</p>
-          <p className="text-purple-600 text-xs mt-0.5">Hari ini: <span className="font-bold">{todayStr}</span></p>
+          <p className="font-semibold text-amber-900 text-sm">Promo otomatis aktif/nonaktif sesuai tanggal</p>
+          <p className="text-amber-700 text-xs mt-0.5">Hari ini: <span className="font-bold">{todayStr}</span></p>
         </div>
       </div>
 
@@ -241,10 +241,10 @@ export default function KelolaPromo() {
             const status = getPromoStatus(promo);
             const active = isPromoActive(promo);
             return (
-              <div key={promo.id} className={`bg-white rounded-2xl border-2 shadow-sm p-4 transition-all ${active ? "border-purple-200" : "border-gray-100 opacity-70"}`}>
+              <div key={promo.id} className={`bg-white rounded-2xl border-2 shadow-sm p-4 transition-all ${active ? "border-amber-200" : "border-gray-100 opacity-70"}`}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${active ? "bg-gradient-to-br from-purple-500 to-pink-500" : "bg-gray-200"}`}>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${active ? "bg-gradient-to-br from-amber-500 to-orange-500" : "bg-gray-200"}`}>
                       <Tag size={16} className={active ? "text-white" : "text-gray-400"}/>
                     </div>
                     <div>
@@ -254,7 +254,7 @@ export default function KelolaPromo() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-black text-purple-600 text-xl leading-none">{promo.discount}</p>
+                    <p className="font-black text-amber-600 text-xl leading-none">{promo.discount}</p>
                     <p className="text-[10px] text-gray-400">diskon</p>
                   </div>
                 </div>
@@ -273,7 +273,7 @@ export default function KelolaPromo() {
                   <span>{promo.used}× digunakan</span>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => openEdit(raw)} className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 rounded-xl text-xs font-bold transition-all">
+                  <button onClick={() => openEdit(raw)} className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold transition-all">
                     <Edit3 size={12}/> Edit
                   </button>
                   <button onClick={() => setConfirmDel(promo.id)} className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-500 rounded-xl text-xs font-bold transition-all">
@@ -318,7 +318,7 @@ export default function KelolaPromo() {
       {showForm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center justify-between">
               <h2 className="font-bold text-white text-lg">{editPromo ? "Edit Kode Promo" : "Tambah Kode Promo"}</h2>
               <button onClick={() => setShowForm(false)} className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center text-white"><X size={16}/></button>
             </div>
@@ -331,7 +331,7 @@ export default function KelolaPromo() {
                   value={form.nama_promo}
                   onChange={e => setF("nama_promo", e.target.value)}
                   placeholder="Diskon Akhir Tahun"
-                  className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-500 transition-all"
+                  className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"
                 />
               </div>
               <div>
@@ -343,7 +343,7 @@ export default function KelolaPromo() {
                   onChange={e => setF("code", e.target.value.toUpperCase())}
                   placeholder="ASTAKIRA10"
                   className={`w-full border-2 rounded-xl px-3 py-2.5 text-sm font-mono font-bold outline-none transition-all ${
-                    !form.code.trim() ? "border-red-300 focus:border-red-500 bg-red-50" : "border-gray-200 focus:border-purple-500"
+                    !form.code.trim() ? "border-red-300 focus:border-red-500 bg-red-50" : "border-gray-200 focus:border-amber-500"
                   }`}
                 />
                 {!form.code.trim() && (
@@ -353,32 +353,32 @@ export default function KelolaPromo() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Tipe Diskon</label>
-                  <select value={form.discountType} onChange={e => setF("discountType", e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-500 transition-all bg-white">
+                  <select value={form.discountType} onChange={e => setF("discountType", e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all bg-white">
                     <option value="persen">Persen (%)</option>
                     <option value="nominal">Nominal (Rp)</option>
                   </select>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Nilai *</label>
-                  <input type="number" value={form.discountValue} onChange={e => setF("discountValue", e.target.value)} placeholder={form.discountType === "persen" ? "10" : "5000"} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-500 transition-all"/>
+                  <input type="number" value={form.discountValue} onChange={e => setF("discountValue", e.target.value)} placeholder={form.discountType === "persen" ? "10" : "5000"} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"/>
                 </div>
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Minimum Order (Rp)</label>
-                <input type="number" value={form.minOrder} onChange={e => setF("minOrder", e.target.value)} placeholder="20000" className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-500 transition-all"/>
+                <input type="number" value={form.minOrder} onChange={e => setF("minOrder", e.target.value)} placeholder="20000" className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"/>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
                     <span className="flex items-center gap-1"><CalendarCheck size={11} className="text-green-500"/> Mulai *</span>
                   </label>
-                  <input type="date" value={form.startDate} onChange={e => setF("startDate", e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-500 transition-all"/>
+                  <input type="date" value={form.startDate} onChange={e => setF("startDate", e.target.value)} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"/>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
                     <span className="flex items-center gap-1"><CalendarX size={11} className="text-red-400"/> Berakhir *</span>
                   </label>
-                  <input type="date" value={form.endDate} onChange={e => setF("endDate", e.target.value)} min={form.startDate} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-500 transition-all"/>
+                  <input type="date" value={form.endDate} onChange={e => setF("endDate", e.target.value)} min={form.startDate} className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"/>
                 </div>
               </div>
               {preview && (
@@ -390,7 +390,7 @@ export default function KelolaPromo() {
             </div>
             <div className="px-6 pb-6 pt-3 flex gap-3 border-t border-gray-100">
               <button onClick={() => setShowForm(false)} className="flex-1 border-2 border-gray-200 text-gray-700 rounded-xl py-3 font-semibold hover:bg-gray-50 transition-all">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl py-3 font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+              <button onClick={handleSave} disabled={saving} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl py-3 font-bold shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-60">
                 {saving ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
                 {saving ? "Menyimpan..." : "Simpan"}
               </button>

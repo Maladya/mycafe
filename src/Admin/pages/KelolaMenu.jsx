@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Search, Image, Edit3, Trash2, ChevronLeft, ChevronRight, X, Camera, Loader2 } from "lucide-react";
-import { defaultCategories, getCatColor } from "../data/constants";
+import { getCatColor } from "../data/constants";
 import { useAdmin } from "../AdminPanel";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
+
 const PER_PAGE = 4;
 
 // ── Ambil logo dari objek kategori — cek semua kemungkinan field name ─────────
@@ -235,12 +236,13 @@ function EditKategoriModal({ kategori, onSave, onClose, saving }) {
 export default function KelolaMenu() {
   const { menuItems, setMenuItems, showToast } = useAdmin();
 
-  const [categories,   setCategories]   = useState(defaultCategories);
+  const [categories,   setCategories]   = useState([]);
   const [search,       setSearch]       = useState("");
   const [catFilter,    setCatFilter]    = useState("all");
   const [showForm,     setShowForm]     = useState(false);
   const [editItem,     setEditItem]     = useState(null);
   const [confirmDel,   setConfirmDel]   = useState(null);
+
   const [page,         setPage]         = useState(1);
   const [saving,       setSaving]       = useState(false);
   const [deleting,     setDeleting]     = useState(false);
@@ -261,7 +263,7 @@ export default function KelolaMenu() {
       });
       const data = await res.json();
       const list = data.data ?? data.kategori ?? data.categories ?? [];
-      if (Array.isArray(list) && list.length > 0) setCategories(list);
+      setCategories(Array.isArray(list) ? list : []);
     } catch (err) { console.error("Fetch kategori error:", err); }
   };
 
@@ -468,10 +470,10 @@ export default function KelolaMenu() {
         <div className="flex gap-2">
           <button
             onClick={() => setManageKatMode(v => !v)}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 font-bold text-sm border-2 transition-all
+            className={`flex items-center rounded-xl px-4 py-2.5 font-bold text-sm border-2 transition-all
               ${manageKatMode ? "border-amber-500 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-600 hover:border-amber-300"}`}
           >
-            <Image size={15}/> Kategori
+            Kategori
           </button>
           <button
             onClick={() => { setEditItem(null); setShowForm(true); }}
@@ -537,9 +539,6 @@ export default function KelolaMenu() {
                 </div>
               );
             })}
-            {categories.length === 0 && (
-              <p className="text-sm text-gray-400 py-4 w-full text-center">Belum ada kategori. Tambah kategori dulu!</p>
-            )}
           </div>
         </div>
       )}
@@ -555,30 +554,30 @@ export default function KelolaMenu() {
             className="w-full pl-9 pr-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm outline-none focus:border-amber-500 transition-all"
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          <button
-            onClick={() => { setCatFilter("all"); setPage(1); }}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all
-              ${catFilter === "all" ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            <Image size={14}/> Semua
-          </button>
-          {categories.map(c => {
-            const val  = String(c?.id ?? c?.nama_kategori ?? c);
-            const logo = getCatLogo(c);
-            return (
-              <button
-                key={val}
-                onClick={() => { setCatFilter(val); setPage(1); }}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all
-                  ${catFilter === val ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-              >
-                <CatLogo logo={logo} size={18}/>
-                {c?.nama_kategori ?? c?.name ?? c}
-              </button>
-            );
-          })}
-        </div>
+        {categories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <button
+              onClick={() => { setCatFilter("all"); setPage(1); }}
+              className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-semibold transition-all
+                ${catFilter === "all" ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              Semua
+            </button>
+            {categories.map(c => {
+              const val  = String(c?.id ?? c?.nama_kategori ?? c);
+              return (
+                <button
+                  key={val}
+                  onClick={() => { setCatFilter(val); setPage(1); }}
+                  className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-semibold transition-all
+                    ${catFilter === val ? "bg-amber-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                >
+                  {c?.nama_kategori ?? c?.name ?? c}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Table ── */}

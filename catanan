@@ -49,7 +49,7 @@ const buatPesanan = async () => {
 };
 2. KelolaOrders.jsx — GET semua pesanan + PATCH status
 js
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.11:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 // Fetch pesanan dari backend
 const fetchOrders = async () => {
@@ -120,7 +120,7 @@ jsx
 const [orders, setOrders] = useState(dummyOrders);
 jsx
 // SESUDAH
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.9:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 const [orders, setOrders] = useState([]);
 const [loading, setLoading] = useState(true);
 
@@ -316,7 +316,7 @@ Ada beberapa cara cek koneksi frontend → backend, dari yang paling mudah:
 Buka halaman Home, tekan F12 → tab Console, ketik:
 
 js
-fetch("http://192.168.1.9:3000/api/pengaturan/user/1")
+fetch("http://192.168.1.5:3000/api/pengaturan/user/1")
   .then(r => r.json())
   .then(d => console.log("✅ Berhasil:", d))
   .catch(e => console.error("❌ Gagal:", e))
@@ -347,7 +347,7 @@ Ganti `1` dengan cafe_id yang ada di database. Kalau muncul data → terhubung.
 
 Di **Console** kalau ada error seperti ini:
 ```
-Access to fetch at 'http://192.168.1.9:3000/api/...' from origin 
+Access to fetch at 'http://192.168.1.5:3000/api/...' from origin 
 'http://localhost:5173' has been blocked by CORS policy
 Berarti backend belum set CORS. Tambahkan di app.js backend:
 
@@ -427,7 +427,7 @@ Lalu lihat terminal backend — error SQL akan muncul di sana.
 
 Buka langsung di browser:
 ```
-http://192.168.1.9:3000/api/orders?meja=17&cafe_id=27
+http://192.168.1.5:3000/api/orders?meja=17&cafe_id=27
 Lihat response JSON-nya, biasanya ada pesan error yang lebih jelas.
 
 Setelah cek, kirim pesan error dari terminal backend — nanti saya bantu fix query-nya.
@@ -459,7 +459,7 @@ js
 
 Simpan, restart backend, lalu buka lagi:
 ```
-http://192.168.1.9:3000/api/orders?meja=17&cafe_id=27
+http://192.168.1.5:3000/api/orders?meja=17&cafe_id=27
 Response akan ada field error yang berisi pesan asli. Kirim pesan error itu ke sini, atau lihat di terminal backend.
 
 Kemungkinan besar penyebabnya
@@ -607,7 +607,7 @@ Setelah ganti file, restart backend. Semua endpoint order seharusnya langsung be
 
 Db
 JS 
-http://192.168.1.10:5173/user?table=17&cafe_id=27kenapa tmapilan nya ginini
+http://192.168.1.5:5173/user?table=17&cafe_id=27kenapa tmapilan nya ginini
 
 10:05 AM
 Saya tidak melihat gambar yang kamu maksud — sepertinya gambar tidak ter-upload. Coba kirim ulang screenshot-nya.
@@ -646,7 +646,7 @@ Kemungkinan controller **menu, kategori, atau pengaturan** masih pakai callback 
 
 Buka di browser:
 ```
-http://192.168.1.9:3000/api/pengaturan/user/27
+http://192.168.1.5:3000/api/pengaturan/user/27
 Kalau loading terus / tidak ada response → db.js belum tersimpan atau ada syntax error di controller lain yang crash backend.
 
 Kalau muncul JSON → koneksi OK, masalah ada di frontend.

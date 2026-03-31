@@ -12,7 +12,7 @@ import { Html5Qrcode } from "html5-qrcode";
 
 
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 const THEME_CACHE_KEY = "astakira_admin_theme";
 
 

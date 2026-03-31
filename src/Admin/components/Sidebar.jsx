@@ -3,15 +3,16 @@ import {
   Settings, LogOut, Tag, Coffee, X, Menu, Bell,
   CreditCard, Wallet, Users
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { isPromoActive } from "../data/constants";
 
 export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen, menuItems, orders, promoCodes, onLogout, cafeRaw }) {
   const navItems = [
     { id:"dashboard",  label:"Dashboard",   icon:<LayoutDashboard size={18}/> },
-    { id:"menu",       label:"Kelola Menu", icon:<UtensilsCrossed size={18}/> },
+    { id:"menu",       label:" Menu", icon:<UtensilsCrossed size={18}/> },
     { id:"orders",     label:"Pesanan",     icon:<ClipboardList size={18}/>,   badge:(orders ?? []).filter(o=>o.status==="baru").length||null },
-    { id:"kasir-users", label:"Kelola Kasir", icon:<Users size={18}/> },
+    { id:"kasir-users", label:"Kasir", icon:<Users size={18}/> },
     { id:"tables",     label:"Meja",        icon:<Table2 size={18}/> },
     { id:"promo",      label:"Promo",       icon:<Tag size={18}/>,             badge:(promoCodes ?? []).filter(p=>isPromoActive(p)).length||null },
     { id:"payment",    label:"Pembayaran",  icon:<Wallet size={18}/> },
@@ -92,12 +93,29 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
       </aside>
 
       {/* Mobile: overlay drawer */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-      <aside className={`lg:hidden fixed top-0 left-0 h-full w-64 z-40 bg-gray-900 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        {sidebarContent}
-      </aside>
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            />
+            <motion.aside
+              className="lg:hidden fixed top-0 left-0 h-full w-64 z-40 bg-gray-900"
+              initial={{ x: "-100%", opacity: 0.96 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "-100%", opacity: 0.96 }}
+              transition={{ type: "spring", stiffness: 320, damping: 30, mass: 0.9 }}
+            >
+              {sidebarContent}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

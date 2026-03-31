@@ -17,6 +17,7 @@
     "chartjs": "^0.3.24",
     "daisyui": "^5.5.14",
     "dropzone": "^6.0.0-beta.2",
+    "framer-motion": "^12.38.0",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.563.0",
     "react": "^19.1.0",

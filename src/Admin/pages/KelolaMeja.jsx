@@ -10,7 +10,7 @@ import { ConfirmDialog } from "../components/SharedComponents";
 
 
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.13:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 
 
@@ -336,135 +336,135 @@ export default function KelolaMeja() {
 
   return (
 
-    <div className="p-4 lg:p-6 space-y-4">
+        <div className="p-4 lg:p-6 space-y-4">
 
-      {/* Header */}
+          {/* Header */}
 
-      <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between">
 
-        <div>
+            <div>
 
-          <h1 className="text-lg font-medium text-gray-900">Meja</h1>
+              <h1 className="text-xl lg:text-2xl font-black text-gray-900">Kelola Meja</h1>
 
-          <p className="text-gray-500 text-xs">
+              <p className="text-gray-400 text-sm">
 
-            {tables.length} meja{selectedIds.size > 0 && <span className="text-gray-700"> • {selectedIds.size} terpilih</span>}
+                {tables.length} meja{selectedIds.size > 0 && <span className="text-gray-700 font-semibold"> • {selectedIds.size} terpilih</span>}
 
-          </p>
+              </p>
 
-        </div>
+            </div>
 
-        <div className="flex gap-1.5">
+            <div className="flex gap-1.5">
 
-          {selectedIds.size > 0 && (
+              {selectedIds.size > 0 && (
 
-            <>
+                <>
+
+                  <button
+
+                    onClick={() => setConfirmDel('bulk')}
+
+                    disabled={deleting}
+
+                    className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl px-3 py-2 text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+
+                  >
+
+                    {deleting ? <Loader2 size={12} className="animate-spin"/> : <Trash2 size={12}/>}
+
+                    Hapus {selectedIds.size}
+
+                  </button>
+
+                  <button
+
+                    onClick={clearSelection}
+
+                    className="w-9 h-9 text-gray-500 hover:bg-gray-100 rounded-xl text-xs transition-all"
+
+                    title="Batal"
+
+                  >
+
+                    <X size={14}/>
+
+                  </button>
+
+                </>
+
+              )}
 
               <button
 
-                onClick={() => setConfirmDel('bulk')}
+                onClick={() => setBulkDeleteMode(!bulkDeleteMode)}
 
-                disabled={deleting}
+                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
 
-                className="flex items-center gap-1.5 bg-red-600 text-white rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                  bulkDeleteMode ? 'bg-amber-500 border-amber-500 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:text-amber-700'
+
+                }`}
 
               >
 
-                {deleting ? <Loader2 size={12} className="animate-spin"/> : <Trash2 size={12}/>}
-
-                Hapus {selectedIds.size}
+                {bulkDeleteMode ? 'Selesai' : 'Pilih'}
 
               </button>
 
               <button
 
-                onClick={clearSelection}
+                onClick={fetchTables}
 
-                className="px-2 py-1.5 text-gray-500 hover:bg-gray-100 rounded text-xs"
+                disabled={fetching}
 
-                title="Batal"
+                className="w-9 h-9 text-gray-500 hover:bg-amber-50 hover:text-amber-600 border border-gray-200 rounded-xl text-xs transition-all disabled:opacity-50"
+
+                title="Refresh"
 
               >
 
-                <X size={14}/>
+                <RefreshCw size={12} className={fetching ? "animate-spin" : ""}/>
 
               </button>
 
-            </>
+              <button
 
-          )}
+                onClick={handleAdd}
 
-          <button
+                disabled={adding || fetching}
 
-            onClick={() => setBulkDeleteMode(!bulkDeleteMode)}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl px-4 py-2 text-xs font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
 
-            className={`px-3 py-1.5 rounded text-xs font-medium ${
+              >
 
-              bulkDeleteMode ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                {adding ? <Loader2 size={12} className="animate-spin"/> : <Plus size={12}/>}
 
-            }`}
+                Tambah
 
-          >
+              </button>
 
-            {bulkDeleteMode ? 'Selesai' : 'Pilih'}
+            </div>
 
-          </button>
-
-          <button
-
-            onClick={fetchTables}
-
-            disabled={fetching}
-
-            className="px-2 py-1.5 text-gray-500 hover:bg-gray-100 rounded text-xs disabled:opacity-50"
-
-            title="Refresh"
-
-          >
-
-            <RefreshCw size={12} className={fetching ? "animate-spin" : ""}/>
-
-          </button>
-
-          <button
-
-            onClick={handleAdd}
-
-            disabled={adding || fetching}
-
-            className="flex items-center gap-1 bg-gray-900 text-white rounded px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-
-          >
-
-            {adding ? <Loader2 size={12} className="animate-spin"/> : <Plus size={12}/>}
-
-            Tambah
-
-          </button>
-
-        </div>
-
-      </div>
+          </div>
 
 
 
-      <input
+          <input
 
-        value={search}
+            value={search}
 
-        onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
 
-        placeholder="Cari meja..."
+            placeholder="Cari meja..."
 
-        className="w-full px-3 py-2 text-sm border border-gray-200 rounded focus:outline-none focus:border-gray-400"
+            className="w-full px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl outline-none focus:border-amber-500 transition-all"
 
-      />
+          />
 
 
 
-      {/* Skeleton */}
+          {/* Skeleton */}
 
-      {fetching && tables.length === 0 && (
+          {fetching && tables.length === 0 && (
 
         <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
 
@@ -648,7 +648,7 @@ export default function KelolaMeja() {
 
             disabled={safePage <= 1}
 
-            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold hover:border-amber-300 hover:text-amber-700 transition-all disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:text-gray-700"
 
           >
 
@@ -668,7 +668,7 @@ export default function KelolaMeja() {
 
             disabled={safePage >= totalPages}
 
-            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold disabled:opacity-50"
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-bold hover:border-amber-300 hover:text-amber-700 transition-all disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:text-gray-700"
 
           >
 
