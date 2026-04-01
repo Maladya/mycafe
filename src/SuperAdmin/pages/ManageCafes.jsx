@@ -117,7 +117,41 @@ export default function ManageCafes() {
     }
   };
 
+  const fmtDate = (raw) => {
+    if (!raw) return "-";
+    try {
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return String(raw);
+      return d.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+    } catch { return String(raw); }
+  };
+
+  const subStatus = (row) => {
+    const st = String(
+      row.subscription_status ?? row.sub_status ?? row.langganan_status ?? ""
+    ).toLowerCase();
+    if (st === "active") return { label: "Aktif", cls: "bg-green-100 text-green-700" };
+    if (st === "expired") return { label: "Kadaluarsa", cls: "bg-red-100 text-red-700" };
+    if (st === "pending") return { label: "Pending", cls: "bg-yellow-100 text-yellow-700" };
+    return { label: st || "Tidak ada", cls: "bg-gray-100 text-gray-600" };
+  };
+
+  const subPlan = (row) =>
+    row.subscription_plan_name ?? row.plan_name ?? row.subscription_plan ?? row.paket ?? "Free";
+
+  const subExpiry = (row) =>
+    row.subscription_expires ?? row.active_until ?? row.expired_at ?? row.expiredAt ?? null;
+
   const columns = [
+    {
+      header: "ID",
+      accessor: "id",
+      render: (val) => (
+        <span className="inline-block px-2 py-1 bg-gray-100 text-gray-700 rounded-lg text-xs font-black font-mono">
+          #{val ?? "-"}
+        </span>
+      ),
+    },
     {
       header: "Nama Cafe",
       accessor: "nama_cafe",
@@ -164,14 +198,18 @@ export default function ManageCafes() {
     {
       header: "Langganan",
       accessor: "subscription_status",
-      render: (val, row) => (
-        <div>
-          <p className="text-sm font-semibold text-gray-900">{row.subscription_plan || "Free"}</p>
-          <p className="text-xs text-gray-500">
-            {row.subscription_expires ? `Hingga ${new Date(row.subscription_expires).toLocaleDateString("id-ID")}` : "Tidak ada"}
-          </p>
-        </div>
-      ),
+      render: (val, row) => {
+        const { label, cls } = subStatus(row);
+        return (
+          <div>
+            <p className="text-sm font-semibold text-gray-900">{subPlan(row)}</p>
+            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${cls}`}>{label}</span>
+            {subExpiry(row) && (
+              <p className="text-xs text-gray-500 mt-0.5">s/d {fmtDate(subExpiry(row))}</p>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: "Aksi",
@@ -264,31 +302,58 @@ export default function ManageCafes() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs text-gray-500 font-semibold mb-1">Email Admin</p>
-                  <p className="text-sm text-gray-900">{selectedCafe.admin_email || "-"}</p>
+                  <p className="text-xs text-gray-500 font-semibold mb-1">Cafe ID</p>
+                  <p className="text-sm font-black font-mono text-gray-900">#{selectedCafe.id ?? "-"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 font-semibold mb-1">Status</p>
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
-                      selectedCafe.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}
-                  >
+                  <p className="text-xs text-gray-500 font-semibold mb-1">Status Cafe</p>
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold ${
+                    selectedCafe.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                  }`}>
+                    {selectedCafe.status === "active" ? <CheckCircle size={12} /> : <XCircle size={12} />}
                     {selectedCafe.status === "active" ? "Aktif" : "Nonaktif"}
                   </span>
                 </div>
                 <div>
+                  <p className="text-xs text-gray-500 font-semibold mb-1">Email Admin</p>
+                  <p className="text-sm text-gray-900">{selectedCafe.admin_email || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-semibold mb-1">Username Admin</p>
+                  <p className="text-sm text-gray-900">{selectedCafe.admin_name || selectedCafe.admin_username || "-"}</p>
+                </div>
+                <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Paket Langganan</p>
-                  <p className="text-sm text-gray-900">{selectedCafe.subscription_plan || "Free"}</p>
+                  <p className="text-sm font-bold text-gray-900">{subPlan(selectedCafe)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-semibold mb-1">Status Langganan</p>
+                  <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${subStatus(selectedCafe).cls}`}>
+                    {subStatus(selectedCafe).label}
+                  </span>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Berakhir</p>
+                  <p className="text-sm text-gray-900">{fmtDate(subExpiry(selectedCafe))}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-semibold mb-1">Tanggal Terdaftar</p>
                   <p className="text-sm text-gray-900">
-                    {selectedCafe.subscription_expires
-                      ? new Date(selectedCafe.subscription_expires).toLocaleDateString("id-ID")
-                      : "-"}
+                    {fmtDate(selectedCafe.created_at ?? selectedCafe.createdAt ?? selectedCafe.registered_at ?? null)}
                   </p>
                 </div>
+                {selectedCafe.no_telp && (
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold mb-1">No. Telp</p>
+                    <p className="text-sm text-gray-900">{selectedCafe.no_telp}</p>
+                  </div>
+                )}
+                {selectedCafe.alamat && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-500 font-semibold mb-1">Alamat</p>
+                    <p className="text-sm text-gray-900">{selectedCafe.alamat}</p>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-4">

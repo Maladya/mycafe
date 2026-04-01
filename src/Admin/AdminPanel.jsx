@@ -4,6 +4,7 @@ import { LogOut, X } from "lucide-react";
 
 import { Toast } from "./components/SharedComponents";
 import { Sidebar, Header } from "./components/Sidebar";
+import MaintenanceBanner from "../components/MaintenanceBanner";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 const THEME_CACHE_KEY = "astakira_admin_theme";
@@ -180,11 +181,55 @@ export default function AdminPanel() {
   const [loading,       setLoading]       = useState(true);
   const [cafeRaw,       setCafeRaw]       = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
+  const [subscriptionActive, setSubscriptionActive] = useState(true);
 
   const getAuthHeader = () => ({
     "Content-Type": "application/json",
     Authorization: `Bearer ${localStorage.getItem("token") ?? ""}`,
   });
+
+  const isSubActive = (me) => {
+    const st = String(me?.status ?? "").toLowerCase();
+    return st === "active" || Boolean(me?.is_active ?? me?.isActive);
+  };
+
+  const checkSubscription = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/subscriptions/me`, { headers: getAuthHeader() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Kalau endpoint belum tersedia/ada masalah, jangan memblokir UI total
+        setSubscriptionActive(true);
+        setSubscriptionChecked(true);
+        return;
+      }
+      const me = data?.data ?? data;
+      const ok = isSubActive(me);
+      setSubscriptionActive(ok);
+      setSubscriptionChecked(true);
+    } catch {
+      setSubscriptionActive(true);
+      setSubscriptionChecked(true);
+    }
+  };
+
+  useEffect(() => {
+    checkSubscription();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // Gating: jika langganan belum aktif, paksa ke halaman billing
+    if (!subscriptionChecked) return;
+    if (subscriptionActive) return;
+
+    const path = location.pathname || "";
+    if (!path.startsWith("/admin")) return;
+    if (path === "/admin/billing") return;
+
+    navigate("/admin/billing", { replace: true });
+  }, [subscriptionChecked, subscriptionActive, location.pathname, navigate]);
 
   const fetchCafeSettings = async () => {
     try {
@@ -297,6 +342,7 @@ export default function AdminPanel() {
         </div>
 
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+        <MaintenanceBanner />
       </div>
 
       {/* Logout Confirmation Modal */}

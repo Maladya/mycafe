@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import {
   UtensilsCrossed,
   RefreshCw,
@@ -90,6 +91,7 @@ function DashboardReportLoader({ cafeRaw, label = "Memuat laporan..." }) {
 // DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const navigate = useNavigate();
   // ── Ambil data dari AdminContext (sudah di-fetch di AdminPanel) ─────────
   const { orders, menuItems, promoCodes, tables, loading, fetchAll, cafeRaw } = useAdmin();
   
@@ -98,11 +100,13 @@ export default function Dashboard() {
   const [laporanData, setLaporanData] = useState(null);
   const [laporanLoading, setLaporanLoading] = useState(true);
   const [laporanError, setLaporanError] = useState(null);
+  const [laporanForbidden, setLaporanForbidden] = useState(false);
 
   // ── Fetch laporan dari backend ──
   const fetchLaporan = async (selectedPeriod) => {
     setLaporanLoading(true);
     setLaporanError(null);
+    setLaporanForbidden(false);
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(`${API_URL}/api/laporan?filter=${selectedPeriod}`, {
@@ -111,6 +115,13 @@ export default function Dashboard() {
           Authorization: token ? `Bearer ${token}` : ""
         },
       });
+
+      if (res.status === 403) {
+        setLaporanForbidden(true);
+        setLaporanData(null);
+        return;
+      }
+
       const data = await res.json();
       if (!res.ok || data.success === false) {
         throw new Error(data.message || `HTTP ${res.status}`);
@@ -236,8 +247,31 @@ export default function Dashboard() {
         </div>
       )}
 
+      {laporanForbidden && !laporanError && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+          <p className="text-sm font-black text-amber-800">Fitur laporan belum aktif</p>
+          <p className="text-xs text-amber-700 mt-1 font-semibold">
+            Paket langganan kamu belum mengaktifkan fitur <span className="font-black">reports</span> atau langganan belum aktif.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              onClick={() => navigate("/admin/billing")}
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs font-black shadow hover:shadow-md transition-all"
+            >
+              Buka Langganan
+            </button>
+            <button
+              onClick={() => fetchLaporan(period)}
+              className="px-4 py-2 border border-amber-300 text-amber-800 rounded-xl text-xs font-black hover:bg-amber-100 transition-all"
+            >
+              Coba Lagi
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Laporan KPI Cards */}
-      {!laporanLoading && !laporanError && (
+      {!laporanLoading && !laporanError && !laporanForbidden && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="bg-green-50 border-green-200 rounded-2xl border p-4">
             <span className="text-2xl">💰</span>
@@ -267,7 +301,7 @@ export default function Dashboard() {
       )}
 
       {/* Kategori Terlaris */}
-      {!laporanLoading && !laporanError && kategori_terlaris.length > 0 && (
+      {!laporanLoading && !laporanError && !laporanForbidden && kategori_terlaris.length > 0 && (
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
           <h2 className="font-bold text-gray-900 mb-4">Kategori Terlaris — Per {period.charAt(0).toUpperCase() + period.slice(1)}</h2>
           <div className="space-y-3">

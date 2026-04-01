@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Save, Shield } from "lucide-react";
+import { MAINTENANCE_LS_KEY } from "../../components/MaintenanceBanner";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
@@ -48,6 +49,7 @@ export default function Settings() {
       });
 
       if (res.ok) {
+        try { localStorage.setItem(MAINTENANCE_LS_KEY, settings.maintenanceMode ? "1" : "0"); } catch {}
         showToast("Pengaturan berhasil disimpan", "success");
       } else {
         showToast("Gagal menyimpan pengaturan", "error");

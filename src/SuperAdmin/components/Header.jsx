@@ -17,6 +17,8 @@ export default function SuperAdminHeader({ activePage, setSidebarOpen }) {
     dashboard: "Dashboard",
     cafes: "Kelola Cafe",
     admins: "Admin Cafe",
+    subscriptions: "Langganan",
+    "subscription-transactions": "Transaksi Langganan",
     reports: "Laporan",
     analytics: "Analytics",
     settings: "Pengaturan",

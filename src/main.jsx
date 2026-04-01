@@ -17,7 +17,8 @@ import SuperAdminLogin from "./SuperAdmin/LoginPage.jsx";
 import SuperAdminLayout from "./SuperAdmin/SuperAdminLayout.jsx";
 import SuperAdminDashboard from "./SuperAdmin/pages/Dashboard.jsx";
 import ManageCafes from "./SuperAdmin/pages/ManageCafes.jsx";
-import ManageAdmins from "./SuperAdmin/pages/Admins.jsx";
+import ManageSubscriptionPlans from "./SuperAdmin/pages/Subscriptions.jsx";
+import SubscriptionTransactions from "./SuperAdmin/pages/SubscriptionTransactions.jsx";
 import Reports from "./SuperAdmin/pages/Reports.jsx";
 import Analytics from "./SuperAdmin/pages/Analytics.jsx";
 import SuperAdminSettings from "./SuperAdmin/pages/Settings.jsx";
@@ -108,7 +109,8 @@ const router = createBrowserRouter([
           { path: "/superadmin", element: <Navigate to="/superadmin/dashboard" replace /> },
           { path: "/superadmin/dashboard", element: <SuperAdminDashboard /> },
           { path: "/superadmin/cafes", element: <ManageCafes /> },
-          { path: "/superadmin/admins", element: <ManageAdmins /> },
+          { path: "/superadmin/subscriptions", element: <ManageSubscriptionPlans /> },
+          { path: "/superadmin/subscription-transactions", element: <SubscriptionTransactions /> },
           { path: "/superadmin/reports", element: <Reports /> },
           { path: "/superadmin/analytics", element: <Analytics /> },
           { path: "/superadmin/settings", element: <SuperAdminSettings /> },

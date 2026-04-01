@@ -1,11 +1,12 @@
-import { LayoutDashboard, Store, FileText, Users, Settings, LogOut, TrendingUp, Shield } from "lucide-react";
+import { LayoutDashboard, Store, FileText, Settings, LogOut, TrendingUp, Shield, CreditCard } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function SuperAdminSidebar({ activePage, setActivePage, onLogout, sidebarOpen, setSidebarOpen }) {
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { id: "cafes", label: "Kelola Cafe", icon: <Store size={18} /> },
-    { id: "admins", label: "Admin Cafe", icon: <Users size={18} /> },
+    { id: "subscriptions", label: "Langganan", icon: <CreditCard size={18} /> },
+    { id: "subscription-transactions", label: "Transaksi Langganan", icon: <CreditCard size={18} /> },
     { id: "reports", label: "Laporan", icon: <FileText size={18} /> },
     { id: "analytics", label: "Analytics", icon: <TrendingUp size={18} /> },
     { id: "settings", label: "Pengaturan", icon: <Settings size={18} /> },

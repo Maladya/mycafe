@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
+import MaintenanceBanner from "../components/MaintenanceBanner";
 import {
   Search, ShoppingBag, ArrowLeft, Heart, Share2, Plus, Minus,
   Clock, MapPin, Flame, Leaf, Check, ExternalLink, RotateCcw,
@@ -1296,9 +1297,22 @@ export default function Home() {
   const isLoading  = menuLoading || catLoading;
   const hasError   = (menuError || catError) && !isLoading;
 
+  if (!CAFE_ID) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center" style={{ background:"var(--bg)", color:"var(--tx)" }}>
+        <MaintenanceBanner />
+        <div className="text-center px-8">
+          <p className="text-lg font-black text-gray-700 mb-2">Link tidak valid</p>
+          <p className="text-sm text-gray-400">Scan ulang QR Code meja untuk membuka menu.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (tableValidating || cafeLoading) {
     return (
       <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
+        <MaintenanceBanner />
         <div className="max-w-md mx-auto"><SkeletonSection /><SkeletonSection /><SkeletonSection /></div>
       </div>
     );
@@ -1307,6 +1321,7 @@ export default function Home() {
   if (paramError) {
     return (
       <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
+        <MaintenanceBanner />
         <div className="max-w-md mx-auto px-4 py-8">
           <ErrorState message={paramError} onRetry={() => { setParamError(""); setValidateKey(k => k+1); refetchCafe(); refetchMenu(); refetchCat(); }} />
         </div>
@@ -1405,6 +1420,7 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
+      <MaintenanceBanner />
       {/* NAVBAR */}
       <div className="sticky top-0 z-40 bg-white shadow-sm">
         <div className="max-w-md mx-auto px-4 py-3">
