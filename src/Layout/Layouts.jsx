@@ -51,7 +51,6 @@ export default function SideBar() {
         </div>
         <div>
           <p className="text-white font-black text-base tracking-tight leading-none">MyCafe</p>
-          <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.55)" }}>Admin Panel</p>
         </div>
       </div>
 

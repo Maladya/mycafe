@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useAdmin } from "../AdminPanel";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
 const authHeaders = () => ({
   "Content-Type": "application/json",
@@ -32,10 +32,10 @@ const fixImgUrl = (url) => {
 };
 
 const initialMethods = [
-  { id: "tunai",         label: "Tunai",           desc: "Pembayaran langsung dengan uang tunai.",                     icon: "cash",     enabled: true,  configurable: false },
-  { id: "qris",          label: "QRIS",            desc: "Scan QR untuk bayar via GoPay, OVO, Dana, ShopeePay, dll.", icon: "qris",     enabled: true,  configurable: true  },
-  { id: "transfer_bank", label: "Transfer Bank",   desc: "Transfer ke rekening BCA, Mandiri, BNI, atau BRI.",         icon: "transfer", enabled: false, configurable: true  },
-  { id: "ewalet", label: "E-Wallet Manual", desc: "Tampilkan nomor GoPay / OVO / Dana untuk transfer manual.", icon: "ewallet",  enabled: false, configurable: true  },
+  { id: "tunai",         label: "Tunai",            desc: "Pembayaran langsung dengan uang tunai.",                                 icon: "cash",     enabled: true,  configurable: false },
+  { id: "online",        label: "Online",           desc: "Pembayaran online via Midtrans (QRIS / E-Wallet / Kartu).",            icon: "online",   enabled: true,  configurable: true  },
+  { id: "transfer_bank", label: "Transfer Bank",    desc: "Transfer ke rekening BCA, Mandiri, BNI, atau BRI.",                   icon: "transfer", enabled: false, configurable: true  },
+  { id: "ewalet",        label: "E-Wallet Manual",  desc: "Tampilkan nomor GoPay / OVO / Dana untuk transfer manual.",            icon: "ewallet",  enabled: false, configurable: true  },
 ];
 
 const initialQris     = { nama_merchant: "ASTAKIRA Cafe", nomor_merchant: "", qris_image: null, feeType: "none", feeValue: "" };
@@ -47,7 +47,7 @@ const initialEwallet  = {
   shopee: { nomor: "", atasNama: "" },
 };
 
-const ACTIVE_METHOD_IDS = ["tunai", "qris"];
+const ACTIVE_METHOD_IDS = ["tunai", "online"];
 
 const TAB_CONFIG = {
   qris:          { endpoint: "/api/qris",          httpMethod: "POST" },
@@ -58,7 +58,8 @@ const TAB_CONFIG = {
 const EWALLET_ENDPOINTS = ["/api/ewallet_manual", "/api/ewalet_manual", "/api/ewalet"];
 
 function PayIcon({ type, size = 20 }) {
-  if (type === "qris")     return <QrCode size={size} />;
+  if (type === "online")   return <CreditCard size={size} />;
+  if (type === "qris")     return <QrCode size={size} />; // legacy (jika masih ada data lama)
   if (type === "transfer") return <CreditCard size={size} />;
   if (type === "ewallet")  return <Smartphone size={size} />;
   return <Banknote size={size} />;
@@ -66,7 +67,8 @@ function PayIcon({ type, size = 20 }) {
 
 const iconBg = {
   cash:     "bg-green-50 text-green-600 border-green-200",
-  qris:     "bg-blue-50 text-blue-600 border-blue-200",
+  online:   "bg-blue-50 text-blue-600 border-blue-200",
+  qris:     "bg-blue-50 text-blue-600 border-blue-200", // legacy support
   transfer: "bg-purple-50 text-purple-600 border-purple-200",
   ewallet:  "bg-pink-50 text-pink-600 border-pink-200",
 };
@@ -174,7 +176,9 @@ export default function Payment() {
               x.id === mt.id ||
               x.name === mt.id ||
               x.metode === mt.id ||
-              x.method === mt.id
+              x.method === mt.id ||
+              x.nama_method === mt.id ||
+              x.nama === mt.id
             );
 
             if (!found) return mt;
@@ -382,7 +386,7 @@ export default function Payment() {
         method:  "PUT",
         headers: authHeaders(),
         body:    JSON.stringify({ 
-          status_method: newEnabled ? 1 : 0 
+          status_method: newEnabled 
         }),
       });
       const data = await res.json();

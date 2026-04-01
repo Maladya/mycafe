@@ -4,7 +4,7 @@ import {
   Hash, Save, Upload, Loader2, Edit3, AlertCircle, Camera, ChevronDown, ChevronUp
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
 
 const authHeaders = (json = true) => {
   const token = localStorage.getItem("token");
@@ -1017,7 +1017,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
 
               <p className="text-[11px] text-gray-500 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 leading-relaxed">
-                💡 Semua grup varian dari database ditampilkan di sini. <strong>Centang</strong> grup yang ingin diaktifkan untuk menu ini. Atau buat grup baru dengan tombol di bawah.
+                💡<strong>Centang</strong> grup yang ingin diaktifkan untuk menu ini. Atau buat grup baru dengan tombol di bawah.
               </p>
 
               {varErr && (
@@ -1053,7 +1053,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
                   {variantGroups.length === 0 && (
                     <div className="text-center py-10">
                       <Hash size={40} className="mx-auto mb-3 text-gray-200"/>
-                      <p className="text-sm font-semibold text-gray-500">Belum ada grup varian di database</p>
+                      <p className="text-sm font-semibold text-gray-500">Belum ada grup varian</p>
                       <p className="text-xs mt-1 text-gray-400">Klik "+ Tambah Grup Varian" untuk membuat baru.</p>
                     </div>
                   )}

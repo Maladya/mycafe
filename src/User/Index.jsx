@@ -10,7 +10,7 @@ import ActionConfirmModal from "../components/ActionConfirmModal";
 
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const KNOWN_GROUPS_KEY = "known_variant_groups";
 const tokenManager = {

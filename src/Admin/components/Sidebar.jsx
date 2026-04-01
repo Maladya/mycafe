@@ -20,9 +20,26 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
     { id:"pengaturan", label:"Pengaturan",  icon:<Settings size={18}/> },
   ];
 
-  // Dynamic cafe info
-  const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || "ASTAKIRA";
-  const cafeLogo = cafeRaw?.logo_cafe || null;
+  // Dynamic cafe info with live override from localStorage (updated by Pengaturan)
+  const [cafeOverride, setCafeOverride] = useState(null);
+
+  useEffect(() => {
+    const applyLatest = () => {
+      try {
+        const txt = localStorage.getItem("latest_cafe");
+        setCafeOverride(txt ? JSON.parse(txt) : null);
+      } catch {}
+    };
+    applyLatest();
+    const onUpdate = () => applyLatest();
+    window.addEventListener("cafeSettingsUpdated", onUpdate);
+    return () => window.removeEventListener("cafeSettingsUpdated", onUpdate);
+  }, []);
+
+  const nameFromRaw = cafeRaw?.cafeNama || cafeRaw?.nama_cafe;
+  const logoFromRaw = cafeRaw?.logo_cafe || null;
+  const cafeName = (cafeOverride?.nama_cafe || cafeOverride?.cafeNama || nameFromRaw || "ASTAKIRA");
+  const cafeLogo = (cafeOverride?.logo_cafe ?? logoFromRaw);
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -37,7 +54,6 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
         </div>
         <div>
           <p className="font-black text-white text-sm leading-none">{cafeName}</p>
-          <p className="text-gray-500 text-[10px] mt-0.5">Admin Panel</p>
         </div>
         <button onClick={() => setSidebarOpen(false)} className="ml-auto lg:hidden text-gray-500 hover:text-white">
           <X size={18}/>
@@ -135,9 +151,25 @@ export function Header({ activePage, setSidebarOpen, orders, setActivePage, cafe
 
   const newOrders = (orders ?? []).filter(o => o.status === "baru").length;
   
-  // Dynamic cafe info from database
-  const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || "ASTAKIRA";
-  const cafeAddress = cafeRaw?.cafeAlamat || cafeRaw?.alamat || "";
+  // Dynamic cafe info from database with live override
+  const [cafeOverride, setCafeOverride] = useState(null);
+  useEffect(() => {
+    const applyLatest = () => {
+      try {
+        const txt = localStorage.getItem("latest_cafe");
+        setCafeOverride(txt ? JSON.parse(txt) : null);
+      } catch {}
+    };
+    applyLatest();
+    const onUpdate = () => applyLatest();
+    window.addEventListener("cafeSettingsUpdated", onUpdate);
+    return () => window.removeEventListener("cafeSettingsUpdated", onUpdate);
+  }, []);
+
+  const nameFromRaw = cafeRaw?.cafeNama || cafeRaw?.nama_cafe;
+  const addrFromRaw = cafeRaw?.cafeAlamat || cafeRaw?.alamat || "";
+  const cafeName = (cafeOverride?.nama_cafe || cafeOverride?.cafeNama || nameFromRaw || "ASTAKIRA");
+  const cafeAddress = (cafeOverride?.alamat || addrFromRaw);
   const displaySubtitle = cafeAddress ? `${cafeName} · ${cafeAddress}` : cafeName;
   
   // Get actual user data from localStorage

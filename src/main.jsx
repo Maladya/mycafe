@@ -12,6 +12,16 @@ import {
 import LoginPage from "./Admin/LoginPage.jsx";
 import Daftar    from "./daftar.jsx";
 
+// ── SuperAdmin ────────────────────────────────────────────────────────────────
+import SuperAdminLogin from "./SuperAdmin/LoginPage.jsx";
+import SuperAdminLayout from "./SuperAdmin/SuperAdminLayout.jsx";
+import SuperAdminDashboard from "./SuperAdmin/pages/Dashboard.jsx";
+import ManageCafes from "./SuperAdmin/pages/ManageCafes.jsx";
+import ManageAdmins from "./SuperAdmin/pages/Admins.jsx";
+import Reports from "./SuperAdmin/pages/Reports.jsx";
+import Analytics from "./SuperAdmin/pages/Analytics.jsx";
+import SuperAdminSettings from "./SuperAdmin/pages/Settings.jsx";
+
 // ── Admin Layout ──────────────────────────────────────────────────────────────
 import AdminPanel from "./Admin/AdminPanel.jsx";
 
@@ -63,6 +73,12 @@ function KasirProtectedRoute() {
   return <Outlet />;
 }
 
+function SuperAdminProtectedRoute() {
+  const token = localStorage.getItem("superadmin_token");
+  if (!token) return <Navigate to="/superadmin/login" replace />;
+  return <Outlet />;
+}
+
 const navLabels = {
   dashboard:  "Dashboard",
   menu:       "Kelola Menu",
@@ -80,6 +96,26 @@ const router = createBrowserRouter([
   { path: "/user/table/:tableId", element: <Home /> },
   { path: "/login",  element: <LoginPage /> },
   { path: "/daftar", element: <Daftar /> },
+
+  // ── SuperAdmin Routes ─────────────────────────────────────────────────────
+  { path: "/superadmin/login", element: <SuperAdminLogin /> },
+  {
+    element: <SuperAdminProtectedRoute />,
+    children: [
+      {
+        element: <SuperAdminLayout />,
+        children: [
+          { path: "/superadmin", element: <Navigate to="/superadmin/dashboard" replace /> },
+          { path: "/superadmin/dashboard", element: <SuperAdminDashboard /> },
+          { path: "/superadmin/cafes", element: <ManageCafes /> },
+          { path: "/superadmin/admins", element: <ManageAdmins /> },
+          { path: "/superadmin/reports", element: <Reports /> },
+          { path: "/superadmin/analytics", element: <Analytics /> },
+          { path: "/superadmin/settings", element: <SuperAdminSettings /> },
+        ],
+      },
+    ],
+  },
 
   {
     element: <ProtectedRoute />,
