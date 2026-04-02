@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Store, Users, DollarSign, TrendingUp, Activity, Calendar } from "lucide-react";
 import StatCard from "../components/StatCard";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState({
@@ -13,6 +13,7 @@ export default function SuperAdminDashboard() {
     activeSubscriptions: 0,
     pendingPayments: 0,
   });
+  const [subscriptionBalance, setSubscriptionBalance] = useState({ total_amount: 0, total_transactions: 0 });
   const [loading, setLoading] = useState(true);
   const [recentActivities, setRecentActivities] = useState([]);
 
@@ -29,9 +30,10 @@ export default function SuperAdminDashboard() {
         Authorization: `Bearer ${token}`,
       };
 
-      const [statsRes, activitiesRes] = await Promise.allSettled([
+      const [statsRes, activitiesRes, balanceRes] = await Promise.allSettled([
         fetch(`${API_URL}/api/superadmin/stats`, { headers }),
         fetch(`${API_URL}/api/superadmin/activities`, { headers }),
+        fetch(`${API_URL}/api/superadmin/subscription-balance`, { headers }),
       ]);
 
       if (statsRes.status === "fulfilled" && statsRes.value.ok) {
@@ -42,6 +44,15 @@ export default function SuperAdminDashboard() {
       if (activitiesRes.status === "fulfilled" && activitiesRes.value.ok) {
         const data = await activitiesRes.value.json();
         setRecentActivities(data.data || data.activities || []);
+      }
+
+      if (balanceRes.status === "fulfilled" && balanceRes.value.ok) {
+        const data = await balanceRes.value.json().catch(() => ({}));
+        const payload = data?.data ?? data;
+        setSubscriptionBalance({
+          total_amount: Number(payload?.total_amount ?? payload?.totalAmount ?? 0),
+          total_transactions: Number(payload?.total_transactions ?? payload?.totalTransactions ?? 0),
+        });
       }
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
@@ -94,6 +105,14 @@ export default function SuperAdminDashboard() {
           trend="up"
           trendValue="+24%"
           color="orange"
+        />
+        <StatCard
+          title="Saldo Langganan"
+          value={`Rp ${(subscriptionBalance.total_amount || 0).toLocaleString("id-ID")}`}
+          icon={<DollarSign size={20} className="text-white" />}
+          color="orange"
+          trend={subscriptionBalance.total_transactions ? "up" : undefined}
+          trendValue={subscriptionBalance.total_transactions ? `${subscriptionBalance.total_transactions} trx` : undefined}
         />
         <StatCard
           title="Langganan Aktif"

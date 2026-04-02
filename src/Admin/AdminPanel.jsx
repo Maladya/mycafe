@@ -1,12 +1,12 @@
 import { useState, useEffect, createContext, useContext, useMemo } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { LogOut, X } from "lucide-react";
+import { LogOut, X, Shield } from "lucide-react";
 
 import { Toast } from "./components/SharedComponents";
 import { Sidebar, Header } from "./components/Sidebar";
 import MaintenanceBanner from "../components/MaintenanceBanner";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 const THEME_CACHE_KEY = "astakira_admin_theme";
 
 // Theme utilities
@@ -183,6 +183,12 @@ export default function AdminPanel() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const [subscriptionActive, setSubscriptionActive] = useState(true);
+  const [subscriptionGate, setSubscriptionGate] = useState({
+    reason: "",
+    status: "",
+    active_until: null,
+    message: "",
+  });
 
   const getAuthHeader = () => ({
     "Content-Type": "application/json",
@@ -198,14 +204,35 @@ export default function AdminPanel() {
     try {
       const res = await fetch(`${API_URL}/api/subscriptions/me`, { headers: getAuthHeader() });
       const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
+        const reason = data?.reason || data?.code || "";
+        const status = data?.status || "";
+        const activeUntil = data?.active_until ?? data?.activeUntil ?? null;
+        const message = data?.message || "";
+
+        if (res.status === 402 || reason === "subscription_required") {
+          setSubscriptionGate({ reason: "subscription_required", status, active_until: activeUntil, message });
+          setSubscriptionActive(false);
+          setSubscriptionChecked(true);
+          return;
+        }
+
         // Kalau endpoint belum tersedia/ada masalah, jangan memblokir UI total
+        setSubscriptionGate({ reason: "", status: "", active_until: null, message: "" });
         setSubscriptionActive(true);
         setSubscriptionChecked(true);
         return;
       }
+
       const me = data?.data ?? data;
       const ok = isSubActive(me);
+      setSubscriptionGate({
+        reason: ok ? "" : "subscription_required",
+        status: String(me?.status ?? "") || (ok ? "active" : "inactive"),
+        active_until: me?.active_until ?? me?.activeUntil ?? me?.expired_at ?? me?.expiredAt ?? null,
+        message: "",
+      });
       setSubscriptionActive(ok);
       setSubscriptionChecked(true);
     } catch {
@@ -297,6 +324,17 @@ export default function AdminPanel() {
     navigate("/login", { replace: true });
   };
 
+  const formatActiveUntil = (raw) => {
+    if (!raw) return "-";
+    try {
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return String(raw);
+      return d.toLocaleString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return String(raw);
+    }
+  };
+
   // Show modal instead of logging out directly
   const handleLogout = () => setShowLogoutModal(true);
 
@@ -344,6 +382,56 @@ export default function AdminPanel() {
         {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
         <MaintenanceBanner />
       </div>
+
+      {subscriptionChecked && !subscriptionActive && location.pathname !== "/admin/billing" && (
+        <div
+          className="fixed inset-0 z-[9998] flex flex-col items-center justify-center p-6"
+          style={{ background: "rgba(10,10,20,0.92)", backdropFilter: "blur(8px)" }}
+        >
+          <div
+            className="bg-gray-900 border border-amber-500/30 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl"
+            style={{ boxShadow: "0 0 60px rgba(245,158,11,0.12)" }}
+          >
+            <div className="w-20 h-20 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto mb-5">
+              <Shield size={36} className="text-amber-400" />
+            </div>
+            <h2 className="text-white text-2xl font-black mb-2 tracking-tight">
+              Langganan Diperlukan
+            </h2>
+            <p className="text-gray-400 text-sm leading-relaxed mb-5">
+              Akses Admin dikunci karena langganan cafe kamu tidak aktif atau sudah berakhir.
+            </p>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left mb-6">
+              <p className="text-[11px] text-gray-400 font-semibold">Status</p>
+              <p className="text-sm text-white font-bold">
+                {subscriptionGate.status ? String(subscriptionGate.status).toUpperCase() : "TIDAK AKTIF"}
+              </p>
+              <p className="text-[11px] text-gray-400 font-semibold mt-3">Aktif sampai</p>
+              <p className="text-sm text-white font-bold">{formatActiveUntil(subscriptionGate.active_until)}</p>
+              {subscriptionGate.message ? (
+                <p className="text-[11px] text-amber-300 font-semibold mt-3">{subscriptionGate.message}</p>
+              ) : null}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => navigate("/admin/billing", { replace: true })}
+                className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl py-3 font-black shadow-lg hover:shadow-xl transition-all"
+              >
+                Bayar Langganan
+              </button>
+              <button
+                onClick={doLogout}
+                className="flex-1 border-2 border-white/10 text-gray-200 rounded-xl py-3 font-semibold hover:bg-white/5 transition-all"
+              >
+                Logout
+              </button>
+            </div>
+            <p className="text-gray-500 text-[11px] mt-5">
+              Jika pembayaran sudah dilakukan, buka halaman Langganan lalu klik “Cek Status Pembayaran”.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Logout Confirmation Modal */}
       <LogoutModal

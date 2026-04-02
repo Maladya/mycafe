@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Mail, Calendar } from "lucide-react";
 import DataTable from "../components/DataTable";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 export default function ManageAdmins() {
   const [admins, setAdmins] = useState([]);

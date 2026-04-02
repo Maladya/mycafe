@@ -2,7 +2,24 @@ import { useState, useEffect } from "react";
 import { Save, Shield } from "lucide-react";
 import { MAINTENANCE_LS_KEY } from "../../components/MaintenanceBanner";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
+
+function asTimeoutError(err) {
+  if (!err) return null;
+  if (err?.name === "AbortError") return new Error("Request timeout");
+  if (String(err?.message || "").toLowerCase().includes("timeout")) return new Error("Request timeout");
+  return null;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
 
 export default function Settings() {
   const [settings, setSettings] = useState({
@@ -18,12 +35,12 @@ export default function Settings() {
   const fetchSettings = async () => {
     try {
       const token = localStorage.getItem("superadmin_token");
-      const res = await fetch(`${API_URL}/api/superadmin/settings`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/superadmin/settings`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-      });
+      }, 15000);
 
       if (res.ok) {
         const data = await res.json();
@@ -31,6 +48,11 @@ export default function Settings() {
         setSettings({ maintenanceMode: Boolean(mode) });
       }
     } catch (err) {
+      const tErr = asTimeoutError(err);
+      if (tErr) {
+        showToast("Gagal memuat pengaturan (timeout). Pastikan backend aktif.", "error");
+        return;
+      }
       console.error("Failed to fetch settings:", err);
     }
   };
@@ -39,14 +61,14 @@ export default function Settings() {
     setSaving(true);
     try {
       const token = localStorage.getItem("superadmin_token");
-      const res = await fetch(`${API_URL}/api/superadmin/settings`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/superadmin/settings`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ maintenanceMode: settings.maintenanceMode }),
-      });
+      }, 15000);
 
       if (res.ok) {
         try { localStorage.setItem(MAINTENANCE_LS_KEY, settings.maintenanceMode ? "1" : "0"); } catch {}
@@ -55,6 +77,11 @@ export default function Settings() {
         showToast("Gagal menyimpan pengaturan", "error");
       }
     } catch (err) {
+      const tErr = asTimeoutError(err);
+      if (tErr) {
+        showToast("Gagal menyimpan (timeout). Pastikan backend aktif dan bisa diakses.", "error");
+        return;
+      }
       console.error("Failed to save settings:", err);
       showToast("Gagal menyimpan pengaturan", "error");
     } finally {

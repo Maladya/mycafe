@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Shield, ChevronRight, CreditCard, Calendar, AlertCircle, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) => `Rp${Number(n || 0).toLocaleString("id-ID")}`;
@@ -49,6 +49,7 @@ export default function Billing() {
   const [checking, setChecking] = useState(false);
   const [toast, setToast] = useState(null);
   const [snapClientKey, setSnapClientKey] = useState("");
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   // Mode pembayaran:
   // - Popup Snap = aktif
@@ -104,9 +105,13 @@ export default function Billing() {
   };
 
   const fetchPlans = async () => {
-    const res = await fetchWithTimeout(`${API_URL}/api/subscriptions/plans`, { headers: authHeaders() });
+    const url = `${API_URL}/api/subscriptions/plans`;
+    const res = await fetchWithTimeout(url, { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+    if (!res.ok) {
+      console.error("fetchPlans failed", { url, status: res.status, body: data });
+      throw new Error(data?.message || `Gagal memuat paket (HTTP ${res.status})`);
+    }
     const list = Array.isArray(data) ? data
       : Array.isArray(data?.data) ? data.data
       : Array.isArray(data?.plans) ? data.plans
@@ -115,9 +120,13 @@ export default function Billing() {
   };
 
   const fetchMe = async () => {
-    const res = await fetchWithTimeout(`${API_URL}/api/subscriptions/me`, { headers: authHeaders() });
+    const url = `${API_URL}/api/subscriptions/me`;
+    const res = await fetchWithTimeout(url, { headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+    if (!res.ok) {
+      console.error("fetchMe failed", { url, status: res.status, body: data });
+      throw new Error(data?.message || `Gagal memuat langganan (HTTP ${res.status})`);
+    }
     return data?.data ?? data;
   };
 
@@ -158,12 +167,39 @@ export default function Billing() {
       const resolvedKey = key || envKey;
       if (resolvedKey) setSnapClientKey(resolvedKey);
     } catch (e) {
+      console.error("refreshAll billing failed", e);
       showToast(e?.message || "Gagal memuat langganan", "error");
       setPlans([]);
       setSub(null);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getRemainingTotalSeconds = (me) => {
+    const remaining = me?.remaining_time ?? me?.remainingTime ?? null;
+    const totalSeconds = remaining?.total_seconds ?? remaining?.totalSeconds;
+    if (Number.isFinite(Number(totalSeconds))) {
+      return Math.max(0, Math.floor(Number(totalSeconds)));
+    }
+    const until = me?.active_until ?? me?.activeUntil ?? me?.expired_at ?? me?.expiredAt;
+    if (!until) return 0;
+    try {
+      const d = new Date(until);
+      if (Number.isNaN(d.getTime())) return 0;
+      return Math.max(0, Math.floor((d.getTime() - Date.now()) / 1000));
+    } catch {
+      return 0;
+    }
+  };
+
+  const breakdownSeconds = (total) => {
+    const t = Math.max(0, Math.floor(Number(total) || 0));
+    const days = Math.floor(t / 86400);
+    const hours = Math.floor((t % 86400) / 3600);
+    const minutes = Math.floor((t % 3600) / 60);
+    const seconds = t % 60;
+    return { days, hours, minutes, seconds };
   };
 
   useEffect(() => {
@@ -178,9 +214,28 @@ export default function Billing() {
     } catch {}
   }, []);
 
+  useEffect(() => {
+    const ok = isSubReallyActive(sub);
+    if (!ok) {
+      setRemainingSeconds(0);
+      return;
+    }
+    setRemainingSeconds(getRemainingTotalSeconds(sub));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sub?.active_until, sub?.activeUntil, sub?.expired_at, sub?.expiredAt, sub?.status, sub?.is_active, sub?.isActive, sub?.remaining_time, sub?.remainingTime]);
+
+  useEffect(() => {
+    if (remainingSeconds <= 0) return;
+    const t = setInterval(() => {
+      setRemainingSeconds((s) => Math.max(0, Number(s || 0) - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [remainingSeconds]);
+
   const activePlanId = sub?.plan_id ?? sub?.planId ?? sub?.subscription_plan_id ?? null;
   const activeUntilRaw = sub?.active_until ?? sub?.activeUntil ?? sub?.expired_at ?? sub?.expiredAt ?? null;
   const isActive = String(sub?.status ?? "").toLowerCase() === "active" || Boolean(sub?.is_active ?? sub?.isActive);
+  const remaining = useMemo(() => breakdownSeconds(remainingSeconds), [remainingSeconds]);
 
   const activePlan = useMemo(() => {
     const arr = Array.isArray(plans) ? plans : [];
@@ -320,6 +375,11 @@ export default function Billing() {
                     </>
                   )}
                 </p>
+                {isActive && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Sisa waktu: <span className="font-black text-gray-700">{remaining.days} hari</span> <span className="font-black text-gray-700">{remaining.hours} jam</span> <span className="font-black text-gray-700">{remaining.minutes} menit</span> <span className="font-black text-gray-700">{remaining.seconds} detik</span>
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -344,20 +404,6 @@ export default function Billing() {
 
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-bold text-gray-900">Pilih Paket</h2>
-            <div className="text-[11px] text-gray-400 font-semibold">
-              Mode pembayaran: <span className="text-gray-700">Redirect</span>
-            </div>
-          </div>
-
-          <div className="mb-5 flex items-center justify-end gap-2">
-            <button
-              onClick={checkSubscriptionNow}
-              disabled={checking || paying}
-              className="px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 border-2 border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-            >
-              {checking ? <Loader2 size={14} className="animate-spin" /> : null}
-              Cek Status Pembayaran
-            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -423,10 +469,7 @@ export default function Billing() {
           </div>
 
       {/* ── Catatan ── */}
-      <div className="mt-5 flex items-start gap-2 text-xs text-gray-400">
-        <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
-        <p>Paket dan fitur ditentukan dari Super Admin. Jika pembayaran berhasil tapi status belum aktif, pastikan webhook Midtrans sudah berjalan.</p>
-      </div>
+      
         </>
       )}
 

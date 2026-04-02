@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Edit, Trash2, CheckCircle2, XCircle, Settings2 } from "lucide-react";
 import DataTable from "../components/DataTable";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 
 function formatRupiah(num) {
   if (!num && num !== 0) return "Rp0";
@@ -28,10 +28,32 @@ function featuresSummary(features) {
   return enabled.slice(0, 3).join(", ") + (enabled.length > 3 ? ` +${enabled.length - 3}` : "");
 }
 
+function getDurationInfo(plan) {
+  const unit = String(plan?.duration_unit ?? plan?.durationUnit ?? "").toLowerCase();
+  const value = plan?.duration_value ?? plan?.durationValue;
+  const minutes = plan?.duration_minutes ?? plan?.durationMinutes;
+  const days = plan?.duration_days ?? plan?.durationDays;
+
+  if (Number.isFinite(Number(minutes)) && Number(minutes) > 0) {
+    return { unit: "minute", value: Number(minutes) };
+  }
+  if (unit === "minute" && Number.isFinite(Number(value)) && Number(value) > 0) {
+    return { unit: "minute", value: Number(value) };
+  }
+  if (Number.isFinite(Number(days)) && Number(days) > 0) {
+    return { unit: "day", value: Number(days) };
+  }
+  if ((unit === "day" || unit === "days") && Number.isFinite(Number(value)) && Number(value) > 0) {
+    return { unit: "day", value: Number(value) };
+  }
+  return { unit: "day", value: 30 };
+}
+
 function PlanModal({ open, initial, onClose, onSubmit, saving }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState(0);
-  const [durationDays, setDurationDays] = useState(30);
+  const [durationUnit, setDurationUnit] = useState("day");
+  const [durationValue, setDurationValue] = useState(30);
   const [isActive, setIsActive] = useState(true);
   const [sortOrder, setSortOrder] = useState(1);
   const [featuresText, setFeaturesText] = useState("{}");
@@ -42,7 +64,9 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
     setError("");
     setName(initial?.name ?? "");
     setPrice(Number(initial?.price ?? 0));
-    setDurationDays(Number(initial?.duration_days ?? initial?.durationDays ?? 30));
+    const d = getDurationInfo(initial);
+    setDurationUnit(d.unit);
+    setDurationValue(Number(d.value ?? 30));
     setIsActive(Boolean(initial?.is_active ?? initial?.isActive ?? true));
     setSortOrder(Number(initial?.sort_order ?? initial?.sortOrder ?? 1));
     try {
@@ -64,8 +88,8 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
       setError("Harga tidak valid");
       return;
     }
-    if (!Number.isFinite(Number(durationDays)) || Number(durationDays) <= 0) {
-      setError("Durasi (hari) tidak valid");
+    if (!Number.isFinite(Number(durationValue)) || Number(durationValue) <= 0) {
+      setError(durationUnit === "minute" ? "Durasi (menit) tidak valid" : "Durasi (hari) tidak valid");
       return;
     }
 
@@ -75,14 +99,30 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
       return;
     }
 
-    onSubmit({
+    const durVal = Number(durationValue);
+    const unit = durationUnit === "minute" ? "minute" : "day";
+    const payload = {
       name: name.trim(),
       price: Number(price),
-      duration_days: Number(durationDays),
       is_active: Boolean(isActive),
       sort_order: Number(sortOrder) || 1,
       features_json: parsed.value,
-    });
+
+      // Forward-compatible
+      duration_unit: unit,
+      duration_value: durVal,
+    };
+
+    // Backward-compatible fields (existing backend may only support duration_days)
+    if (unit === "minute") {
+      payload.duration_minutes = durVal;
+      payload.duration_days = 0;
+    } else {
+      payload.duration_days = durVal;
+      payload.duration_minutes = 0;
+    }
+
+    onSubmit(payload);
   };
 
   return (
@@ -121,14 +161,24 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
           </div>
 
           <div>
-            <p className="text-xs font-bold text-gray-500 mb-1">Durasi (hari)</p>
-            <input
-              type="number"
-              value={durationDays}
-              onChange={e => setDurationDays(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-purple-500 transition-all"
-              placeholder="30"
-            />
+            <p className="text-xs font-bold text-gray-500 mb-1">Durasi</p>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={durationValue}
+                onChange={e => setDurationValue(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-purple-500 transition-all"
+                placeholder={durationUnit === "minute" ? "60" : "30"}
+              />
+              <select
+                value={durationUnit}
+                onChange={e => setDurationUnit(e.target.value)}
+                className="px-3 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-purple-500 transition-all"
+              >
+                <option value="day">Hari</option>
+                <option value="minute">Menit</option>
+              </select>
+            </div>
           </div>
 
           <div>
@@ -306,11 +356,14 @@ export default function ManageSubscriptionPlans() {
     {
       header: "Durasi",
       accessor: "duration_days",
-      render: (val, row) => (
-        <span className="inline-flex px-2 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-700">
-          {(val ?? row.durationDays ?? "-")} hari
-        </span>
-      ),
+      render: (val, row) => {
+        const d = getDurationInfo({ ...row, duration_days: val ?? row.duration_days ?? row.durationDays });
+        return (
+          <span className="inline-flex px-2 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-700">
+            {d.value ?? "-"} {d.unit === "minute" ? "menit" : "hari"}
+          </span>
+        );
+      },
     },
     {
       header: "Status",

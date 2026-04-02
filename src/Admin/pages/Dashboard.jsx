@@ -6,11 +6,12 @@ import {
   RefreshCw,
   Table2,
   Tag,
+  CreditCard,
 } from "lucide-react";
 import { useAdmin } from "../AdminPanel";
 import { isPromoActive } from "../data/constants";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.2:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
 
 function DashboardReportLoader({ cafeRaw, label = "Memuat laporan..." }) {
   const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || cafeRaw?.nama || "Cafe";
@@ -94,6 +95,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   // ── Ambil data dari AdminContext (sudah di-fetch di AdminPanel) ─────────
   const { orders, menuItems, promoCodes, tables, loading, fetchAll, cafeRaw } = useAdmin();
+
+  const [midtransBalance, setMidtransBalance] = useState({ total_amount: 0, total_orders: 0 });
   
   // Laporan state
   const [period, setPeriod] = useState("hari");
@@ -138,6 +141,35 @@ export default function Dashboard() {
     fetchLaporan(period);
   }, [period]);
 
+  useEffect(() => {
+    const fetchMidtransBalance = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const url = `${API_URL}/api/orders/admin/midtrans-balance`;
+        const res = await fetch(url, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error("fetch midtrans balance failed", { url, status: res.status, body: data });
+          return;
+        }
+        const payload = data?.data ?? data;
+        setMidtransBalance({
+          total_amount: Number(payload?.total_amount ?? payload?.totalAmount ?? 0),
+          total_orders: Number(payload?.total_orders ?? payload?.totalOrders ?? 0),
+        });
+      } catch (e) {
+        console.error("fetch midtrans balance error", e);
+      }
+    };
+
+    fetchMidtransBalance();
+  }, []);
+
   if (loading) {
     return (
       <div className="p-4 lg:p-6">
@@ -168,6 +200,8 @@ export default function Dashboard() {
   const totalTables = (tables ?? []).length;
   const activePromoCount = (promoCodes ?? []).filter(p => isPromoActive(p)).length;
 
+  const fmtRupiah = (n) => `Rp${Number(n || 0).toLocaleString("id-ID")}`;
+
   const stats = [
     {
       label: "Total Menu",
@@ -186,6 +220,13 @@ export default function Dashboard() {
       value: activePromoCount,
       icon: <Tag size={20} />,
       color: "from-purple-500 to-pink-500",
+    },
+    {
+      label: "Saldo Midtrans",
+      value: fmtRupiah(midtransBalance.total_amount),
+      icon: <CreditCard size={20} />,
+      color: "from-amber-500 to-orange-500",
+      sub: `${midtransBalance.total_orders || 0} transaksi`,
     },
   ];
 
@@ -219,7 +260,7 @@ export default function Dashboard() {
       </div>
 
       {/* Dashboard Sebelumnya: hanya total */}
-      <div className="grid grid-cols-3 gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         {stats.map((s, i) => (
           <div key={i} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
             <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center shadow-md text-white mb-3`}>
@@ -227,6 +268,7 @@ export default function Dashboard() {
             </div>
             <p className="text-2xl font-black text-gray-900 leading-none">{s.value}</p>
             <p className="text-xs text-gray-400 mt-1 font-medium">{s.label}</p>
+            {s.sub ? <p className="text-[10px] text-gray-400 mt-0.5 font-semibold">{s.sub}</p> : null}
           </div>
         ))}
       </div>
