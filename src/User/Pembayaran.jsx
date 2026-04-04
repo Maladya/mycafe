@@ -6,7 +6,7 @@ import ActionConfirmModal from "../components/ActionConfirmModal";
 /* ─────────────────────────────────────────────
    Config
    ──────────────────────────────────────────── */
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
 

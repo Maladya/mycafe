@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, Shield, ChevronRight, CreditCard, Calendar, AlertCircle, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (n) => `Rp${Number(n || 0).toLocaleString("id-ID")}`;
