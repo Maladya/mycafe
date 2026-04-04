@@ -262,8 +262,38 @@ export default function Billing() {
       .map(([k]) => k);
   };
 
+  const getPlanDurationLabel = (p) => {
+    const unit = String(p?.duration_unit ?? p?.durationUnit ?? "").toLowerCase();
+    const value = p?.duration_value ?? p?.durationValue;
+    const minutes = p?.duration_minutes ?? p?.durationMinutes;
+    const days = p?.duration_days ?? p?.durationDays;
+
+    if (Number.isFinite(Number(minutes)) && Number(minutes) > 0) return `${Number(minutes)} menit`;
+    if (unit === "minute" && Number.isFinite(Number(value)) && Number(value) > 0) return `${Number(value)} menit`;
+    if (Number.isFinite(Number(days)) && Number(days) > 0) return `${Number(days)} hari`;
+    if ((unit === "day" || unit === "days") && Number.isFinite(Number(value)) && Number(value) > 0) return `${Number(value)} hari`;
+    if (Number.isFinite(Number(p?.duration_days)) && Number(p?.duration_days) > 0) return `${Number(p.duration_days)} hari`;
+    return "-";
+  };
+
+  const isPlanEligible = (p) => {
+    if (p == null) return true;
+    if (p.eligible === false) return false;
+    if (p.is_eligible === false) return false;
+    return true;
+  };
+
   const startCheckout = async (plan) => {
     if (!plan?.id) return;
+    if (!isPlanEligible(plan)) {
+      const reason = plan?.disabled_reason ?? plan?.disabledReason ?? "";
+      if (reason === "free_plan_already_used") {
+        showToast("Paket gratis hanya bisa dipakai 1 kali.", "error");
+        return;
+      }
+      showToast("Paket ini tidak bisa dipilih saat ini.", "error");
+      return;
+    }
     setPaying(true);
     try {
       const res = await fetchWithTimeout(`${API_URL}/api/subscriptions/checkout`, {
@@ -273,6 +303,10 @@ export default function Billing() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const reason = data?.reason ?? data?.data?.reason ?? "";
+        if (res.status === 403 && reason === "free_plan_already_used") {
+          throw new Error("Paket gratis hanya bisa dipakai 1 kali.");
+        }
         const expected = data?.expected_price ?? data?.expected_amount;
         const msg = expected
           ? `${data?.message || "Harga tidak sesuai"} (seharusnya ${fmt(expected)})`
@@ -410,6 +444,11 @@ export default function Billing() {
             {sortedPlans.map((plan) => {
               const isCurrent = String(activePlanId) && String(plan.id) === String(activePlanId);
               const features = getFeatures(plan);
+              const eligible = isPlanEligible(plan);
+              const disabledReason = plan?.disabled_reason ?? plan?.disabledReason ?? "";
+              const disabledLabel = disabledReason === "free_plan_already_used"
+                ? "Paket gratis hanya 1x"
+                : "Tidak tersedia";
 
               return (
                 <div
@@ -426,7 +465,7 @@ export default function Billing() {
                     </div>
                     <div>
                       <p className="font-black text-gray-900 text-sm">{plan.name ?? "-"}</p>
-                      <p className="text-[10px] text-gray-400 leading-snug">Durasi {plan.duration_days ?? "-"} hari</p>
+                      <p className="text-[10px] text-gray-400 leading-snug">Durasi {getPlanDurationLabel(plan)}</p>
                     </div>
                   </div>
 
@@ -456,11 +495,20 @@ export default function Billing() {
                   ) : (
                     <button
                       onClick={() => startCheckout(plan)}
-                      disabled={paying}
-                      className="w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                      disabled={paying || !eligible}
+                      className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 disabled:opacity-60 ${eligible ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-gray-100 text-gray-400 border border-gray-200"}`}
                     >
-                      {paying ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                      Bayar {plan.name} <ChevronRight size={13} />
+                      {eligible ? (
+                        <>
+                          {paying ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+                          Bayar {plan.name} <ChevronRight size={13} />
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle size={14} />
+                          {disabledLabel}
+                        </>
+                      )}
                     </button>
                   )}
                 </div>

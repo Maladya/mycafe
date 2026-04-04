@@ -917,8 +917,8 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
     })),
   }));
 
-  const isSedang  = s => ["sedang","proses","pending","waiting","processing"].includes(String(s).toLowerCase());
-  const isSelesai = s => ["selesai","done","completed","success","paid"].includes(String(s).toLowerCase());
+  const isSedang  = s => ["sedang","proses","pending","waiting","processing","paid","lunas","success"].includes(String(s).toLowerCase());
+  const isSelesai = s => ["selesai","done","completed"].includes(String(s).toLowerCase());
   const sedangOrders  = orders.filter(o => isSedang(o.status));
   const selesaiOrders = orders.filter(o => isSelesai(o.status));
   const displayed     = activeTab === "sedang" ? sedangOrders : selesaiOrders;

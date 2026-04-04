@@ -870,62 +870,34 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
 
   );
 
-
-
   useEffect(() => {
-
     document.body.style.overflow = "hidden";
-
     return () => { document.body.style.overflow = ""; };
-
   }, []);
 
-
-
   const orders = (ordersRaw ?? []).map(o => ({
-
     id:       o.id,
-
     status:   o.status,
-
     waktu:    o.waktu    ?? o.created_at ?? o.tanggal ?? "",
-
     estimasi: o.estimasi ?? o.eta        ?? "15 mnt",
-
     items: (o.items ?? o.detail ?? o.order_items ?? []).map(i => ({
-
       name:    i.name   ?? i.nama    ?? i.nama_menu ?? "",
-
       variant: i.variant ?? i.varian ?? "",
-
       qty:     Number(i.qty ?? i.jumlah ?? 1),
-
       price:   Number(i.price ?? i.harga ?? 0),
-
       image:   fixImgUrl(i.image ?? i.foto ?? i.gambar ?? ""),
-
     })),
-
   }));
 
-
-
-  const isSedang  = s => ["sedang", "proses", "pending"].includes(s);
-
-  const isSelesai = s => ["selesai", "done", "completed"].includes(s);
+  const isSedang  = s => ["sedang", "proses", "pending", "waiting", "processing", "paid", "lunas", "success"].includes(String(s ?? "").toLowerCase());
+  const isSelesai = s => ["selesai", "done", "completed"].includes(String(s ?? "").toLowerCase());
 
   const sedangOrders  = orders.filter(o => isSedang(o.status));
-
   const selesaiOrders = orders.filter(o => isSelesai(o.status));
-
   const displayed     = activeTab === "sedang" ? sedangOrders : selesaiOrders;
-
   const getTotal      = items => items.reduce((s, i) => s + i.price * i.qty, 0);
 
-
-
   return (
-
     <div className="fixed inset-0 z-50 flex items-end animate-fadeIn"
 
       style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={onClose}>

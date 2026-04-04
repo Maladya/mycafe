@@ -248,9 +248,7 @@ export default function RingkasanPesanan() {
 
   const [submitError, setSubmitError] = useState(null);
 
-  const [paymentStatus, setPaymentStatus] = useState("pending"); // pending | paid
-
-
+  const [paymentStatus, setPaymentStatus] = useState("pending"); // pending | paid | failed
 
   const [copied,      setCopied]      = useState(false);
 
@@ -369,15 +367,11 @@ export default function RingkasanPesanan() {
     const midtransOrderId = state?.midtrans?.orderId;
 
     if (method === "online" && midtransOrderId) {
-
       setOrderId(midtransOrderId);
-
       setOrderNumber(midtransOrderId);
-
       setStatus("success");
-
+      setPaymentStatus("pending");
       return;
-
     }
 
 
@@ -595,6 +589,49 @@ export default function RingkasanPesanan() {
    
 
   }, []);
+
+  /* ── ONLINE: verifikasi status Midtrans sebelum anggap paid ── */
+  useEffect(() => {
+    if (method !== "online") return;
+    if (!orderNumber) return;
+    if (paymentStatus === "paid" || paymentStatus === "failed") return;
+
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/midtrans/status/${encodeURIComponent(orderNumber)}`, {
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        const raw = data?.data ?? data;
+        const tx = String(raw?.transaction_status ?? raw?.transactionStatus ?? raw?.status ?? "").toLowerCase();
+
+        if (tx === "settlement" || tx === "capture") {
+          if (cancelled) return;
+          setPaymentStatus("paid");
+        } else if (["deny", "cancel", "expire", "failure"].includes(tx)) {
+          if (cancelled) return;
+          setPaymentStatus("failed");
+        }
+      } catch {
+        // silent
+      }
+    };
+
+    check();
+    const t = setInterval(check, 3000);
+    const timeout = setTimeout(() => {
+      clearInterval(t);
+    }, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+      clearTimeout(timeout);
+    };
+  }, [method, orderNumber, paymentStatus, BASE_URL]);
 
 
 
@@ -1389,9 +1426,7 @@ export default function RingkasanPesanan() {
 
               </>
 
-            ) : (
-
-              /* ══ ONLINE: Pembayaran Selesai ══ */
+            ) : paymentStatus === "paid" ? (
 
               <>
 
@@ -1417,7 +1452,7 @@ export default function RingkasanPesanan() {
 
                     <h2 className="text-white text-2xl font-extrabold mb-1">Ringkasan Pesanan</h2>
 
-                    <p className="text-green-100 text-sm">Pembayaran selesai, pesanan akan diantar</p>
+                    <p className="text-green-100 text-sm">Pembayaran diterima, pesanan akan diproses</p>
 
                     <div className="flex items-center justify-center gap-2 mt-3 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full px-4 py-1.5 w-fit mx-auto">
 
@@ -1449,7 +1484,7 @@ export default function RingkasanPesanan() {
 
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
 
-                        ✓ Pembayaran Diterima
+                        Pembayaran Diterima
 
                       </span>
 
@@ -1515,7 +1550,7 @@ export default function RingkasanPesanan() {
 
                   <p className="text-center text-xs text-gray-400 pb-4">
 
-                    Terima kasih sudah memesan di {cafeName} ☕
+                    Terima kasih sudah memesan di {cafeName} 
 
                   </p>
 
@@ -1523,7 +1558,31 @@ export default function RingkasanPesanan() {
 
               </>
 
+            ) : paymentStatus === "failed" ? (
+              <div className="px-4 pt-10 pb-14">
+                <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 text-center">
+                  <AlertCircle size={38} className="text-red-500 mx-auto mb-3" />
+                  <p className="text-base font-extrabold text-gray-900">Pembayaran gagal</p>
+                  <p className="text-sm text-gray-500 mt-1">Silakan coba bayar ulang dari halaman pembayaran.</p>
+                  <button
+                    onClick={() => navigate(-1)}
+                    className="mt-5 w-full py-3 rounded-2xl font-bold"
+                    style={{ background: "var(--grad)", color: "var(--on-p)" }}
+                  >
+                    Kembali
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 pt-10 pb-14">
+                <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5 text-center">
+                  <Loader2 size={34} className="animate-spin text-amber-500 mx-auto mb-3" />
+                  <p className="text-base font-extrabold text-gray-900">Menunggu konfirmasi pembayaran...</p>
+                  <p className="text-sm text-gray-500 mt-1">Jangan tutup halaman ini. Kami sedang memverifikasi pembayaran.</p>
+                </div>
+              </div>
             )}
+
 
           </>
 

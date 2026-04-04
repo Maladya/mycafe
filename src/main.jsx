@@ -12,6 +12,9 @@ import {
 import LoginPage from "./Admin/LoginPage.jsx";
 import Daftar    from "./daftar.jsx";
 
+// ── Marketing ─────────────────────────────────────────────────────────────────
+import LandingPage from "./LandingPage.jsx";
+
 // ── SuperAdmin ────────────────────────────────────────────────────────────────
 import SuperAdminLogin from "./SuperAdmin/LoginPage.jsx";
 import SuperAdminLayout from "./SuperAdmin/SuperAdminLayout.jsx";
@@ -92,7 +95,7 @@ const navLabels = {
 };
 
 const router = createBrowserRouter([
-  { path: "/", element: <Navigate to="/login" replace /> },
+  { path: "/", element: <LandingPage /> },
 
   { path: "/user/table/:tableId", element: <Home /> },
   { path: "/login",  element: <LoginPage /> },

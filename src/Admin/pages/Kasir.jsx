@@ -204,6 +204,7 @@ export default function Kasir() {
   // ─── processPayment ───────────────────────────────────────────────────────
   const processPayment = async () => {
     if (!currentOrder) return;
+
     // DEBUG: cek token
   const token = localStorage.getItem("kasir_token");
   console.log("Token:", token);
@@ -211,6 +212,33 @@ export default function Kasir() {
   console.log("Headers:", authHeaders());
     setLoading(true);
     try {
+      const paymentMethod = String(currentOrder?.payment_method ?? currentOrder?.paymentMethod ?? currentOrder?.method ?? "").toLowerCase();
+      const isOnline = paymentMethod === "online";
+
+      if (isOnline) {
+        try {
+          const statusRes = await fetch(`${API_URL}/api/midtrans/status/${encodeURIComponent(currentOrder.id)}`, {
+            headers: authHeaders(),
+          });
+          const ct = statusRes.headers.get("content-type") || "";
+          const statusPayload = ct.includes("application/json") ? await statusRes.json().catch(() => ({})) : {};
+          if (!statusRes.ok) {
+            throw new Error(statusPayload?.message || `Gagal cek status pembayaran (${statusRes.status})`);
+          }
+
+          const raw = statusPayload?.data ?? statusPayload;
+          const tx = String(raw?.transaction_status ?? raw?.transactionStatus ?? raw?.status ?? "").toLowerCase();
+          const ok = tx === "settlement" || tx === "capture";
+          if (!ok) {
+            showToast("Pembayaran online belum berhasil. Selesaikan pembayaran dulu.", "error");
+            return;
+          }
+        } catch (err) {
+          showToast(err?.message || "Gagal cek status pembayaran online", "error");
+          return;
+        }
+      }
+
       const res = await fetch(`${API_URL}/api/orders/kasir/${currentOrder.id}/status`, {
         method: "PATCH",
         headers: authHeaders(),
