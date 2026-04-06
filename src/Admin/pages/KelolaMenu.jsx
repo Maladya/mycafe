@@ -5,7 +5,7 @@ import { useAdmin } from "../AdminPanel";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/";
 
 const PER_PAGE = 4;
 

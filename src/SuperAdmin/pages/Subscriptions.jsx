@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Edit, Trash2, CheckCircle2, XCircle, Settings2 } from "lucide-react";
 import DataTable from "../components/DataTable";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/";
 
 function formatRupiah(num) {
   if (!num && num !== 0) return "Rp0";

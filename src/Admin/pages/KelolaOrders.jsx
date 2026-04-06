@@ -79,7 +79,7 @@ function OrderItemsList({ itemList, itemNotes }) {
   );
 }
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/").replace(/\/$/, "");
 const POLL_INTERVAL = 15000;
 
 function parseDateFlexible(raw) {

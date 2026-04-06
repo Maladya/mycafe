@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Store, Users, DollarSign, TrendingUp, Activity, Calendar } from "lucide-react";
 import StatCard from "../components/StatCard";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/";
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState({

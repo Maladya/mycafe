@@ -4,7 +4,7 @@ import { useAdmin } from "../AdminPanel";
 import qrisLogo from "../../assets/qris.png";
 
 const PUBLIC_URL = (import.meta.env.VITE_PUBLIC_URL ?? window.location.origin).replace(/\/$/, "");
-const API_BASE   = (import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000").replace(/\/$/, "");
+const API_BASE   = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/").replace(/\/$/, "");
 
 const fixLogoUrl = (url) => {
   if (!url?.trim()) return "";

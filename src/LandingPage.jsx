@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, CreditCard, Gauge, LayoutDashboard, QrCode, ShieldCheck, Smartphone, Sparkles, Store } from "lucide-react";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://202.74.74.203:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/").replace(/\/$/, "");
 
 function formatRupiah(num) {
   if (!num && num !== 0) return "Rp0";
