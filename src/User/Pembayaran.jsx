@@ -746,7 +746,7 @@ export default function Pembayaran() {
                 </div>
                 <div>
                   <p className="font-bold text-sm text-gray-900">QRIS / E-Wallet / Kartu</p>
-                  <p className="text-xs text-gray-400">Proses via Midtrans Sandbox</p>
+                  <p className="text-xs text-gray-400">Silahkan nanti scan QR code yang tersedia</p>
                 </div>
               </div>
               <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "var(--grad)" }}>
