@@ -881,29 +881,49 @@ function MenuCard({ item, qty, onAdd, onRemove, onClick }) {
 
 function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
   const [activeTab, setActiveTab] = useState("sedang");
-  const { data: ordersRaw, loading, error, refetch } = useApi(
-    async () => {
-      if (!cafeId) return [];
-      const visitorId = getCookie(VISITOR_COOKIE_KEY);
-      const clientFingerprint = localStorage.getItem(CLIENT_FINGERPRINT_KEY);
-      if (!visitorId || !clientFingerprint) return [];
-      const qs = new URLSearchParams();
-      qs.set("cafe_id", String(cafeId));
-      qs.set("meja_id", String(mejaId ?? ""));
-      qs.set("meja", String(mejaId ?? ""));
-      if (visitorId) qs.set("visitor_id", visitorId);
-      if (clientFingerprint) qs.set("fingerprint", clientFingerprint);
-      return api.get(`api/client/riwayat-pembelian?${qs.toString()}`).then(r => r.data ?? r.orders ?? r);
-    },
-    [cafeId]
-  );
+
+  const fetchRiwayatByStatus = async (status) => {
+    if (!cafeId) return [];
+    const visitorId = getCookie(VISITOR_COOKIE_KEY);
+    const clientFingerprint = localStorage.getItem(CLIENT_FINGERPRINT_KEY);
+    if (!visitorId || !clientFingerprint) return [];
+    const qs = new URLSearchParams();
+    qs.set("cafe_id", String(cafeId));
+    qs.set("meja_id", String(mejaId ?? ""));
+    qs.set("meja", String(mejaId ?? ""));
+    qs.set("status", String(status ?? ""));
+    if (visitorId) qs.set("visitor_id", visitorId);
+    if (clientFingerprint) qs.set("fingerprint", clientFingerprint);
+    return api.get(`api/client/riwayat-pembelian?${qs.toString()}`).then((r) => r.data ?? r.orders ?? r);
+  };
+
+  const {
+    data: sedangRaw,
+    loading: loadingSedang,
+    error: errorSedang,
+    refetch: refetchSedang,
+  } = useApi(() => fetchRiwayatByStatus("proses"), [cafeId, mejaId]);
+
+  const {
+    data: selesaiRaw,
+    loading: loadingSelesai,
+    error: errorSelesai,
+    refetch: refetchSelesai,
+  } = useApi(() => fetchRiwayatByStatus("selesai"), [cafeId, mejaId]);
+
+  const loading = activeTab === "sedang" ? loadingSedang : loadingSelesai;
+  const error = activeTab === "sedang" ? errorSedang : errorSelesai;
+  const refetch = () => {
+    refetchSedang();
+    refetchSelesai();
+  };
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  const orders = (Array.isArray(ordersRaw) ? ordersRaw : []).map(o => ({
+  const toOrders = (ordersRaw) => (Array.isArray(ordersRaw) ? ordersRaw : []).map(o => ({
     id:       o.id ?? o.order_id ?? o.orderId,
     status:   o.status ?? "proses",
     waktu:    formatWaktu(o.waktu ?? o.created_at ?? o.tanggal ?? ""),
@@ -919,9 +939,10 @@ function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, 
 
   const isSedang  = s => ["sedang","proses","pending","waiting","processing","paid","lunas","success"].includes(String(s).toLowerCase());
   const isSelesai = s => ["selesai","done","completed"].includes(String(s).toLowerCase());
-  const sedangOrders  = orders.filter(o => isSedang(o.status));
-  const selesaiOrders = orders.filter(o => isSelesai(o.status));
-  const displayed     = activeTab === "sedang" ? sedangOrders : selesaiOrders;
+
+  const sedangOrders = toOrders(sedangRaw);
+  const selesaiOrders = toOrders(selesaiRaw);
+  const displayed = activeTab === "sedang" ? sedangOrders : selesaiOrders;
   const getTotal      = items => items.reduce((s, i) => s + (i.price * i.qty), 0);
 
   return (
