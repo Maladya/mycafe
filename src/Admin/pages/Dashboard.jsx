@@ -11,7 +11,7 @@ import {
 import { useAdmin } from "../AdminPanel";
 import { isPromoActive } from "../data/constants";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 
 function DashboardReportLoader({ cafeRaw, label = "Memuat laporan..." }) {
   const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || cafeRaw?.nama || "Cafe";

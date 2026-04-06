@@ -22,7 +22,7 @@ import {
 
    ──────────────────────────────────────────── */
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 
 const FINGERPRINT_KEY = "astakira_fingerprint";
 

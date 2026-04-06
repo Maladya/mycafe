@@ -16,7 +16,7 @@ import {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 
 const TOKEN_KEY = "astakira_token";
 

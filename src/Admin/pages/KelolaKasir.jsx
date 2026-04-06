@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useAdmin } from "../AdminPanel";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 
 /* --------------------------------------------------
    KELOLA KASIR — Admin Manage Kasir Users

@@ -4,7 +4,7 @@ import {
   Hash, Save, Upload, Loader2, Edit3, AlertCircle, Camera, ChevronDown, ChevronUp
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 
 const authHeaders = (json = true) => {
   const token = localStorage.getItem("token");

@@ -10,7 +10,7 @@ import { ConfirmDialog } from "../components/SharedComponents";
 
 
 
-const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 
 
 

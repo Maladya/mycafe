@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Mail, Calendar } from "lucide-react";
 import DataTable from "../components/DataTable";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 
 export default function ManageAdmins() {
   const [admins, setAdmins] = useState([]);

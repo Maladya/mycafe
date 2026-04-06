@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Wrench } from "lucide-react";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net/").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 const POLL_MS = 30_000;
 export const MAINTENANCE_LS_KEY = "astakira_maintenance_mode";
 
