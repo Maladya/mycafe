@@ -1222,28 +1222,6 @@ export default function Pengaturan() {
 
                   onChange={e => handleLogoUpload(e.target.files?.[0])} />
 
-                <div className="relative">
-
-                  <input value={urlInput} onChange={e => handleUrlInput(e.target.value)}
-
-                    placeholder="Atau masukkan URL logo (https://...)"
-
-                    className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-500 transition-all text-gray-600 pr-8" />
-
-                  {urlInput && (
-
-                    <button onClick={() => handleUrlInput("")}
-
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-red-400">
-
-                      <X size={12} />
-
-                    </button>
-
-                  )}
-
-                </div>
-
               </div>
 
             </div>

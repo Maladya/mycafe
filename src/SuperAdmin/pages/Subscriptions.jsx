@@ -9,21 +9,74 @@ function formatRupiah(num) {
   return `Rp${Number(num).toLocaleString("id-ID")}`;
 }
 
-function safeJsonParse(str) {
-  try {
-    const val = JSON.parse(str);
-    if (val && typeof val === "object") return { ok: true, value: val };
-    return { ok: false, error: "features_json harus berupa object JSON" };
-  } catch (e) {
-    return { ok: false, error: e?.message || "JSON tidak valid" };
+function normalizeFeaturesToList(raw, depth = 0) {
+  if (!raw) return [];
+  if (depth > 3) return [];
+
+  if (typeof raw === "string") {
+    // Handle JSON string / double-encoded JSON
+    let parsed = raw;
+    for (let i = 0; i < 2 && typeof parsed === "string"; i++) {
+      const s = String(parsed || "").trim();
+      const looksLikeJson =
+        (s.startsWith("[") && s.endsWith("]")) ||
+        (s.startsWith("{") && s.endsWith("}")) ||
+        ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")));
+      if (!looksLikeJson) break;
+      try {
+        parsed = JSON.parse(s);
+      } catch {
+        break;
+      }
+    }
+
+    if (parsed !== raw) {
+      return normalizeFeaturesToList(parsed, depth + 1);
+    }
+
+    return String(raw)
+      .split("\n")
+      .map((s) => String(s || "").trim())
+      .filter(Boolean);
   }
+
+  if (Array.isArray(raw)) {
+    // Handle ["[...]"] or ["{...}"]
+    if (raw.length === 1 && typeof raw[0] === "string") {
+      const s = String(raw[0] || "").trim();
+      if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
+        try {
+          const again = JSON.parse(s);
+          return normalizeFeaturesToList(again, depth + 1);
+        } catch {
+          // keep as-is
+        }
+      }
+    }
+
+    return raw
+      .map((x) => {
+        if (x == null) return "";
+        if (typeof x === "string") return x;
+        if (typeof x === "object") return String(x.label ?? x.name ?? x.key ?? "");
+        return String(x);
+      })
+      .map((s) => String(s || "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof raw === "object") {
+    return Object.entries(raw)
+      .filter(([, v]) => v === true || v === 1 || v === "1" || v === "true")
+      .map(([k]) => String(k || "").trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 function featuresSummary(features) {
-  if (!features || typeof features !== "object") return "-";
-  const enabled = Object.entries(features)
-    .filter(([, v]) => v === true)
-    .map(([k]) => k);
+  const enabled = normalizeFeaturesToList(features);
   if (enabled.length === 0) return "-";
   return enabled.slice(0, 3).join(", ") + (enabled.length > 3 ? ` +${enabled.length - 3}` : "");
 }
@@ -56,7 +109,7 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
   const [durationValue, setDurationValue] = useState(30);
   const [isActive, setIsActive] = useState(true);
   const [sortOrder, setSortOrder] = useState(1);
-  const [featuresText, setFeaturesText] = useState("{}");
+  const [featuresText, setFeaturesText] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -69,11 +122,9 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
     setDurationValue(Number(d.value ?? 30));
     setIsActive(Boolean(initial?.is_active ?? initial?.isActive ?? true));
     setSortOrder(Number(initial?.sort_order ?? initial?.sortOrder ?? 1));
-    try {
-      setFeaturesText(JSON.stringify(initial?.features_json ?? initial?.featuresJson ?? {}, null, 2));
-    } catch {
-      setFeaturesText("{}");
-    }
+    const existing = initial?.features_json ?? initial?.featuresJson ?? initial?.features ?? null;
+    const list = normalizeFeaturesToList(existing);
+    setFeaturesText(list.join("\n"));
   }, [open, initial]);
 
   if (!open) return null;
@@ -93,11 +144,10 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
       return;
     }
 
-    const parsed = safeJsonParse(featuresText || "{}");
-    if (!parsed.ok) {
-      setError(parsed.error);
-      return;
-    }
+    const features = String(featuresText || "")
+      .split("\n")
+      .map(s => String(s || "").trim())
+      .filter(Boolean);
 
     const durVal = Number(durationValue);
     const unit = durationUnit === "minute" ? "minute" : "day";
@@ -106,7 +156,7 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
       price: Number(price),
       is_active: Boolean(isActive),
       sort_order: Number(sortOrder) || 1,
-      features_json: parsed.value,
+      features_json: features,
 
       // Forward-compatible
       duration_unit: unit,
@@ -194,7 +244,7 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
 
           <div className="md:col-span-2">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-gray-500">Fitur (JSON)</p>
+              <p className="text-xs font-bold text-gray-500">Fitur</p>
               <label className="flex items-center gap-2 text-xs font-bold text-gray-600">
                 <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} />
                 Aktif
@@ -205,7 +255,7 @@ function PlanModal({ open, initial, onClose, onSubmit, saving }) {
               onChange={e => setFeaturesText(e.target.value)}
               rows={6}
               className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-xs font-mono outline-none focus:border-purple-500 transition-all"
-              placeholder='{"promo": true, "multi_kasir": false}'
+              placeholder="Tulis 1 fitur per baris"
             />
             {error && <p className="text-xs text-red-500 font-semibold mt-2">{error}</p>}
           </div>

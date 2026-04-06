@@ -31,11 +31,73 @@ function getDurationInfo(plan) {
 }
 
 function planFeaturePoints(plan) {
-  const raw = plan?.features_json ?? plan?.featuresJson ?? plan?.features ?? {};
-  if (!raw || typeof raw !== "object") return [];
-  return Object.entries(raw)
-    .filter(([, v]) => v === true)
-    .map(([k]) => String(k).replace(/_/g, " "));
+  let raw = plan?.features_json ?? plan?.featuresJson ?? plan?.features ?? null;
+  if (!raw) return [];
+
+  if (typeof raw === "string") {
+    // Some backends may return JSON as a stringified JSON string (double-encoded)
+    // or as a JSON array/object string. Try parsing up to 2 times.
+    let parsed = raw;
+    for (let i = 0; i < 2 && typeof parsed === "string"; i++) {
+      const s = String(parsed || "").trim();
+      const looksLikeJson =
+        (s.startsWith("[") && s.endsWith("]")) ||
+        (s.startsWith("{") && s.endsWith("}")) ||
+        ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")));
+      if (!looksLikeJson) break;
+      try {
+        parsed = JSON.parse(s);
+      } catch {
+        break;
+      }
+    }
+    raw = parsed;
+
+    if (typeof raw === "string") {
+      return raw
+        .split("\n")
+        .map((s) => String(s || "").trim())
+        .filter(Boolean);
+    }
+  }
+
+  if (Array.isArray(raw)) {
+    // If we got ["[...]"], parse the inner JSON once.
+    if (raw.length === 1 && typeof raw[0] === "string") {
+      const s = String(raw[0] || "").trim();
+      if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
+        try {
+          raw = JSON.parse(s);
+        } catch {
+          // keep as-is
+        }
+      }
+    }
+
+    if (!Array.isArray(raw)) {
+      // Parsed into object map
+      if (typeof raw === "object" && raw) {
+        return Object.entries(raw)
+          .filter(([, v]) => v === true || v === 1 || v === "1" || v === "true")
+          .map(([k]) => String(k).replace(/_/g, " ").trim())
+          .filter(Boolean);
+      }
+      return [];
+    }
+
+    return raw
+      .map((x) => String(x?.label ?? x?.name ?? x?.key ?? x ?? "").trim())
+      .filter(Boolean);
+  }
+
+  if (typeof raw === "object") {
+    return Object.entries(raw)
+      .filter(([, v]) => v === true || v === 1 || v === "1" || v === "true")
+      .map(([k]) => String(k).replace(/_/g, " "))
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 export default function LandingPage() {

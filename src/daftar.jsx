@@ -99,6 +99,7 @@ export default function Daftar() {
   const [email,        setEmail]        = useState("");
   const [username,     setUsername]     = useState("");
   const [password,     setPassword]     = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [err,          setErr]          = useState("");
@@ -106,8 +107,12 @@ export default function Daftar() {
 
   const handleDaftar = async () => {
     setErr("");
-    if (!namaCafe || !email || !username || !password) {
+    if (!namaCafe || !email || !username || !password || !confirmPassword) {
       setErr("Semua field wajib diisi");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErr("Konfirmasi password tidak sama");
       return;
     }
     setLoading(true);
@@ -232,6 +237,19 @@ export default function Daftar() {
                 <div className="relative">
                   <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyPress={handleKeyPress} placeholder="••••••••"
+                    className="w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-10 py-3 text-white placeholder-gray-500 outline-none focus:border-amber-500 transition-all text-sm" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-amber-400 transition-colors">
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-300 text-xs font-semibold mb-2 block uppercase tracking-wide">Konfirmasi Password</label>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input type={showPassword ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onKeyPress={handleKeyPress} placeholder="••••••••"
                     className="w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-10 py-3 text-white placeholder-gray-500 outline-none focus:border-amber-500 transition-all text-sm" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-amber-400 transition-colors">

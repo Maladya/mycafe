@@ -76,6 +76,67 @@ export default function Billing() {
     }
   };
 
+  const getCafeIdForAuto = () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      let cafeId = user?.cafe_id ?? user?.cafeId ?? user?.cafe?.id ?? "";
+      if (!cafeId) {
+        try {
+          const latest = JSON.parse(localStorage.getItem("latest_cafe") || "{}");
+          cafeId = latest?.id ?? latest?.cafe_id ?? latest?.cafeId ?? "";
+        } catch {}
+      }
+      return cafeId ? String(cafeId) : "";
+    } catch {
+      return "";
+    }
+  };
+
+  const autoActivateFreePlanIfNeeded = async ({ listPlans, me } = {}) => {
+    const cafeId = getCafeIdForAuto();
+    const key = cafeId ? `astakira_auto_free_activated:${cafeId}` : "astakira_auto_free_activated";
+    try {
+      if (sessionStorage.getItem(key)) return;
+    } catch {}
+
+    const hasAnyPlanId = Boolean(me?.plan_id ?? me?.planId ?? me?.subscription_plan_id);
+    const alreadyActive = isSubReallyActive(me);
+    if (alreadyActive || hasAnyPlanId) return;
+
+    const arr = Array.isArray(listPlans) ? listPlans : [];
+    const freePlan = arr.find(p => Number(p?.price ?? 0) === 0) ?? null;
+    if (!freePlan) return;
+    if (freePlan.eligible === false || freePlan.is_eligible === false) return;
+
+    setPaying(true);
+    try {
+      showToast("Mengaktifkan paket gratis...", "info");
+      const res = await fetchWithTimeout(`${API_URL}/api/subscriptions/checkout`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ plan_id: freePlan.id, price: 0 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const reason = data?.reason ?? data?.data?.reason ?? "";
+        if (res.status === 403 && reason === "free_plan_already_used") {
+          showToast("Paket gratis sudah pernah digunakan.", "info");
+          return;
+        }
+        throw new Error(data?.message || `Gagal mengaktifkan paket gratis (HTTP ${res.status})`);
+      }
+
+      try { sessionStorage.setItem(key, String(Date.now())); } catch {}
+      const confirmed = await pollUntilActive({ intervalMs: 2000, timeoutMs: 30000 });
+      setSub(confirmed);
+      showToast("Paket gratis aktif!", "success");
+    } catch (e) {
+      showToast(e?.message || "Gagal mengaktifkan paket gratis", "error");
+    } finally {
+      setPaying(false);
+    }
+  };
+
   const pollUntilActive = async ({ intervalMs = 3000, timeoutMs = 60000 } = {}) => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -166,6 +227,8 @@ export default function Billing() {
       const envKey = import.meta.env.VITE_MIDTRANS_CLIENT_KEY ?? "";
       const resolvedKey = key || envKey;
       if (resolvedKey) setSnapClientKey(resolvedKey);
+
+      await autoActivateFreePlanIfNeeded({ listPlans, me });
     } catch (e) {
       console.error("refreshAll billing failed", e);
       showToast(e?.message || "Gagal memuat langganan", "error");
@@ -255,11 +318,77 @@ export default function Billing() {
   }, [plans]);
 
   const getFeatures = (p) => {
-    const f = p?.features_json ?? p?.featuresJson ?? p?.features ?? {};
-    if (!f || typeof f !== "object") return [];
-    return Object.entries(f)
-      .filter(([, v]) => v === true)
-      .map(([k]) => k);
+    let f = p?.features_json ?? p?.featuresJson ?? p?.features ?? {};
+    if (!f) return [];
+
+    if (typeof f === "string") {
+      // Some backends may store JSON as a stringified JSON string (double-encoded).
+      // Try parsing up to 2 times. If it still stays a string, fallback to line-splitting.
+      let parsed = f;
+      for (let i = 0; i < 2 && typeof parsed === "string"; i++) {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch {
+          break;
+        }
+      }
+      f = parsed;
+      if (typeof f === "string") {
+        return String(f)
+          .split("\n")
+          .map((s) => String(s || "").trim())
+          .filter(Boolean);
+      }
+    }
+
+    if (Array.isArray(f)) {
+      // If we still get a single element that is a JSON array/object string, parse it.
+      if (f.length === 1 && typeof f[0] === "string") {
+        const s = String(f[0] || "").trim();
+        if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
+          try {
+            const again = JSON.parse(s);
+            f = again;
+          } catch {
+            // keep as-is
+          }
+        }
+      }
+
+      if (!Array.isArray(f)) {
+        // Parsed into object map
+        if (typeof f === "object" && f) {
+          return Object.entries(f)
+            .filter(([, v]) => v === true || v === 1 || v === "1" || v === "true")
+            .map(([k]) => String(k || "").trim())
+            .filter(Boolean);
+        }
+        return [];
+      }
+
+      return f
+        .map((x) => {
+          if (x == null) return "";
+          if (typeof x === "string") return x;
+          if (typeof x === "object") {
+            const enabled = x.enabled ?? x.is_active ?? x.active ?? true;
+            if (enabled === false) return "";
+            return String(x.label ?? x.name ?? x.key ?? "");
+          }
+          return String(x);
+        })
+        .map((s) => String(s || "").trim())
+        .filter(Boolean);
+    }
+
+    if (typeof f === "object") {
+      return Object.entries(f)
+        .filter(([, v]) => v === true || v === 1 || v === "1" || v === "true")
+        .map(([k]) => String(k || "").trim())
+        .filter(Boolean);
+    }
+
+    return [];
   };
 
   const getPlanDurationLabel = (p) => {
@@ -483,7 +612,7 @@ export default function Billing() {
                     {features.map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-xs text-gray-700">
                         <Check size={13} className="flex-shrink-0 mt-0.5 text-amber-500" />
-                        {f}
+                        <span className="break-words">{f}</span>
                       </li>
                     ))}
                   </ul>

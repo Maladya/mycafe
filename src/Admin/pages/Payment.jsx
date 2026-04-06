@@ -33,7 +33,7 @@ const fixImgUrl = (url) => {
 
 const initialMethods = [
   { id: "tunai",         label: "Tunai",            desc: "Pembayaran langsung dengan uang tunai.",                                 icon: "cash",     enabled: true,  configurable: false },
-  { id: "online",        label: "Online",           desc: "Pembayaran online via Midtrans (QRIS / E-Wallet / Kartu).",            icon: "online",   enabled: true,  configurable: true  },
+  { id: "online",        label: "Online",           desc: "Pembayaran online (QRIS / E-Wallet / Kartu).",            icon: "online",   enabled: true,  configurable: true  },
   { id: "transfer_bank", label: "Transfer Bank",    desc: "Transfer ke rekening BCA, Mandiri, BNI, atau BRI.",                   icon: "transfer", enabled: false, configurable: true  },
   { id: "ewalet",        label: "E-Wallet Manual",  desc: "Tampilkan nomor GoPay / OVO / Dana untuk transfer manual.",            icon: "ewallet",  enabled: false, configurable: true  },
 ];
@@ -90,6 +90,9 @@ export default function Payment() {
   const [qrPreviewUrl, setQrPreviewUrl] = useState("");
 
   const fileRef = useRef();
+
+  // Prevent repeated auto-enabling
+  const autoEnabledRef = useRef(false);
 
   // ── Fetch semua data pembayaran ──────────────────────────────────────────
   useEffect(() => {
@@ -211,6 +214,57 @@ export default function Payment() {
 
     fetchAll();
   }, []);
+
+  // ── Default: pastikan metode utama aktif (Tunai & Online) ───────────────
+  useEffect(() => {
+    if (loading) return;
+    if (autoEnabledRef.current) return;
+
+    const flagKey = "astakira_auto_enable_payments_v1";
+    let already = false;
+    try {
+      already = localStorage.getItem(flagKey) === "1";
+    } catch {
+      already = false;
+    }
+    if (already) {
+      autoEnabledRef.current = true;
+      return;
+    }
+
+    const targets = methods.filter((m) => ACTIVE_METHOD_IDS.includes(m.id));
+    const anyDisabled = targets.some((m) => !m.enabled);
+    if (!anyDisabled) {
+      autoEnabledRef.current = true;
+      try { localStorage.setItem(flagKey, "1"); } catch {}
+      return;
+    }
+
+    autoEnabledRef.current = true;
+
+    // Optimistic: set ON locally
+    setMethods((prev) =>
+      prev.map((m) => (ACTIVE_METHOD_IDS.includes(m.id) ? { ...m, enabled: true } : m))
+    );
+
+    // Persist once (best-effort)
+    (async () => {
+      for (const m of targets) {
+        if (m.enabled) continue;
+        const endpointId = m.backendId ?? m.id;
+        try {
+          await fetch(`${API_URL}/api/pembayaran/${endpointId}`, {
+            method: "PUT",
+            headers: authHeaders(),
+            body: JSON.stringify({ status_method: true }),
+          });
+        } catch {
+          // ignore
+        }
+      }
+      try { localStorage.setItem(flagKey, "1"); } catch {}
+    })();
+  }, [loading, methods]);
 
   // ── Fetch e-wallet hanya saat tab E-Wallet dibuka (hindari 404 saat load awal) ──
   useEffect(() => {

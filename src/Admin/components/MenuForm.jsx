@@ -783,17 +783,6 @@ export default function MenuForm({ item, onSave, onCancel }) {
               </div>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => uploadMenuImage(e.target.files?.[0])}/>
               {uploadErr && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><X size={11}/>{uploadErr}</p>}
-              {!uploading && (
-                <div className="mt-2">
-                  <p className="text-[10px] text-gray-400 mb-1">Atau masukkan URL gambar manual:</p>
-                  <input
-                    value={form.image_url}
-                    onChange={e => { set("image_url", e.target.value); setPreviewUrl(e.target.value); setUploadErr(""); }}
-                    placeholder="https://..."
-                    className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-500 transition-all"
-                  />
-                </div>
-              )}
             </div>
 
             {/* Nama */}
