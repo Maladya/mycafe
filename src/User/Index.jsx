@@ -305,6 +305,33 @@ function MenuImage({ src, alt, className = "w-full h-full object-cover" }) {
   return <img src={src} alt={alt} className={className} onError={() => setErr(true)} />;
 }
 
+function SkeletonCard() {
+  return (
+    <div className="flex-shrink-0 w-44 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 animate-pulse">
+      <div className="h-32 bg-gray-200" />
+      <div className="p-3 space-y-2">
+        <div className="h-3 bg-gray-200 rounded w-3/4" />
+        <div className="h-3 bg-gray-200 rounded w-1/2" />
+        <div className="h-6 bg-gray-200 rounded-xl mt-2" />
+      </div>
+    </div>
+  );
+}
+
+function SkeletonSection() {
+  return (
+    <div className="mb-8">
+      <div className="px-4 flex items-center gap-2 mb-3 animate-pulse">
+        <div className="w-8 h-8 bg-gray-200 rounded-xl" />
+        <div className="h-4 bg-gray-200 rounded w-24" />
+      </div>
+      <div className="flex gap-3 overflow-hidden px-4">
+        {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+      </div>
+    </div>
+  );
+}
+
 function MenuCard({ item, qty = 0, onAdd, onRemove, onClick }) {
   const isHot = item?.badge === "Best Seller" || item?.badge === "Favorit";
 
