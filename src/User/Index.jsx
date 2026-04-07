@@ -8,12 +8,14 @@ import {
 } from "lucide-react";
 
 import ActionConfirmModal from "../components/ActionConfirmModal";
+import { RiwayatPesananSheet } from "./Search";
 
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 const TOKEN_KEY = "astakira_token";
 const KNOWN_GROUPS_KEY = "known_variant_groups";
+
 const tokenManager = {
   get:   ()  => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
   set:   (t) => localStorage.setItem(TOKEN_KEY, t),
@@ -388,7 +390,7 @@ function MenuCard({ item, qty = 0, onAdd, onRemove, onClick }) {
           ) : (
             <button
               onClick={onAdd}
-              className="px-3 py-1.5 rounded-xl text-xs font-extrabold hover:scale-105 transition-all"
+              className="px-2.5 py-1.25 rounded-xl text-[10px] font-extrabold hover:scale-105 transition-all whitespace-nowrap"
               style={{ background:"var(--grad)", color:"var(--on-p)" }}
             >
               + Tambah
@@ -722,7 +724,7 @@ function MenuDetailSheet({ item, menuDatabase, cafeId, onClose, onAddToCart, onO
           </button>
         </div>
 
-        <div className="overflow-y-auto scrollbar-hide" style={{ maxHeight:"calc(92vh - 150px)" }}>
+        <div className="overflow-y-auto scrollbar-hide" style={{ maxHeight:"calc(92vh - 170px)", paddingBottom: 140 }}>
           <div className="px-5 pb-4">
             <div className="w-full h-44 rounded-2xl overflow-hidden border border-gray-100" style={{ background:"var(--bg-soft)" }}>
               <MenuImage src={activeItem.image_url} alt={activeItem.name} className="w-full h-full object-cover" />

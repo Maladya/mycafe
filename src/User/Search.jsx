@@ -844,9 +844,12 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
 
 
 
+
+
+
 // ── RiwayatPesananSheet — fetch dari API seperti Home ─────────────────────────
 
-function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
+export function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, onClose, onNavigateToPesanan, onReorder }) {
 
   const [activeTab, setActiveTab] = useState("sedang");
 
