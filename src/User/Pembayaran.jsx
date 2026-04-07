@@ -461,6 +461,7 @@ export default function Pembayaran() {
         try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme)); } catch {}
         setCafeName(raw?.nama_cafe ?? raw?.nama ?? raw?.name ?? "ASTAKIRA");
         const key = raw?.midtrans_client_key ?? raw?.snap_client_key ?? "";
+
         if (key) setSnapClientKey(key);
       })
       .catch(() => {});
@@ -484,7 +485,17 @@ export default function Pembayaran() {
 
         setAvailableMethods(norm);
 
-        const hasOnline = norm.some((m) => ["online", "midtrans", "qris"].includes(m.id));
+        const hasOnline = norm.some((m) => {
+          const id = String(m?.id ?? "").toLowerCase();
+          const label = String(m?.label ?? "").toLowerCase();
+          const text = `${id} ${label}`;
+          return (
+            ["online", "midtrans", "qris"].includes(id) ||
+            text.includes("online") ||
+            text.includes("midtrans") ||
+            text.includes("qris")
+          );
+        });
         setOnlineEnabled(hasOnline);
 
         if (!hasOnline && method === "online") {
@@ -493,7 +504,7 @@ export default function Pembayaran() {
       })
       .catch(() => {
         setAvailableMethods([]);
-        setOnlineEnabled(false); // Changed from true to false
+        setOnlineEnabled(false);
       });
   }, [CAFE_ID, method]);
 
