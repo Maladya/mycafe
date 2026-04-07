@@ -518,10 +518,8 @@ function MenuDetailSheet({ item, menuDatabase, cafeId, onClose, onAddToCart, onO
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError]   = useState("");
 
-  // selectedVariants: { [namaGroup]: { id, variantObj } }
   const [selectedVariants, setSelectedVariants] = useState({});
 
-  // Fetch semua varian milik menu ini → extract nama_group unik
   const [namaGroups, setNamaGroups]   = useState([]);
   const [varFetched, setVarFetched]   = useState(false);
 
@@ -637,6 +635,124 @@ function MenuDetailSheet({ item, menuDatabase, cafeId, onClose, onAddToCart, onO
     });
     setTimeout(() => { setAddedToCart(false); onClose(); }, 1200);
   };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end animate-fadeIn"
+      style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)" }} onClick={onClose}>
+      <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[2rem] animate-slideUp overflow-hidden"
+        style={{ maxHeight:"92vh" }} onClick={e => e.stopPropagation()}>
+        <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-2" />
+        <div className="flex items-start justify-between px-5 pb-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-widest" style={{ color:"var(--p)" }}>{activeItem.category || ""}</p>
+            <h2 className="text-xl font-extrabold text-gray-900 leading-tight line-clamp-2">{activeItem.name}</h2>
+            <p className="text-sm font-extrabold mt-1" style={{ color:"var(--p)" }}>Rp{Number(activeItem.price || 0).toLocaleString("id-ID")}</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-all">
+            <span className="text-gray-600 font-bold text-xl leading-none">×</span>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto scrollbar-hide" style={{ maxHeight:"calc(92vh - 150px)" }}>
+          <div className="px-5 pb-4">
+            <div className="w-full h-44 rounded-2xl overflow-hidden border border-gray-100" style={{ background:"var(--bg-soft)" }}>
+              <MenuImage src={activeItem.image_url} alt={activeItem.name} className="w-full h-full object-cover" />
+            </div>
+          </div>
+
+          {detailLoading && (
+            <p className="px-5 pb-3 text-xs text-gray-400">Memuat detail...</p>
+          )}
+          {!detailLoading && detailError && (
+            <p className="px-5 pb-3 text-xs text-red-400">{detailError}</p>
+          )}
+
+          {varFetched && namaGroups.length > 0 && (
+            <div className="border-t border-gray-100">
+              {namaGroups.map(namaGroup => (
+                <VariantGroupSection
+                  key={namaGroup}
+                  namaGroup={namaGroup}
+                  menuId={activeItem.id}
+                  basePrice={activeItem.price}
+                  selectedId={selectedVariants[namaGroup]?.id ?? null}
+                  onSelect={(variantId, variantObj) => handleSelect(namaGroup, variantId, variantObj)}
+                  variants={activeItem.variants?.filter(v =>
+                    (v.namaGroup ?? v.nama_group ?? v.nama_grup ?? v.group ?? "") === namaGroup
+                  )}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="px-5 py-5 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-gray-900">Catatan</p>
+              <p className="text-[10px] text-gray-400">opsional</p>
+            </div>
+            <textarea
+              value={catatan}
+              onChange={e => setCatatan(e.target.value)}
+              placeholder="Contoh: Tidak pakai bawang..."
+              maxLength={200}
+              rows={3}
+              className="w-full mt-2 px-4 py-3 text-sm text-gray-700 placeholder-gray-400 resize-none outline-none bg-white rounded-2xl border-2"
+              style={{ borderColor: catatan ? "var(--p)" : "#e5e7eb" }}
+            />
+            <div className="mt-1 text-right">
+              <span className="text-[10px] text-gray-400">{catatan.length}/200</span>
+            </div>
+          </div>
+
+          {relatedItems.length > 0 && (
+            <div className="px-5 pb-6 border-t border-gray-100">
+              <h3 className="text-base font-bold text-gray-900 mb-4 pt-5">Menu Lainnya</h3>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {relatedItems.map(rel => (
+                  <div key={rel.id} onClick={() => onOpenItem(rel)}
+                    className="flex-shrink-0 w-36 bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer">
+                    <div className="h-24 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
+                      <MenuImage src={rel.image_url} alt={rel.name} />
+                    </div>
+                    <div className="p-3">
+                      <p className="font-bold text-gray-900 text-xs line-clamp-1">{rel.name}</p>
+                      <p className="font-bold text-xs mt-1" style={{ color:"var(--p)" }}>Rp{Number(rel.price || 0).toLocaleString("id-ID")}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">Total Harga</p>
+              <p className="text-2xl font-extrabold text-gray-900">Rp{Number(totalPrice || 0).toLocaleString("id-ID")}</p>
+            </div>
+            <div className="flex items-center gap-3 rounded-2xl px-3 py-2 border-2"
+              style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
+              <button onClick={() => setQty(q => Math.max(1, q-1))} className="w-8 h-8 flex items-center justify-center bg-white rounded-xl shadow-sm transition-all">
+                <Minus size={16} style={{ color:"var(--p)" }} />
+              </button>
+              <span className="font-extrabold text-gray-900 text-lg w-6 text-center">{qty}</span>
+              <button onClick={() => setQty(q => q+1)} className="w-8 h-8 flex items-center justify-center rounded-xl shadow-sm hover:shadow-md transition-all"
+                style={{ background:"var(--grad)", color:"var(--on-p)" }}>
+                <Plus size={16} style={{ color:"var(--on-p)" }} />
+              </button>
+            </div>
+          </div>
+          <button onClick={handleAdd}
+            className="w-full py-4 rounded-2xl font-bold text-base transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-lg hover:scale-[1.02]"
+            style={addedToCart ? { background:"#22c55e", color:"#fff" } : { background:"var(--grad)", color:"var(--on-p)" }}>
+            {addedToCart ? <><Check size={20} /> Ditambahkan!</> : <><ShoppingBag size={20} /> Tambah ke Pesanan</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ══════════════════════════════════════════════════════════
     Main Home Component
