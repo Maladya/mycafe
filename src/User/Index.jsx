@@ -1193,9 +1193,6 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
       </div>
     </div>
   );
-}
-
-/* ══════════════════════════════════════════════════════════
     Main Home Component
 ══════════════════════════════════════════════════════════ */
 export default function Home() {
@@ -1211,6 +1208,7 @@ export default function Home() {
   useEffect(() => {
     if (!CAFE_ID || !MEJA_ID || initClientOnceRef.current) return;
     initClientOnceRef.current = true;
+
     (async () => {
       let fingerprint = "";
       try { fingerprint = await getOrCreateFingerprint(); } catch {}
@@ -1227,15 +1225,44 @@ export default function Home() {
     })();
   }, [CAFE_ID, MEJA_ID]);
 
+  useEffect(() => {
+    const paymentStatus = String(searchParams.get("payment_status") || "").toLowerCase();
+    const orderId = String(searchParams.get("order_id") || searchParams.get("orderId") || "");
+    const msg = String(searchParams.get("message") || "").trim();
+    const result = String(searchParams.get("result") || "").toLowerCase();
+
+    const hasAny = Boolean(paymentStatus || orderId || msg || result);
+    if (!hasAny) return;
+
+    setMidtransReturn({ paymentStatus, orderId, msg, result });
+
+    if (paymentStatus === "paid" || paymentStatus === "failed") {
+      setShowRiwayat(true);
+    }
+
+    try {
+      const url = new URL(window.location.href);
+      ["payment_status", "order_id", "orderId", "message", "result", "transaction_status", "status_code", "synced"].forEach((k) => {
+        url.searchParams.delete(k);
+      });
+      navigate({ pathname: url.pathname, search: url.search }, { replace: true });
+    } catch {
+      // ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [activeCategory, setActiveCategory]       = useState("all");
   const [selectedItem, setSelectedItem]           = useState(null);
   const [lihatSemuaSection, setLihatSemuaSection] = useState(null);
   const [showRiwayat, setShowRiwayat]             = useState(false);
+  const [midtransReturn, setMidtransReturn]       = useState(null);
   const [paramError, setParamError]               = useState("");
   const [tableValidating, setTableValidating]     = useState(false);
   const [tableOk, setTableOk]                     = useState(null);
   const [validateKey, setValidateKey]             = useState(0);
   const [cart, setCart]                           = useState(locationState?.existingCart ?? {});
+
   const [showEmptyCartConfirm, setShowEmptyCartConfirm] = useState(false);
   const [pendingReplace, setPendingReplace] = useState(null);
   const sectionRefs                               = useRef({});
@@ -1252,33 +1279,6 @@ export default function Home() {
     () => CAFE_ID ? api.get(`api/pengaturan/user/${CAFE_ID}`).then(r => r.data ?? r) : Promise.resolve(null),
     [CAFE_ID]
   );
-
-  useEffect(() => {
-    setParamError(""); setTableOk(null); setTableValidating(false);
-    if (!CAFE_ID) { setParamError("Cafe tidak ditemukan"); return; }
-    const mejaN = Number(MEJA_ID);
-    if (!Number.isFinite(mejaN) || mejaN <= 0) { setParamError("Meja tidak ditemukan"); return; }
-    setTableValidating(true);
-    const token = tokenManager.get() || localStorage.getItem("token") || "";
-    fetch(`${BASE_URL}/api/tables`, {
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    })
-      .then(r => r.json())
-      .then(r => {
-        const list = r?.data ?? r?.tables ?? r ?? [];
-        const arr  = Array.isArray(list) ? list : [];
-        const exists = arr.some(t => {
-          const no = Number(t.nomor_meja ?? t.no_meja ?? t.meja ?? t.id);
-          const tCafe = t.cafe_id ?? t.cafeId ?? t.cafe ?? null;
-          if (no !== mejaN) return false;
-          return tCafe == null || String(tCafe) === String(CAFE_ID);
-        });
-        if (!exists && arr.length > 0) console.warn("Meja tidak ditemukan di API, bypass validasi");
-        setTableOk(true);
-      })
-      .catch(() => setTableOk(true))
-      .finally(() => setTableValidating(false));
-  }, [CAFE_ID, MEJA_ID, validateKey]);
 
   useEffect(() => {
     if (!CAFE_ID || cafeLoading) return;
@@ -1334,6 +1334,25 @@ export default function Home() {
     return (
       <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
         <MaintenanceBanner />
+        {midtransReturn && (
+          <div className="fixed top-4 left-0 right-0 z-50 px-4">
+            <div className={`max-w-md mx-auto rounded-2xl px-4 py-3 shadow-lg border text-sm font-semibold ${midtransReturn.paymentStatus === "paid" ? "bg-green-50 border-green-200 text-green-700" : midtransReturn.paymentStatus === "failed" ? "bg-red-50 border-red-200 text-red-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-extrabold">
+                    {midtransReturn.paymentStatus === "paid" ? "Pembayaran berhasil" : midtransReturn.paymentStatus === "failed" ? "Pembayaran tidak berhasil" : "Menunggu pembayaran"}
+                  </p>
+                  <p className="text-xs font-medium opacity-80 mt-0.5">
+                    {midtransReturn.msg || (midtransReturn.orderId ? `Order: ${midtransReturn.orderId}` : "")}
+                  </p>
+                </div>
+                <button onClick={() => setMidtransReturn(null)} className="w-7 h-7 rounded-xl bg-white/70 border border-black/5 flex items-center justify-center">
+                  <span className="text-gray-700 font-black leading-none">×</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="max-w-md mx-auto"><SkeletonSection /><SkeletonSection /><SkeletonSection /></div>
       </div>
     );
@@ -1343,6 +1362,25 @@ export default function Home() {
     return (
       <div className="relative min-h-screen" style={{ background:"var(--bg)", color:"var(--tx)" }}>
         <MaintenanceBanner />
+        {midtransReturn && (
+          <div className="fixed top-4 left-0 right-0 z-50 px-4">
+            <div className={`max-w-md mx-auto rounded-2xl px-4 py-3 shadow-lg border text-sm font-semibold ${midtransReturn.paymentStatus === "paid" ? "bg-green-50 border-green-200 text-green-700" : midtransReturn.paymentStatus === "failed" ? "bg-red-50 border-red-200 text-red-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-extrabold">
+                    {midtransReturn.paymentStatus === "paid" ? "Pembayaran berhasil" : midtransReturn.paymentStatus === "failed" ? "Pembayaran tidak berhasil" : "Menunggu pembayaran"}
+                  </p>
+                  <p className="text-xs font-medium opacity-80 mt-0.5">
+                    {midtransReturn.msg || (midtransReturn.orderId ? `Order: ${midtransReturn.orderId}` : "")}
+                  </p>
+                </div>
+                <button onClick={() => setMidtransReturn(null)} className="w-7 h-7 rounded-xl bg-white/70 border border-black/5 flex items-center justify-center">
+                  <span className="text-gray-700 font-black leading-none">×</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="max-w-md mx-auto px-4 py-8">
           <ErrorState message={paramError} onRetry={() => { setParamError(""); setValidateKey(k => k+1); refetchCafe(); refetchMenu(); refetchCat(); }} />
         </div>

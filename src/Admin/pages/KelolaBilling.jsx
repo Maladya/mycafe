@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Check, Shield, ChevronRight, CreditCard, Calendar, AlertCircle, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
@@ -42,6 +42,7 @@ function loadSnapScript(clientKey) {
 // ─── KOMPONEN ─────────────────────────────────────────────────────────────────
 export default function Billing() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [plans, setPlans] = useState([]);
   const [sub, setSub] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,37 @@ export default function Billing() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    const paymentStatus = String(searchParams.get("payment_status") || "").toLowerCase();
+    const subscriptionStatus = String(searchParams.get("subscription_status") || "").toLowerCase();
+    const msg = String(searchParams.get("message") || "").trim();
+    const synced = searchParams.get("synced");
+
+    const hasAny = Boolean(paymentStatus || subscriptionStatus || msg || synced);
+    if (!hasAny) return;
+
+    if (paymentStatus === "paid" || subscriptionStatus === "active") {
+      showToast(msg || "Pembayaran berhasil.", "success");
+    } else if (paymentStatus === "failed") {
+      showToast(msg || "Pembayaran tidak berhasil.", "error");
+    } else if (paymentStatus === "pending") {
+      showToast(msg || "Menunggu pembayaran.", "info");
+    } else {
+      showToast(msg || "Status pembayaran diperbarui.", "info");
+    }
+
+    if (typeof refreshAll === "function") {
+      refreshAll();
+    }
+
+    try {
+      navigate({ search: "" }, { replace: true });
+    } catch {
+      // ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isSubReallyActive = (me) => {
     const st = String(me?.status ?? "").toLowerCase();
