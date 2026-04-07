@@ -305,27 +305,69 @@ function MenuImage({ src, alt, className = "w-full h-full object-cover" }) {
   return <img src={src} alt={alt} className={className} onError={() => setErr(true)} />;
 }
 
-function SkeletonCard() {
+function MenuCard({ item, qty = 0, onAdd, onRemove, onClick }) {
+  const isHot = item?.badge === "Best Seller" || item?.badge === "Favorit";
+
   return (
-    <div className="flex-shrink-0 w-44 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 animate-pulse">
-      <div className="h-32 bg-gray-200" />
-      <div className="p-3 space-y-2">
-        <div className="h-3 bg-gray-200 rounded w-3/4" />
-        <div className="h-3 bg-gray-200 rounded w-1/2" />
-        <div className="h-6 bg-gray-200 rounded-xl mt-2" />
+    <div
+      className="flex-shrink-0 w-44 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="relative h-32 overflow-hidden" style={{ background:"var(--bg-soft)" }}>
+        <MenuImage src={item?.image_url} alt={item?.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+        {item?.badge && (
+          <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow">
+            {item.badge}
+          </div>
+        )}
+        {isHot && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-0.5 bg-black/60 backdrop-blur-sm rounded-full px-1.5 py-0.5">
+            <Flame size={9} className="text-orange-400" />
+            <span className="text-[9px] text-orange-300 font-bold">Hot</span>
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-function SkeletonSection() {
-  return (
-    <div className="mb-8">
-      <div className="px-4 flex items-center gap-2 mb-3 animate-pulse">
-        <div className="w-8 h-8 bg-gray-200 rounded-xl" />
-        <div className="h-4 bg-gray-200 rounded w-24" />
-      </div>
-      <div className="flex gap-3 overflow-hidden px-4">
-        {[1,2,3].map(i => <SkeletonCard key={i} />)}
+
+      <div className="p-3">
+        <p className="font-extrabold text-gray-900 text-sm leading-tight line-clamp-2 min-h-[2.5rem]">{item?.name}</p>
+        {item?.tagline && (
+          <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed mt-1 min-h-[2.25rem]">{item.tagline}</p>
+        )}
+
+        <div className="flex items-center justify-between mt-2" onClick={(e) => e.stopPropagation()}>
+          <p className="font-extrabold text-base leading-none" style={{ color:"var(--p)" }}>
+            Rp{Number(item?.price || 0).toLocaleString("id-ID")}
+          </p>
+
+          {qty > 0 ? (
+            <div className="flex items-center gap-2 rounded-xl px-2 py-1 border"
+              style={{ background:"var(--bg-soft)", borderColor:"var(--p-20)" }}>
+              <button
+                onClick={() => onRemove?.(item?.id)}
+                className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs"
+                style={{ background:"var(--p)" }}
+              >
+                −
+              </button>
+              <span className="font-bold text-xs w-4 text-center" style={{ color:"var(--s)" }}>{qty}</span>
+              <button
+                onClick={onAdd}
+                className="w-6 h-6 rounded-lg flex items-center justify-center text-white font-bold text-xs"
+                style={{ background:"var(--p)" }}
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onAdd}
+              className="px-3 py-1.5 rounded-xl text-xs font-extrabold hover:scale-105 transition-all"
+              style={{ background:"var(--grad)", color:"var(--on-p)" }}
+            >
+              + Tambah
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
