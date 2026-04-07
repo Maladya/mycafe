@@ -99,14 +99,7 @@ function loadSnapScript(clientKey) {
     const script = document.createElement("script");
     script.id = "midtrans-snap";
 
-    const envProd = String(import.meta.env.VITE_MIDTRANS_IS_PRODUCTION ?? "").toLowerCase();
-    const byEnv = envProd === "true" || envProd === "1" || envProd === "yes" || envProd === "y";
-    const byKey = clientKey && !String(clientKey).startsWith("SB-");
-    const isProd = byEnv || byKey;
-
-    script.src = isProd
-      ? "https://app.midtrans.com/snap/snap.js"
-      : "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
     script.setAttribute("data-client-key", clientKey);
     script.onload = resolve;
     script.onerror = () => reject(new Error("Gagal memuat Midtrans Snap"));

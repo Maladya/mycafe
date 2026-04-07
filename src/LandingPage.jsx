@@ -66,7 +66,7 @@ function planFeaturePoints(plan) {
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Syne:wght@700;800;900&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 16px; line-height: 1.55; text-rendering: geometricPrecision; -webkit-font-smoothing: antialiased; }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 15px; line-height: 1.62; text-rendering: geometricPrecision; -webkit-font-smoothing: antialiased; }
   .font-display { font-family: 'Syne', sans-serif !important; }
 
   @keyframes fadeUp {
@@ -107,9 +107,9 @@ const STYLES = `
 
   .btn-primary {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 16px 32px; border-radius: 16px;
+    padding: 14px 26px; border-radius: 14px;
     background: linear-gradient(135deg,#f59e0b,#f97316);
-    color: #fff; font-weight: 800; font-size: 16px;
+    color: #fff; font-weight: 800; font-size: 15px;
     text-decoration: none; border: none; cursor: pointer;
     box-shadow: 0 8px 28px rgba(245,158,11,.38);
     transition: box-shadow .2s, transform .2s;
@@ -121,9 +121,9 @@ const STYLES = `
 
   .btn-outline {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 16px 32px; border-radius: 16px;
+    padding: 14px 26px; border-radius: 14px;
     border: 1.5px solid #e7e5e4; background: #fff;
-    color: #44403c; font-weight: 700; font-size: 16px;
+    color: #44403c; font-weight: 700; font-size: 15px;
     text-decoration: none; cursor: pointer;
     transition: border-color .15s, background .15s;
   }
@@ -161,8 +161,8 @@ const STYLES = `
   .footer-link:hover { color: #f59e0b; }
 
   .nav-link {
-    font-size: 14.5px; font-weight: 700; color: #44403c;
-    text-decoration: none; padding: 8px 16px; border-radius: 12px;
+    font-size: 13.5px; font-weight: 700; color: #44403c;
+    text-decoration: none; padding: 7px 14px; border-radius: 12px;
     transition: color .15s, background .15s;
   }
   .nav-link:hover { color: #f59e0b; background: #fff8ec; }
@@ -171,14 +171,14 @@ const STYLES = `
     display: inline-flex; align-items: center; gap: 8px;
     background: linear-gradient(135deg,#fff8ec,#fff3e0);
     border: 1px solid #fde68a; border-radius: 99px;
-    padding: 7px 16px; margin-bottom: 18px;
-    font-size: 12px; font-weight: 800; color: #b45309;
+    padding: 6px 14px; margin-bottom: 16px;
+    font-size: 11px; font-weight: 800; color: #b45309;
     letter-spacing: .05em; text-transform: uppercase;
   }
 
   .stat-val {
     font-family: 'Syne', sans-serif;
-    font-size: 2.15rem; font-weight: 900;
+    font-size: 2.0rem; font-weight: 900;
     background: linear-gradient(135deg,#f59e0b,#f97316);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -198,8 +198,8 @@ const STYLES = `
     .feat-grid { grid-template-columns: 1fr !important; }
     .footer-grid { grid-template-columns: 1fr !important; }
     .stat-grid { grid-template-columns: 1fr 1fr !important; }
-    .btn-primary, .btn-outline { padding: 14px 22px; font-size: 15px; border-radius: 14px; }
-    .section-label { font-size: 11px; padding: 6px 14px; }
+    .btn-primary, .btn-outline { padding: 13px 18px; font-size: 14px; border-radius: 14px; }
+    .section-label { font-size: 10px; padding: 5px 12px; }
   }
 `;
 
@@ -270,7 +270,7 @@ export default function LandingPage() {
 
         {/* NAV */}
         <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,251,245,.9)", backdropFilter: "blur(16px)", borderBottom: "1px solid #fde68a" }}>
-          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
+          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 68 }}>
             <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
               <div style={{ width: 38, height: 38, borderRadius: 12, background: "linear-gradient(135deg,#f59e0b,#f97316)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(245,158,11,.4)" }}>
                 <Coffee size={18} color="#fff" />
@@ -288,10 +288,10 @@ export default function LandingPage() {
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
-              <Link to="/login" style={{ padding: "10px 20px", borderRadius: 12, border: "1.5px solid #e7e5e4", color: "#44403c", fontSize: 14, fontWeight: 700, textDecoration: "none", background: "#fff", transition: "background .15s" }}>
+              <Link to="/login" style={{ padding: "9px 18px", borderRadius: 12, border: "1.5px solid #e7e5e4", color: "#44403c", fontSize: 13, fontWeight: 700, textDecoration: "none", background: "#fff", transition: "background .15s" }}>
                 Masuk
               </Link>
-              <Link to="/daftar" className="btn-primary" style={{ padding: "10px 20px", fontSize: 14, borderRadius: 12 }}>
+              <Link to="/daftar" className="btn-primary" style={{ padding: "9px 18px", fontSize: 13, borderRadius: 12 }}>
                 Daftar <ArrowRight size={14} />
               </Link>
             </div>
@@ -303,25 +303,25 @@ export default function LandingPage() {
           <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", background: "rgba(251,191,36,.18)", filter: "blur(90px)", top: -200, left: "50%", transform: "translateX(-50%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: "rgba(249,115,22,.13)", filter: "blur(80px)", top: 60, right: -140, pointerEvents: "none" }} />
 
-          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "88px 20px 92px", position: "relative" }}>
+          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "82px 20px 86px", position: "relative" }}>
             <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
 
               {/* Left */}
               <div className="anim-fade-up">
                 <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} /> Sistem POS Modern untuk Cafe</div>
-                <h1 className="font-display" style={{ fontSize: "clamp(2.35rem,4.2vw,3.6rem)", fontWeight: 900, lineHeight: 1.08, color: C.dark, marginBottom: 22, letterSpacing: "-0.02em" }}>
+                <h1 className="font-display" style={{ fontSize: "clamp(2.05rem,3.8vw,3.1rem)", fontWeight: 900, lineHeight: 1.12, color: C.dark, marginBottom: 18, letterSpacing: "-0.02em" }}>
                   Kelola Cafe Lebih Cepat dengan <span className="shimmer-text">QR Menu & POS Modern</span>
                 </h1>
-                <p style={{ fontSize: 17, color: C.muted, lineHeight: 1.78, fontWeight: 500, marginBottom: 34, maxWidth: 520 }}>
+                <p style={{ fontSize: 15.5, color: C.muted, lineHeight: 1.82, fontWeight: 500, marginBottom: 28, maxWidth: 520 }}>
                   MyCafe membantu cafe kamu menerima pesanan lebih cepat, mengelola menu & promo, dan memantau laporan penjualan dari satu dashboard.
                 </p>
-                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 40 }}>
-                  <Link to="/daftar" className="btn-primary">Mulai Sekarang <ArrowRight size={18} /></Link>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 34 }}>
+                  <Link to="/daftar" className="btn-primary">Mulai Sekarang <ArrowRight size={16} /></Link>
                   <a href="#cara-kerja" className="btn-outline">Lihat Cara Kerja</a>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 20px" }}>
                   {["Setup cepat & mudah", "Tampilan UI modern", "Mobile-first design", "Siap pembayaran online"].map(t => (
-                    <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 600, color: "#57534e" }}>
+                    <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.8, fontWeight: 600, color: "#57534e" }}>
                       <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />{t}
                     </div>
                   ))}
@@ -409,9 +409,9 @@ export default function LandingPage() {
               { val: "< 5 Mnt", label: "Setup Awal" },
               { val: "24/7", label: "Dukungan Teknis" },
             ].map((s, i, arr) => (
-              <div key={s.label} style={{ padding: "28px 24px", borderRight: i < arr.length - 1 ? "1px solid #fde68a" : "none", textAlign: "center" }}>
+              <div key={s.label} style={{ padding: "24px 22px", borderRight: i < arr.length - 1 ? "1px solid #fde68a" : "none", textAlign: "center" }}>
                 <div className="stat-val">{s.val}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, marginTop: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginTop: 4 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -421,15 +421,15 @@ export default function LandingPage() {
         <section id="fitur" style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Fitur Unggulan</div>
-            <h2 className="font-display" style={{ fontSize: "clamp(1.95rem,3.2vw,2.75rem)", fontWeight: 900, color: C.dark, marginBottom: 14, letterSpacing: "-0.01em" }}>Semua yang Kamu Butuhkan</h2>
-            <p style={{ fontSize: 16, color: C.muted, fontWeight: 500, maxWidth: 520, margin: "0 auto", lineHeight: 1.75 }}>Solusi lengkap untuk operasional cafe modern — dari pemesanan hingga laporan keuangan.</p>
+            <h2 className="font-display" style={{ fontSize: "clamp(1.7rem,2.9vw,2.4rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Semua yang Kamu Butuhkan</h2>
+            <p style={{ fontSize: 14.8, color: C.muted, fontWeight: 500, maxWidth: 520, margin: "0 auto", lineHeight: 1.78 }}>Solusi lengkap untuk operasional cafe modern — dari pemesanan hingga laporan keuangan.</p>
           </div>
           <div className="feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20 }}>
             {features.map((f, i) => (
               <div key={f.title} className={`feature-card card-hover anim-fade-up-${Math.min(i+1,3)}`} style={{ borderRadius: 24, border: `1px solid ${C.border}`, background: "#fff", padding: 26, boxShadow: "0 2px 16px rgba(0,0,0,.04)" }}>
                 <div style={{ width: 50, height: 50, borderRadius: 15, background: f.grad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,.14)", marginBottom: 18 }}>{f.icon}</div>
-                <div style={{ fontSize: 16, fontWeight: 850, color: C.dark, marginBottom: 10, letterSpacing: "-0.01em" }}>{f.title}</div>
-                <div style={{ fontSize: 14.5, color: C.muted, lineHeight: 1.72, fontWeight: 500 }}>{f.desc}</div>
+                <div style={{ fontSize: 15, fontWeight: 850, color: C.dark, marginBottom: 9, letterSpacing: "-0.01em" }}>{f.title}</div>
+                <div style={{ fontSize: 13.6, color: C.muted, lineHeight: 1.76, fontWeight: 500 }}>{f.desc}</div>
               </div>
             ))}
           </div>
@@ -440,19 +440,19 @@ export default function LandingPage() {
           <div style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
             <div style={{ textAlign: "center", marginBottom: 52 }}>
               <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Cara Kerja</div>
-              <h2 className="font-display" style={{ fontSize: "clamp(1.95rem,3.2vw,2.75rem)", fontWeight: 900, color: C.dark, marginBottom: 14, letterSpacing: "-0.01em" }}>Mulai dalam 3 Langkah</h2>
-              <p style={{ fontSize: 16, color: C.muted, fontWeight: 500, lineHeight: 1.75 }}>Tidak perlu keahlian teknis — setup cepat dan langsung bisa digunakan.</p>
+              <h2 className="font-display" style={{ fontSize: "clamp(1.7rem,2.9vw,2.4rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Mulai dalam 3 Langkah</h2>
+              <p style={{ fontSize: 14.8, color: C.muted, fontWeight: 500, lineHeight: 1.78 }}>Tidak perlu keahlian teknis — setup cepat dan langsung bisa digunakan.</p>
             </div>
             <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, position: "relative" }}>
               <div style={{ position: "absolute", top: 37, left: "17%", right: "17%", height: 2, background: "linear-gradient(90deg,#f59e0b,#f97316)", opacity: .25, borderRadius: 99 }} />
               {steps.map(s => (
-                <div key={s.title} className="card-hover" style={{ borderRadius: 24, background: "#fff", border: "1px solid #fde68a", padding: 30, boxShadow: "0 6px 28px rgba(245,158,11,.10)" }}>
+                <div key={s.title} className="card-hover" style={{ borderRadius: 24, background: "#fff", border: "1px solid #fde68a", padding: 28, boxShadow: "0 6px 28px rgba(245,158,11,.10)" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
                     <div style={{ width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg,#fff8ec,#fff3e0)", border: "1.5px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center" }}>{s.icon}</div>
                     <span className="font-display" style={{ fontSize: 34, fontWeight: 900, color: "#fde68a" }}>{s.num}</span>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 850, color: C.dark, marginBottom: 10, letterSpacing: "-0.01em" }}>{s.title}</div>
-                  <div style={{ fontSize: 14.5, color: C.muted, lineHeight: 1.72, fontWeight: 500 }}>{s.desc}</div>
+                  <div style={{ fontSize: 15, fontWeight: 850, color: C.dark, marginBottom: 9, letterSpacing: "-0.01em" }}>{s.title}</div>
+                  <div style={{ fontSize: 13.6, color: C.muted, lineHeight: 1.76, fontWeight: 500 }}>{s.desc}</div>
                 </div>
               ))}
             </div>
@@ -463,8 +463,8 @@ export default function LandingPage() {
         <section id="paket" style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Paket Langganan</div>
-            <h2 className="font-display" style={{ fontSize: "clamp(1.95rem,3.2vw,2.75rem)", fontWeight: 900, color: C.dark, marginBottom: 14, letterSpacing: "-0.01em" }}>Harga Transparan, Tanpa Biaya Tersembunyi</h2>
-            <p style={{ fontSize: 16, color: C.muted, fontWeight: 500, lineHeight: 1.75 }}>Pilih paket yang sesuai skala dan kebutuhan cafe kamu.</p>
+            <h2 className="font-display" style={{ fontSize: "clamp(1.7rem,2.9vw,2.4rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Harga Transparan, Tanpa Biaya Tersembunyi</h2>
+            <p style={{ fontSize: 14.8, color: C.muted, fontWeight: 500, lineHeight: 1.78 }}>Pilih paket yang sesuai skala dan kebutuhan cafe kamu.</p>
           </div>
 
           {plansLoading ? (
@@ -497,7 +497,7 @@ export default function LandingPage() {
                       <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", fontSize: 11, fontWeight: 800, padding: "5px 16px", borderRadius: 99, boxShadow: "0 4px 14px rgba(245,158,11,.4)", whiteSpace: "nowrap" }}>⭐ Paling Populer</div>
                     )}
                     <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 17, fontWeight: 900, color: C.dark, letterSpacing: "-0.01em" }}>{p.name ?? "-"}</div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: C.dark, letterSpacing: "-0.01em" }}>{p.name ?? "-"}</div>
                       <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
                         <span className="font-display" style={{ fontSize: 28, fontWeight: 900, color: hl ? C.orange : C.dark }}>{formatRupiah(p.price ?? 0)}</span>
                         <span style={{ fontSize: 13, color: "#a8a29e", fontWeight: 600 }}>/ {d.value} {d.unit === "minute" ? "menit" : "hari"}</span>
@@ -509,13 +509,13 @@ export default function LandingPage() {
                       ) : pts.slice(0, 6).map(pt => (
                         <div key={pt} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
                           <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: 2 }} />
-                          <span style={{ fontSize: 14.5, color: "#44403c", fontWeight: 600, lineHeight: 1.55 }}>{pt}</span>
+                          <span style={{ fontSize: 13.8, color: "#44403c", fontWeight: 600, lineHeight: 1.6 }}>{pt}</span>
                         </div>
                       ))}
                     </div>
                     <Link to="/daftar" style={{
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      padding: "14px 20px", borderRadius: 16, fontWeight: 800, fontSize: 15,
+                      padding: "13px 18px", borderRadius: 14, fontWeight: 800, fontSize: 14,
                       textDecoration: "none", width: "100%",
                       background: hl ? "linear-gradient(135deg,#f59e0b,#f97316)" : "#fff",
                       color: hl ? "#fff" : "#44403c",
