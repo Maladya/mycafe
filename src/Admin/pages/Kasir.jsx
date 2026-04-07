@@ -372,8 +372,8 @@ export default function Kasir() {
               <QrCode size={20} className="text-white" />
             </div>
             <div>
-              <h1 className="font-black text-lg leading-none">TERMINAL KASIR</h1>
-              <p className="text-gray-400 text-[10px]">{cafeInfo.nama?.toUpperCase()} POS</p>
+              <h1 className="font-black text-lg leading-none">Halaman Kasir</h1>
+              {/* <p className="text-gray-400 text-[10px]">{cafeInfo.nama?.toUpperCase()} POS</p> */}
             </div>
           </div>
           <div className="flex items-center gap-3">

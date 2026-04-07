@@ -66,7 +66,7 @@ function planFeaturePoints(plan) {
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Syne:wght@700;800;900&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Plus Jakarta Sans', sans-serif; }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 16px; line-height: 1.55; text-rendering: geometricPrecision; -webkit-font-smoothing: antialiased; }
   .font-display { font-family: 'Syne', sans-serif !important; }
 
   @keyframes fadeUp {
@@ -107,9 +107,9 @@ const STYLES = `
 
   .btn-primary {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 14px 28px; border-radius: 14px;
+    padding: 16px 32px; border-radius: 16px;
     background: linear-gradient(135deg,#f59e0b,#f97316);
-    color: #fff; font-weight: 800; font-size: 15px;
+    color: #fff; font-weight: 800; font-size: 16px;
     text-decoration: none; border: none; cursor: pointer;
     box-shadow: 0 8px 28px rgba(245,158,11,.38);
     transition: box-shadow .2s, transform .2s;
@@ -121,9 +121,9 @@ const STYLES = `
 
   .btn-outline {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 14px 28px; border-radius: 14px;
+    padding: 16px 32px; border-radius: 16px;
     border: 1.5px solid #e7e5e4; background: #fff;
-    color: #44403c; font-weight: 700; font-size: 15px;
+    color: #44403c; font-weight: 700; font-size: 16px;
     text-decoration: none; cursor: pointer;
     transition: border-color .15s, background .15s;
   }
@@ -161,8 +161,8 @@ const STYLES = `
   .footer-link:hover { color: #f59e0b; }
 
   .nav-link {
-    font-size: 13.5px; font-weight: 700; color: #44403c;
-    text-decoration: none; padding: 6px 14px; border-radius: 10px;
+    font-size: 14.5px; font-weight: 700; color: #44403c;
+    text-decoration: none; padding: 8px 16px; border-radius: 12px;
     transition: color .15s, background .15s;
   }
   .nav-link:hover { color: #f59e0b; background: #fff8ec; }
@@ -171,14 +171,14 @@ const STYLES = `
     display: inline-flex; align-items: center; gap: 8px;
     background: linear-gradient(135deg,#fff8ec,#fff3e0);
     border: 1px solid #fde68a; border-radius: 99px;
-    padding: 5px 14px; margin-bottom: 16px;
-    font-size: 11px; font-weight: 800; color: #b45309;
+    padding: 7px 16px; margin-bottom: 18px;
+    font-size: 12px; font-weight: 800; color: #b45309;
     letter-spacing: .05em; text-transform: uppercase;
   }
 
   .stat-val {
     font-family: 'Syne', sans-serif;
-    font-size: 2rem; font-weight: 900;
+    font-size: 2.15rem; font-weight: 900;
     background: linear-gradient(135deg,#f59e0b,#f97316);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -198,6 +198,8 @@ const STYLES = `
     .feat-grid { grid-template-columns: 1fr !important; }
     .footer-grid { grid-template-columns: 1fr !important; }
     .stat-grid { grid-template-columns: 1fr 1fr !important; }
+    .btn-primary, .btn-outline { padding: 14px 22px; font-size: 15px; border-radius: 14px; }
+    .section-label { font-size: 11px; padding: 6px 14px; }
   }
 `;
 
@@ -268,7 +270,7 @@ export default function LandingPage() {
 
         {/* NAV */}
         <nav style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,251,245,.9)", backdropFilter: "blur(16px)", borderBottom: "1px solid #fde68a" }}>
-          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 62 }}>
+          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 72 }}>
             <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
               <div style={{ width: 38, height: 38, borderRadius: 12, background: "linear-gradient(135deg,#f59e0b,#f97316)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(245,158,11,.4)" }}>
                 <Coffee size={18} color="#fff" />
@@ -286,10 +288,10 @@ export default function LandingPage() {
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
-              <Link to="/login" style={{ padding: "8px 18px", borderRadius: 10, border: "1.5px solid #e7e5e4", color: "#44403c", fontSize: 13, fontWeight: 700, textDecoration: "none", background: "#fff", transition: "background .15s" }}>
+              <Link to="/login" style={{ padding: "10px 20px", borderRadius: 12, border: "1.5px solid #e7e5e4", color: "#44403c", fontSize: 14, fontWeight: 700, textDecoration: "none", background: "#fff", transition: "background .15s" }}>
                 Masuk
               </Link>
-              <Link to="/daftar" className="btn-primary" style={{ padding: "8px 18px", fontSize: 13, borderRadius: 10 }}>
+              <Link to="/daftar" className="btn-primary" style={{ padding: "10px 20px", fontSize: 14, borderRadius: 12 }}>
                 Daftar <ArrowRight size={14} />
               </Link>
             </div>
@@ -301,19 +303,19 @@ export default function LandingPage() {
           <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", background: "rgba(251,191,36,.18)", filter: "blur(90px)", top: -200, left: "50%", transform: "translateX(-50%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: "rgba(249,115,22,.13)", filter: "blur(80px)", top: 60, right: -140, pointerEvents: "none" }} />
 
-          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "72px 20px 80px", position: "relative" }}>
+          <div style={{ maxWidth: 1152, margin: "0 auto", padding: "88px 20px 92px", position: "relative" }}>
             <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center" }}>
 
               {/* Left */}
               <div className="anim-fade-up">
                 <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} /> Sistem POS Modern untuk Cafe</div>
-                <h1 className="font-display" style={{ fontSize: "clamp(2.2rem,3.8vw,3.3rem)", fontWeight: 900, lineHeight: 1.06, color: C.dark, marginBottom: 20 }}>
+                <h1 className="font-display" style={{ fontSize: "clamp(2.35rem,4.2vw,3.6rem)", fontWeight: 900, lineHeight: 1.08, color: C.dark, marginBottom: 22, letterSpacing: "-0.02em" }}>
                   Kelola Cafe Lebih Cepat dengan <span className="shimmer-text">QR Menu & POS Modern</span>
                 </h1>
-                <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.72, fontWeight: 500, marginBottom: 32 }}>
+                <p style={{ fontSize: 17, color: C.muted, lineHeight: 1.78, fontWeight: 500, marginBottom: 34, maxWidth: 520 }}>
                   MyCafe membantu cafe kamu menerima pesanan lebih cepat, mengelola menu & promo, dan memantau laporan penjualan dari satu dashboard.
                 </p>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 36 }}>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 40 }}>
                   <Link to="/daftar" className="btn-primary">Mulai Sekarang <ArrowRight size={18} /></Link>
                   <a href="#cara-kerja" className="btn-outline">Lihat Cara Kerja</a>
                 </div>
@@ -407,9 +409,9 @@ export default function LandingPage() {
               { val: "< 5 Mnt", label: "Setup Awal" },
               { val: "24/7", label: "Dukungan Teknis" },
             ].map((s, i, arr) => (
-              <div key={s.label} style={{ padding: "22px 24px", borderRight: i < arr.length - 1 ? "1px solid #fde68a" : "none", textAlign: "center" }}>
+              <div key={s.label} style={{ padding: "28px 24px", borderRight: i < arr.length - 1 ? "1px solid #fde68a" : "none", textAlign: "center" }}>
                 <div className="stat-val">{s.val}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginTop: 2 }}>{s.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, marginTop: 4 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -419,15 +421,15 @@ export default function LandingPage() {
         <section id="fitur" style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Fitur Unggulan</div>
-            <h2 className="font-display" style={{ fontSize: "clamp(1.8rem,3vw,2.6rem)", fontWeight: 900, color: C.dark, marginBottom: 12 }}>Semua yang Kamu Butuhkan</h2>
-            <p style={{ fontSize: 15, color: C.muted, fontWeight: 500, maxWidth: 460, margin: "0 auto" }}>Solusi lengkap untuk operasional cafe modern — dari pemesanan hingga laporan keuangan.</p>
+            <h2 className="font-display" style={{ fontSize: "clamp(1.95rem,3.2vw,2.75rem)", fontWeight: 900, color: C.dark, marginBottom: 14, letterSpacing: "-0.01em" }}>Semua yang Kamu Butuhkan</h2>
+            <p style={{ fontSize: 16, color: C.muted, fontWeight: 500, maxWidth: 520, margin: "0 auto", lineHeight: 1.75 }}>Solusi lengkap untuk operasional cafe modern — dari pemesanan hingga laporan keuangan.</p>
           </div>
           <div className="feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20 }}>
             {features.map((f, i) => (
               <div key={f.title} className={`feature-card card-hover anim-fade-up-${Math.min(i+1,3)}`} style={{ borderRadius: 24, border: `1px solid ${C.border}`, background: "#fff", padding: 26, boxShadow: "0 2px 16px rgba(0,0,0,.04)" }}>
                 <div style={{ width: 50, height: 50, borderRadius: 15, background: f.grad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,.14)", marginBottom: 18 }}>{f.icon}</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.dark, marginBottom: 8 }}>{f.title}</div>
-                <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.65, fontWeight: 500 }}>{f.desc}</div>
+                <div style={{ fontSize: 16, fontWeight: 850, color: C.dark, marginBottom: 10, letterSpacing: "-0.01em" }}>{f.title}</div>
+                <div style={{ fontSize: 14.5, color: C.muted, lineHeight: 1.72, fontWeight: 500 }}>{f.desc}</div>
               </div>
             ))}
           </div>
@@ -438,19 +440,19 @@ export default function LandingPage() {
           <div style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
             <div style={{ textAlign: "center", marginBottom: 52 }}>
               <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Cara Kerja</div>
-              <h2 className="font-display" style={{ fontSize: "clamp(1.8rem,3vw,2.6rem)", fontWeight: 900, color: C.dark, marginBottom: 12 }}>Mulai dalam 3 Langkah</h2>
-              <p style={{ fontSize: 15, color: C.muted, fontWeight: 500 }}>Tidak perlu keahlian teknis — setup cepat dan langsung bisa digunakan.</p>
+              <h2 className="font-display" style={{ fontSize: "clamp(1.95rem,3.2vw,2.75rem)", fontWeight: 900, color: C.dark, marginBottom: 14, letterSpacing: "-0.01em" }}>Mulai dalam 3 Langkah</h2>
+              <p style={{ fontSize: 16, color: C.muted, fontWeight: 500, lineHeight: 1.75 }}>Tidak perlu keahlian teknis — setup cepat dan langsung bisa digunakan.</p>
             </div>
             <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, position: "relative" }}>
               <div style={{ position: "absolute", top: 37, left: "17%", right: "17%", height: 2, background: "linear-gradient(90deg,#f59e0b,#f97316)", opacity: .25, borderRadius: 99 }} />
               {steps.map(s => (
-                <div key={s.title} className="card-hover" style={{ borderRadius: 24, background: "#fff", border: "1px solid #fde68a", padding: 28, boxShadow: "0 4px 24px rgba(245,158,11,.09)" }}>
+                <div key={s.title} className="card-hover" style={{ borderRadius: 24, background: "#fff", border: "1px solid #fde68a", padding: 30, boxShadow: "0 6px 28px rgba(245,158,11,.10)" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
                     <div style={{ width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg,#fff8ec,#fff3e0)", border: "1.5px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center" }}>{s.icon}</div>
                     <span className="font-display" style={{ fontSize: 34, fontWeight: 900, color: "#fde68a" }}>{s.num}</span>
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: C.dark, marginBottom: 8 }}>{s.title}</div>
-                  <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.65, fontWeight: 500 }}>{s.desc}</div>
+                  <div style={{ fontSize: 16, fontWeight: 850, color: C.dark, marginBottom: 10, letterSpacing: "-0.01em" }}>{s.title}</div>
+                  <div style={{ fontSize: 14.5, color: C.muted, lineHeight: 1.72, fontWeight: 500 }}>{s.desc}</div>
                 </div>
               ))}
             </div>
@@ -461,8 +463,8 @@ export default function LandingPage() {
         <section id="paket" style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Paket Langganan</div>
-            <h2 className="font-display" style={{ fontSize: "clamp(1.8rem,3vw,2.6rem)", fontWeight: 900, color: C.dark, marginBottom: 12 }}>Harga Transparan, Tanpa Biaya Tersembunyi</h2>
-            <p style={{ fontSize: 15, color: C.muted, fontWeight: 500 }}>Pilih paket yang sesuai skala dan kebutuhan cafe kamu.</p>
+            <h2 className="font-display" style={{ fontSize: "clamp(1.95rem,3.2vw,2.75rem)", fontWeight: 900, color: C.dark, marginBottom: 14, letterSpacing: "-0.01em" }}>Harga Transparan, Tanpa Biaya Tersembunyi</h2>
+            <p style={{ fontSize: 16, color: C.muted, fontWeight: 500, lineHeight: 1.75 }}>Pilih paket yang sesuai skala dan kebutuhan cafe kamu.</p>
           </div>
 
           {plansLoading ? (
@@ -495,7 +497,7 @@ export default function LandingPage() {
                       <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", fontSize: 11, fontWeight: 800, padding: "5px 16px", borderRadius: 99, boxShadow: "0 4px 14px rgba(245,158,11,.4)", whiteSpace: "nowrap" }}>⭐ Paling Populer</div>
                     )}
                     <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 16, fontWeight: 900, color: C.dark }}>{p.name ?? "-"}</div>
+                      <div style={{ fontSize: 17, fontWeight: 900, color: C.dark, letterSpacing: "-0.01em" }}>{p.name ?? "-"}</div>
                       <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
                         <span className="font-display" style={{ fontSize: 28, fontWeight: 900, color: hl ? C.orange : C.dark }}>{formatRupiah(p.price ?? 0)}</span>
                         <span style={{ fontSize: 13, color: "#a8a29e", fontWeight: 600 }}>/ {d.value} {d.unit === "minute" ? "menit" : "hari"}</span>
@@ -507,13 +509,13 @@ export default function LandingPage() {
                       ) : pts.slice(0, 6).map(pt => (
                         <div key={pt} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
                           <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: 2 }} />
-                          <span style={{ fontSize: 13.5, color: "#44403c", fontWeight: 600 }}>{pt}</span>
+                          <span style={{ fontSize: 14.5, color: "#44403c", fontWeight: 600, lineHeight: 1.55 }}>{pt}</span>
                         </div>
                       ))}
                     </div>
                     <Link to="/daftar" style={{
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      padding: "13px 20px", borderRadius: 14, fontWeight: 800, fontSize: 14,
+                      padding: "14px 20px", borderRadius: 16, fontWeight: 800, fontSize: 15,
                       textDecoration: "none", width: "100%",
                       background: hl ? "linear-gradient(135deg,#f59e0b,#f97316)" : "#fff",
                       color: hl ? "#fff" : "#44403c",
@@ -533,12 +535,12 @@ export default function LandingPage() {
         {/* CTA BANNER */}
         <div style={{ background: "#1c1917" }}>
           <div style={{ maxWidth: 1152, margin: "0 auto", padding: "60px 20px" }}>
-            <div style={{ borderRadius: 28, background: "linear-gradient(135deg,#f59e0b 0%,#f97316 60%,#ef4444 100%)", padding: "48px 52px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 28, position: "relative", overflow: "hidden" }}>
+            <div style={{ borderRadius: 30, background: "linear-gradient(135deg,#f59e0b 0%,#f97316 60%,#ef4444 100%)", padding: "54px 56px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 30, position: "relative", overflow: "hidden" }}>
               <div style={{ position: "absolute", right: -80, top: -80, width: 280, height: 280, borderRadius: "50%", background: "rgba(255,255,255,.08)" }} />
               <div style={{ position: "relative" }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,.75)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".08em" }}>Mulai Hari Ini</div>
                 <h3 className="font-display" style={{ fontSize: "clamp(1.6rem,3vw,2.3rem)", fontWeight: 900, color: "#fff", marginBottom: 10 }}>Tingkatkan Operasional Cafe Kamu</h3>
-                <p style={{ fontSize: 15, color: "rgba(255,255,255,.85)", fontWeight: 500 }}>Buat akun, atur menu, dan mulai terima pesanan dalam hitungan menit.</p>
+                <p style={{ fontSize: 16, color: "rgba(255,255,255,.88)", fontWeight: 500, lineHeight: 1.7, maxWidth: 520 }}>Buat akun, atur menu, dan mulai terima pesanan dalam hitungan menit.</p>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", position: "relative" }}>
                 <Link to="/daftar" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 14, background: "#fff", color: C.orange, fontWeight: 800, fontSize: 15, textDecoration: "none", boxShadow: "0 4px 20px rgba(0,0,0,.15)", transition: "transform .15s" }}>
@@ -633,7 +635,7 @@ export default function LandingPage() {
 
             {/* Bottom strip */}
             <div style={{ padding: "20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,.28)" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,.28)" }}>
                 © {new Date().getFullYear()} MyCafe · Dibangun untuk cafe modern Indonesia 🇮🇩
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

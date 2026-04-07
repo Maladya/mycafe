@@ -485,26 +485,11 @@ export default function Pembayaran() {
 
         setAvailableMethods(norm);
 
-        const hasOnline = norm.some((m) => {
-          const id = String(m?.id ?? "").toLowerCase();
-          const label = String(m?.label ?? "").toLowerCase();
-          const text = `${id} ${label}`;
-          return (
-            ["online", "midtrans", "qris"].includes(id) ||
-            text.includes("online") ||
-            text.includes("midtrans") ||
-            text.includes("qris")
-          );
-        });
-        setOnlineEnabled(hasOnline);
-
-        if (!hasOnline && method === "online") {
-          setMethod("kasir");
-        }
+        setOnlineEnabled(true);
       })
       .catch(() => {
         setAvailableMethods([]);
-        setOnlineEnabled(false);
+        setOnlineEnabled(true);
       });
   }, [CAFE_ID, method]);
 
@@ -536,11 +521,6 @@ export default function Pembayaran() {
     : "";
 
   const handleOnlinePayment = useCallback(async () => {
-    if (!onlineEnabled) {
-      setPaying(false);
-      setPayError("Pembayaran online sedang dinonaktifkan. Silakan pilih Bayar di Kasir.");
-      return;
-    }
     if (!form.nama.trim()) {
       setShowNameError(true);
       return;
@@ -644,11 +624,6 @@ export default function Pembayaran() {
       setPayError("");
       setConfirmKasir(true);
     } else {
-      if (!onlineEnabled) {
-        setMethod("kasir");
-        setPayError("Pembayaran online sedang dinonaktifkan. Silakan pilih Bayar di Kasir.");
-        return;
-      }
       if (!form.nama.trim()) { setShowNameError(true); return; }
       setConfirmOnline(true);
     }
