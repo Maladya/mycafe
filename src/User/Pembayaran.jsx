@@ -493,7 +493,7 @@ export default function Pembayaran() {
       })
       .catch(() => {
         setAvailableMethods([]);
-        setOnlineEnabled(true);
+        setOnlineEnabled(false); // Changed from true to false
       });
   }, [CAFE_ID, method]);
 
