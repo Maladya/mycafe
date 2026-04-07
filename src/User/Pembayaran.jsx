@@ -433,6 +433,9 @@ export default function Pembayaran() {
   const [pendingPromo, setPendingPromo] = useState(null);
   const [confirmRemovePromo, setConfirmRemovePromo] = useState(false);
 
+  const [availableMethods, setAvailableMethods] = useState([]);
+  const [onlineEnabled, setOnlineEnabled] = useState(true);
+
   const [form, setForm]                 = useState({ nama: "", meja: MEJA_ID });
   const [cafeName, setCafeName]         = useState("ASTAKIRA");
   const [snapClientKey, setSnapClientKey] = useState("");
@@ -465,6 +468,37 @@ export default function Pembayaran() {
 
   useEffect(() => {
     if (!CAFE_ID) return;
+    api.get(`api/pembayaran/public?cafe_id=${encodeURIComponent(CAFE_ID)}`)
+      .then((r) => {
+        const raw = r?.data ?? r;
+        const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+        const norm = list
+          .map((x) => {
+            const id = String(x?.id_method ?? x?.id ?? x?.method ?? x?.nama_method ?? x?.name ?? "").toLowerCase();
+            const label = x?.nama_method ?? x?.label ?? x?.name ?? "";
+            const activeRaw = x?.status_method ?? x?.aktif ?? x?.active ?? x?.is_active ?? x?.enabled;
+            const active = activeRaw === undefined ? true : (activeRaw === true || activeRaw === 1 || String(activeRaw) === "1" || String(activeRaw).toLowerCase() === "true");
+            return { id, label, active, raw: x };
+          })
+          .filter((m) => m.id && m.active);
+
+        setAvailableMethods(norm);
+
+        const hasOnline = norm.some((m) => ["online", "midtrans", "qris"].includes(m.id));
+        setOnlineEnabled(hasOnline);
+
+        if (!hasOnline && method === "online") {
+          setMethod("kasir");
+        }
+      })
+      .catch(() => {
+        setAvailableMethods([]);
+        setOnlineEnabled(true);
+      });
+  }, [CAFE_ID, method]);
+
+  useEffect(() => {
+    if (!CAFE_ID) return;
     api.get(`api/pajak/public/${CAFE_ID}`)
       .then(r => {
         const raw = r?.data ?? r;
@@ -491,6 +525,11 @@ export default function Pembayaran() {
     : "";
 
   const handleOnlinePayment = useCallback(async () => {
+    if (!onlineEnabled) {
+      setPaying(false);
+      setPayError("Pembayaran online sedang dinonaktifkan. Silakan pilih Bayar di Kasir.");
+      return;
+    }
     if (!form.nama.trim()) {
       setShowNameError(true);
       return;
@@ -594,6 +633,11 @@ export default function Pembayaran() {
       setPayError("");
       setConfirmKasir(true);
     } else {
+      if (!onlineEnabled) {
+        setMethod("kasir");
+        setPayError("Pembayaran online sedang dinonaktifkan. Silakan pilih Bayar di Kasir.");
+        return;
+      }
       if (!form.nama.trim()) { setShowNameError(true); return; }
       setConfirmOnline(true);
     }
@@ -719,7 +763,7 @@ export default function Pembayaran() {
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { id: "online", icon: <CreditCard size={22} />, label: "Online", sub: "QRIS / E-Wallet" },
+              ...(onlineEnabled ? [{ id: "online", icon: <CreditCard size={22} />, label: "Online", sub: "QRIS / E-Wallet" }] : []),
               { id: "kasir", icon: <Wallet size={22} />, label: "Di Kasir", sub: "Bayar langsung" },
             ].map(m => (
               <button key={m.id} onClick={() => { setMethod(m.id); setPayError(""); }}
@@ -746,7 +790,7 @@ export default function Pembayaran() {
             ))}
           </div>
 
-          {method === "online" && (
+          {method === "online" && onlineEnabled && (
             <div className="mt-3 bg-white rounded-2xl p-4 flex items-center justify-between border-2" style={{ borderColor: "var(--p-20)" }}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--grad)" }}>
