@@ -24,7 +24,7 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
   }).finally(() => clearTimeout(t));
 }
 
-function loadSnapScript(clientKey) {
+function loadSnapScript(clientKey, snapJsUrl) {
   return new Promise((resolve, reject) => {
     if (window.snap) { resolve(); return; }
     const existing = document.getElementById("midtrans-snap");
@@ -32,7 +32,7 @@ function loadSnapScript(clientKey) {
     const script = document.createElement("script");
     script.id = "midtrans-snap";
 
-    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.src = snapJsUrl || "https://app.sandbox.midtrans.com/snap/snap.js";
     script.setAttribute("data-client-key", clientKey);
     script.onload = resolve;
     script.onerror = () => reject(new Error("Gagal memuat Midtrans Snap"));
@@ -51,6 +51,7 @@ export default function Billing() {
   const [checking, setChecking] = useState(false);
   const [toast, setToast] = useState(null);
   const [snapClientKey, setSnapClientKey] = useState("");
+  const [snapJsUrl, setSnapJsUrl] = useState("");
   const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   // Mode pembayaran:
@@ -62,6 +63,19 @@ export default function Billing() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    fetchWithTimeout(`${API_URL}/api/midtrans/config`, { headers: authHeaders() })
+      .then((r) => r.json().catch(() => ({})))
+      .then((data) => {
+        const raw = data?.data ?? data ?? {};
+        const key = raw?.client_key ?? raw?.clientKey ?? "";
+        const url = raw?.snap_js_url ?? raw?.snapJsUrl ?? "";
+        if (key) setSnapClientKey(String(key));
+        if (url) setSnapJsUrl(String(url));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const paymentStatus = String(searchParams.get("payment_status") || "").toLowerCase();
@@ -491,7 +505,7 @@ export default function Billing() {
       if (String(snapClientKey).startsWith("Mid-server-")) throw new Error("Client Key tidak valid (terdeteksi Mid-server-...).");
       if (!snapToken) throw new Error("Snap token tidak ditemukan");
 
-      await loadSnapScript(snapClientKey);
+      await loadSnapScript(snapClientKey, snapJsUrl);
       if (!window.snap?.pay) throw new Error("Midtrans Snap tidak tersedia");
 
       window.snap.pay(snapToken, {

@@ -91,7 +91,7 @@ const api = {
 /* ─────────────────────────────────────────────
    Load Midtrans Snap.js (sandbox)
    ──────────────────────────────────────────── */
-function loadSnapScript(clientKey) {
+function loadSnapScript(clientKey, snapJsUrl) {
   return new Promise((resolve, reject) => {
     if (window.snap) { resolve(); return; }
     const existing = document.getElementById("midtrans-snap");
@@ -99,7 +99,7 @@ function loadSnapScript(clientKey) {
     const script = document.createElement("script");
     script.id = "midtrans-snap";
 
-    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
+    script.src = snapJsUrl || "https://app.sandbox.midtrans.com/snap/snap.js";
     script.setAttribute("data-client-key", clientKey);
     script.onload = resolve;
     script.onerror = () => reject(new Error("Gagal memuat Midtrans Snap"));
@@ -432,6 +432,7 @@ export default function Pembayaran() {
   const [form, setForm]                 = useState({ nama: "", meja: MEJA_ID });
   const [cafeName, setCafeName]         = useState("ASTAKIRA");
   const [snapClientKey, setSnapClientKey] = useState("");
+  const [snapJsUrl, setSnapJsUrl] = useState("");
   const [showNameError, setShowNameError] = useState(false);
 
   const [pajakPersen, setPajakPersen] = useState(0);
@@ -459,6 +460,18 @@ export default function Pembayaran() {
       })
       .catch(() => {});
   }, [CAFE_ID]);
+
+  useEffect(() => {
+    api.get("api/midtrans/config")
+      .then((r) => {
+        const raw = r?.data ?? r ?? {};
+        const key = raw?.client_key ?? raw?.clientKey ?? "";
+        const url = raw?.snap_js_url ?? raw?.snapJsUrl ?? "";
+        if (key) setSnapClientKey(String(key));
+        if (url) setSnapJsUrl(String(url));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!CAFE_ID) return;
@@ -569,7 +582,7 @@ export default function Pembayaran() {
 
       if (!snapToken) throw new Error("snap_token tidak ditemukan di respons backend");
 
-      await loadSnapScript(clientKey);
+      await loadSnapScript(clientKey, snapJsUrl);
 
       const navState = {
         cart, items, note, itemNotes,
@@ -608,7 +621,7 @@ export default function Pembayaran() {
   }, [
     form, CAFE_ID, MEJA_ID, note, itemNotes, appliedPromo,
     orderedItems, cart, items, method, pajakPersen,
-    navigate, snapClientKey,
+    navigate, snapClientKey, snapJsUrl,
   ]);
 
   const handleBayar = () => {
