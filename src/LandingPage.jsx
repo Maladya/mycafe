@@ -109,7 +109,7 @@ const STYLES = `
     display: inline-flex; align-items: center; gap: 8px;
     padding: 14px 26px; border-radius: 14px;
     background: linear-gradient(135deg,#f59e0b,#f97316);
-    color: #fff; font-weight: 800; font-size: 15px;
+    color: #fff; font-weight: 800; font-size: 14px;
     text-decoration: none; border: none; cursor: pointer;
     box-shadow: 0 8px 28px rgba(245,158,11,.38);
     transition: box-shadow .2s, transform .2s;
@@ -123,7 +123,7 @@ const STYLES = `
     display: inline-flex; align-items: center; gap: 8px;
     padding: 14px 26px; border-radius: 14px;
     border: 1.5px solid #e7e5e4; background: #fff;
-    color: #44403c; font-weight: 700; font-size: 15px;
+    color: #44403c; font-weight: 700; font-size: 14px;
     text-decoration: none; cursor: pointer;
     transition: border-color .15s, background .15s;
   }
@@ -178,7 +178,7 @@ const STYLES = `
 
   .stat-val {
     font-family: 'Syne', sans-serif;
-    font-size: 2.0rem; font-weight: 900;
+    font-size: 1.8rem; font-weight: 900;
     background: linear-gradient(135deg,#f59e0b,#f97316);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -198,7 +198,7 @@ const STYLES = `
     .feat-grid { grid-template-columns: 1fr !important; }
     .footer-grid { grid-template-columns: 1fr !important; }
     .stat-grid { grid-template-columns: 1fr 1fr !important; }
-    .btn-primary, .btn-outline { padding: 13px 18px; font-size: 14px; border-radius: 14px; }
+    .btn-primary, .btn-outline { padding: 12px 16px; font-size: 13px; border-radius: 14px; }
     .section-label { font-size: 10px; padding: 5px 12px; }
   }
 `;
@@ -254,7 +254,7 @@ export default function LandingPage() {
 
   const highlightPlanId = useMemo(() => activePlans[Math.floor(activePlans.length / 2)]?.id ?? null, [activePlans]);
 
-  const C = { // color palette shortcuts
+  const C = {
     cream: "#fffbf5",
     dark: "#1c1917",
     muted: "#78716c",
@@ -309,20 +309,25 @@ export default function LandingPage() {
               {/* Left */}
               <div className="anim-fade-up">
                 <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} /> Sistem POS Modern untuk Cafe</div>
-                <h1 className="font-display" style={{ fontSize: "clamp(2.05rem,3.8vw,3.1rem)", fontWeight: 900, lineHeight: 1.12, color: C.dark, marginBottom: 18, letterSpacing: "-0.02em" }}>
+
+                {/* ✅ PERBAIKAN: font lebih kecil & line-height lebih lapang */}
+                <h1 className="font-display" style={{ fontSize: "clamp(1.55rem,2.6vw,2.1rem)", fontWeight: 900, lineHeight: 1.28, color: C.dark, marginBottom: 18, letterSpacing: "-0.02em" }}>
                   Kelola Cafe Lebih Cepat dengan <span className="shimmer-text">QR Menu & POS Modern</span>
                 </h1>
-                <p style={{ fontSize: 15.5, color: C.muted, lineHeight: 1.82, fontWeight: 500, marginBottom: 28, maxWidth: 520 }}>
+
+                {/* ✅ PERBAIKAN: body text lebih kecil */}
+                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.78, fontWeight: 500, marginBottom: 28, maxWidth: 500 }}>
                   MyCafe membantu cafe kamu menerima pesanan lebih cepat, mengelola menu & promo, dan memantau laporan penjualan dari satu dashboard.
                 </p>
+
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 34 }}>
                   <Link to="/daftar" className="btn-primary">Mulai Sekarang <ArrowRight size={16} /></Link>
                   <a href="#cara-kerja" className="btn-outline">Lihat Cara Kerja</a>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 20px" }}>
                   {["Setup cepat & mudah", "Tampilan UI modern", "Mobile-first design", "Siap pembayaran online"].map(t => (
-                    <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.8, fontWeight: 600, color: "#57534e" }}>
-                      <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />{t}
+                    <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: "#57534e" }}>
+                      <CheckCircle2 size={15} color="#10b981" style={{ flexShrink: 0 }} />{t}
                     </div>
                   ))}
                 </div>
@@ -353,7 +358,7 @@ export default function LandingPage() {
                             <span style={{ fontSize: 11, fontWeight: 700, color: "#a8a29e" }}>{s.label}</span>
                             {s.icon}
                           </div>
-                          <div className="font-display" style={{ fontSize: 19, fontWeight: 900, color: C.dark }}>{s.val}</div>
+                          <div className="font-display" style={{ fontSize: 18, fontWeight: 900, color: C.dark }}>{s.val}</div>
                         </div>
                       ))}
                     </div>
@@ -409,7 +414,7 @@ export default function LandingPage() {
               { val: "< 5 Mnt", label: "Setup Awal" },
               { val: "24/7", label: "Dukungan Teknis" },
             ].map((s, i, arr) => (
-              <div key={s.label} style={{ padding: "24px 22px", borderRight: i < arr.length - 1 ? "1px solid #fde68a" : "none", textAlign: "center" }}>
+              <div key={s.label} style={{ padding: "22px 20px", borderRight: i < arr.length - 1 ? "1px solid #fde68a" : "none", textAlign: "center" }}>
                 <div className="stat-val">{s.val}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginTop: 4 }}>{s.label}</div>
               </div>
@@ -421,15 +426,17 @@ export default function LandingPage() {
         <section id="fitur" style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Fitur Unggulan</div>
-            <h2 className="font-display" style={{ fontSize: "clamp(1.7rem,2.9vw,2.4rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Semua yang Kamu Butuhkan</h2>
-            <p style={{ fontSize: 14.8, color: C.muted, fontWeight: 500, maxWidth: 520, margin: "0 auto", lineHeight: 1.78 }}>Solusi lengkap untuk operasional cafe modern — dari pemesanan hingga laporan keuangan.</p>
+
+            {/* ✅ PERBAIKAN: section heading lebih kecil */}
+            <h2 className="font-display" style={{ fontSize: "clamp(1.35rem,2.1vw,1.85rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Semua yang Kamu Butuhkan</h2>
+            <p style={{ fontSize: 14, color: C.muted, fontWeight: 500, maxWidth: 500, margin: "0 auto", lineHeight: 1.75 }}>Solusi lengkap untuk operasional cafe modern — dari pemesanan hingga laporan keuangan.</p>
           </div>
           <div className="feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20 }}>
             {features.map((f, i) => (
               <div key={f.title} className={`feature-card card-hover anim-fade-up-${Math.min(i+1,3)}`} style={{ borderRadius: 24, border: `1px solid ${C.border}`, background: "#fff", padding: 26, boxShadow: "0 2px 16px rgba(0,0,0,.04)" }}>
-                <div style={{ width: 50, height: 50, borderRadius: 15, background: f.grad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,.14)", marginBottom: 18 }}>{f.icon}</div>
-                <div style={{ fontSize: 15, fontWeight: 850, color: C.dark, marginBottom: 9, letterSpacing: "-0.01em" }}>{f.title}</div>
-                <div style={{ fontSize: 13.6, color: C.muted, lineHeight: 1.76, fontWeight: 500 }}>{f.desc}</div>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: f.grad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 20px rgba(0,0,0,.14)", marginBottom: 16 }}>{f.icon}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.dark, marginBottom: 8, letterSpacing: "-0.01em" }}>{f.title}</div>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.72, fontWeight: 500 }}>{f.desc}</div>
               </div>
             ))}
           </div>
@@ -440,19 +447,21 @@ export default function LandingPage() {
           <div style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
             <div style={{ textAlign: "center", marginBottom: 52 }}>
               <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Cara Kerja</div>
-              <h2 className="font-display" style={{ fontSize: "clamp(1.7rem,2.9vw,2.4rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Mulai dalam 3 Langkah</h2>
-              <p style={{ fontSize: 14.8, color: C.muted, fontWeight: 500, lineHeight: 1.78 }}>Tidak perlu keahlian teknis — setup cepat dan langsung bisa digunakan.</p>
+
+              {/* ✅ PERBAIKAN: section heading lebih kecil */}
+              <h2 className="font-display" style={{ fontSize: "clamp(1.35rem,2.1vw,1.85rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Mulai dalam 3 Langkah</h2>
+              <p style={{ fontSize: 14, color: C.muted, fontWeight: 500, lineHeight: 1.75 }}>Tidak perlu keahlian teknis — setup cepat dan langsung bisa digunakan.</p>
             </div>
             <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, position: "relative" }}>
               <div style={{ position: "absolute", top: 37, left: "17%", right: "17%", height: 2, background: "linear-gradient(90deg,#f59e0b,#f97316)", opacity: .25, borderRadius: 99 }} />
               {steps.map(s => (
                 <div key={s.title} className="card-hover" style={{ borderRadius: 24, background: "#fff", border: "1px solid #fde68a", padding: 28, boxShadow: "0 6px 28px rgba(245,158,11,.10)" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
-                    <div style={{ width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg,#fff8ec,#fff3e0)", border: "1.5px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center" }}>{s.icon}</div>
-                    <span className="font-display" style={{ fontSize: 34, fontWeight: 900, color: "#fde68a" }}>{s.num}</span>
+                    <div style={{ width: 46, height: 46, borderRadius: 13, background: "linear-gradient(135deg,#fff8ec,#fff3e0)", border: "1.5px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center" }}>{s.icon}</div>
+                    <span className="font-display" style={{ fontSize: 30, fontWeight: 900, color: "#fde68a" }}>{s.num}</span>
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 850, color: C.dark, marginBottom: 9, letterSpacing: "-0.01em" }}>{s.title}</div>
-                  <div style={{ fontSize: 13.6, color: C.muted, lineHeight: 1.76, fontWeight: 500 }}>{s.desc}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.dark, marginBottom: 8, letterSpacing: "-0.01em" }}>{s.title}</div>
+                  <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.72, fontWeight: 500 }}>{s.desc}</div>
                 </div>
               ))}
             </div>
@@ -463,8 +472,10 @@ export default function LandingPage() {
         <section id="paket" style={{ maxWidth: 1152, margin: "0 auto", padding: "80px 20px" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <div className="section-label"><span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber, display: "inline-block" }} />Paket Langganan</div>
-            <h2 className="font-display" style={{ fontSize: "clamp(1.7rem,2.9vw,2.4rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Harga Transparan, Tanpa Biaya Tersembunyi</h2>
-            <p style={{ fontSize: 14.8, color: C.muted, fontWeight: 500, lineHeight: 1.78 }}>Pilih paket yang sesuai skala dan kebutuhan cafe kamu.</p>
+
+            {/* ✅ PERBAIKAN: section heading lebih kecil */}
+            <h2 className="font-display" style={{ fontSize: "clamp(1.35rem,2.1vw,1.85rem)", fontWeight: 900, color: C.dark, marginBottom: 12, letterSpacing: "-0.01em" }}>Harga Transparan, Tanpa Biaya Tersembunyi</h2>
+            <p style={{ fontSize: 14, color: C.muted, fontWeight: 500, lineHeight: 1.75 }}>Pilih paket yang sesuai skala dan kebutuhan cafe kamu.</p>
           </div>
 
           {plansLoading ? (
@@ -497,25 +508,25 @@ export default function LandingPage() {
                       <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#f59e0b,#f97316)", color: "#fff", fontSize: 11, fontWeight: 800, padding: "5px 16px", borderRadius: 99, boxShadow: "0 4px 14px rgba(245,158,11,.4)", whiteSpace: "nowrap" }}>⭐ Paling Populer</div>
                     )}
                     <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 16, fontWeight: 900, color: C.dark, letterSpacing: "-0.01em" }}>{p.name ?? "-"}</div>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: C.dark, letterSpacing: "-0.01em" }}>{p.name ?? "-"}</div>
                       <div style={{ marginTop: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
-                        <span className="font-display" style={{ fontSize: 28, fontWeight: 900, color: hl ? C.orange : C.dark }}>{formatRupiah(p.price ?? 0)}</span>
+                        <span className="font-display" style={{ fontSize: 26, fontWeight: 900, color: hl ? C.orange : C.dark }}>{formatRupiah(p.price ?? 0)}</span>
                         <span style={{ fontSize: 13, color: "#a8a29e", fontWeight: 600 }}>/ {d.value} {d.unit === "minute" ? "menit" : "hari"}</span>
                       </div>
                     </div>
                     <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, marginBottom: 24 }}>
                       {pts.length === 0 ? (
-                        <div style={{ fontSize: 13.5, color: C.muted, fontWeight: 500 }}>Fitur akan mengikuti paket.</div>
+                        <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Fitur akan mengikuti paket.</div>
                       ) : pts.slice(0, 6).map(pt => (
                         <div key={pt} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
-                          <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: 2 }} />
-                          <span style={{ fontSize: 13.8, color: "#44403c", fontWeight: 600, lineHeight: 1.6 }}>{pt}</span>
+                          <CheckCircle2 size={15} color="#10b981" style={{ flexShrink: 0, marginTop: 2 }} />
+                          <span style={{ fontSize: 13, color: "#44403c", fontWeight: 600, lineHeight: 1.6 }}>{pt}</span>
                         </div>
                       ))}
                     </div>
                     <Link to="/daftar" style={{
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      padding: "13px 18px", borderRadius: 14, fontWeight: 800, fontSize: 14,
+                      padding: "12px 18px", borderRadius: 14, fontWeight: 800, fontSize: 13.5,
                       textDecoration: "none", width: "100%",
                       background: hl ? "linear-gradient(135deg,#f59e0b,#f97316)" : "#fff",
                       color: hl ? "#fff" : "#44403c",
@@ -523,7 +534,7 @@ export default function LandingPage() {
                       boxShadow: hl ? "0 6px 22px rgba(245,158,11,.35)" : "none",
                       transition: "all .2s",
                     }}>
-                      Pilih {p.name ?? "Paket"} <ArrowRight size={16} />
+                      Pilih {p.name ?? "Paket"} <ArrowRight size={15} />
                     </Link>
                   </div>
                 );
@@ -535,18 +546,20 @@ export default function LandingPage() {
         {/* CTA BANNER */}
         <div style={{ background: "#1c1917" }}>
           <div style={{ maxWidth: 1152, margin: "0 auto", padding: "60px 20px" }}>
-            <div style={{ borderRadius: 30, background: "linear-gradient(135deg,#f59e0b 0%,#f97316 60%,#ef4444 100%)", padding: "54px 56px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 30, position: "relative", overflow: "hidden" }}>
+            <div style={{ borderRadius: 30, background: "linear-gradient(135deg,#f59e0b 0%,#f97316 60%,#ef4444 100%)", padding: "48px 52px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 30, position: "relative", overflow: "hidden" }}>
               <div style={{ position: "absolute", right: -80, top: -80, width: 280, height: 280, borderRadius: "50%", background: "rgba(255,255,255,.08)" }} />
               <div style={{ position: "relative" }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,.75)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".08em" }}>Mulai Hari Ini</div>
-                <h3 className="font-display" style={{ fontSize: "clamp(1.6rem,3vw,2.3rem)", fontWeight: 900, color: "#fff", marginBottom: 10 }}>Tingkatkan Operasional Cafe Kamu</h3>
-                <p style={{ fontSize: 16, color: "rgba(255,255,255,.88)", fontWeight: 500, lineHeight: 1.7, maxWidth: 520 }}>Buat akun, atur menu, dan mulai terima pesanan dalam hitungan menit.</p>
+
+                {/* ✅ PERBAIKAN: CTA heading lebih kecil */}
+                <h3 className="font-display" style={{ fontSize: "clamp(1.35rem,2.4vw,1.9rem)", fontWeight: 900, color: "#fff", marginBottom: 10 }}>Tingkatkan Operasional Cafe Kamu</h3>
+                <p style={{ fontSize: 14.5, color: "rgba(255,255,255,.88)", fontWeight: 500, lineHeight: 1.68, maxWidth: 500 }}>Buat akun, atur menu, dan mulai terima pesanan dalam hitungan menit.</p>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", position: "relative" }}>
-                <Link to="/daftar" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 14, background: "#fff", color: C.orange, fontWeight: 800, fontSize: 15, textDecoration: "none", boxShadow: "0 4px 20px rgba(0,0,0,.15)", transition: "transform .15s" }}>
-                  Daftar Gratis <ArrowRight size={18} />
+                <Link to="/daftar" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "13px 26px", borderRadius: 14, background: "#fff", color: C.orange, fontWeight: 800, fontSize: 14, textDecoration: "none", boxShadow: "0 4px 20px rgba(0,0,0,.15)", transition: "transform .15s" }}>
+                  Daftar Gratis <ArrowRight size={17} />
                 </Link>
-                <Link to="/login" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 14, border: "2px solid rgba(255,255,255,.4)", color: "#fff", fontWeight: 700, fontSize: 15, textDecoration: "none" }}>
+                <Link to="/login" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "13px 26px", borderRadius: 14, border: "2px solid rgba(255,255,255,.4)", color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
                   Masuk
                 </Link>
               </div>
@@ -566,12 +579,12 @@ export default function LandingPage() {
                     <Coffee size={20} color="#fff" />
                   </div>
                   <div>
-                    <div className="font-display" style={{ fontWeight: 900, fontSize: 19, color: "#fff" }}>MyCafe</div>
+                    <div className="font-display" style={{ fontWeight: 900, fontSize: 18, color: "#fff" }}>MyCafe</div>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.35)" }}>POS & QR Menu Modern</div>
                   </div>
                 </div>
 
-                <p style={{ fontSize: 13.5, color: "rgba(255,255,255,.45)", lineHeight: 1.72, fontWeight: 500, marginBottom: 24, maxWidth: 270 }}>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,.45)", lineHeight: 1.72, fontWeight: 500, marginBottom: 24, maxWidth: 270 }}>
                   Platform POS & QR Menu modern untuk cafe yang ingin tumbuh lebih cepat, efisien, dan terdata dengan baik.
                 </p>
 
