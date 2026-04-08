@@ -38,7 +38,7 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
 
   const nameFromRaw = cafeRaw?.cafeNama || cafeRaw?.nama_cafe;
   const logoFromRaw = cafeRaw?.logo_cafe || null;
-  const cafeName = (cafeOverride?.nama_cafe || cafeOverride?.cafeNama || nameFromRaw || "ASTAKIRA");
+  const cafeName = (cafeOverride?.nama_cafe || cafeOverride?.cafeNama || nameFromRaw || "MYCAFE");
   const cafeLogo = (cafeOverride?.logo_cafe ?? logoFromRaw);
 
   const sidebarContent = (
@@ -168,7 +168,7 @@ export function Header({ activePage, setSidebarOpen, orders, setActivePage, cafe
 
   const nameFromRaw = cafeRaw?.cafeNama || cafeRaw?.nama_cafe;
   const addrFromRaw = cafeRaw?.cafeAlamat || cafeRaw?.alamat || "";
-  const cafeName = (cafeOverride?.nama_cafe || cafeOverride?.cafeNama || nameFromRaw || "ASTAKIRA");
+  const cafeName = (cafeOverride?.nama_cafe || cafeOverride?.cafeNama || nameFromRaw || "MYCAFE");
   const cafeAddress = (cafeOverride?.alamat || addrFromRaw);
   const displaySubtitle = cafeAddress ? `${cafeName} · ${cafeAddress}` : cafeName;
   

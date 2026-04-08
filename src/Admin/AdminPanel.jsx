@@ -7,7 +7,7 @@ import { Sidebar, Header } from "./components/Sidebar";
 import MaintenanceBanner from "../components/MaintenanceBanner";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
-const THEME_CACHE_KEY = "astakira_admin_theme";
+const THEME_CACHE_KEY = "MYCAFE_admin_theme";
 
 // Theme utilities
 function parseTheme(raw) {

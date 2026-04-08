@@ -591,7 +591,7 @@ export default function LandingPage() {
                 {/* Contact */}
                 <div style={{ marginBottom: 28 }}>
                   {[
-                    { icon: <MapPin size={14} />, text: "Jakarta, Indonesia" },
+                    { icon: <MapPin size={14} />, text: "Jawa Barat, Indonesia" },
                     { icon: <Phone size={14} />, text: "+62 812-3456-7890" },
                     { icon: <Mail size={14} />, text: "halo@mycafe-order.net" },
                   ].map(c => (

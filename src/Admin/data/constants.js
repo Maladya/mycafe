@@ -67,7 +67,7 @@ export const initialTables = Array.from({length:8},(_,i)=>({
 }));
 
 export const initialPromoCodes = [
-  { id:1, code:"ASTAKIRA10", discountType:"percent", discountValue:10, discount:"10%",       description:"Diskon 10% untuk semua menu",          minOrder:20000, startDate:"2026-01-01", endDate:"2026-12-31", used:42 },
+  { id:1, code:"MYCAFE10", discountType:"percent", discountValue:10, discount:"10%",       description:"Diskon 10% untuk semua menu",          minOrder:20000, startDate:"2026-01-01", endDate:"2026-12-31", used:42 },
   { id:2, code:"NEWUSER",    discountType:"flat",    discountValue:5000, discount:"Rp5.000", description:"Diskon Rp5.000 untuk pelanggan baru",    minOrder:15000, startDate:"2026-02-01", endDate:"2026-03-31", used:18 },
   { id:3, code:"KOPI20",     discountType:"percent", discountValue:20, discount:"20%",       description:"Diskon 20% khusus menu kopi",            minOrder:10000, startDate:"2026-02-20", endDate:"2026-02-28", used:31 },
 ];

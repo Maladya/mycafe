@@ -199,7 +199,7 @@ export default function LoginPage() {
           <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-amber-500/30 mx-auto mb-8">
             <Coffee size={44} className="text-white" />
           </div>
-          <h1 className="text-6xl font-black text-white tracking-tight mb-4">ASTAKIRA</h1>
+          <h1 className="text-6xl font-black text-white tracking-tight mb-4">MYCAFE</h1>
           <p className="text-lg text-gray-400 max-w-sm mx-auto leading-relaxed mb-12">
             Kelola kafe Anda dengan mudah dan efisien bersama kami
           </p>
@@ -232,7 +232,7 @@ export default function LoginPage() {
             <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-xl shadow-amber-500/30 mx-auto mb-3">
               <Coffee size={28} className="text-white" />
             </div>
-            <h1 className="text-2xl font-black text-white tracking-tight">ASTAKIRA</h1>
+            <h1 className="text-2xl font-black text-white tracking-tight">MYCAFE</h1>
             <p className="text-gray-400 text-sm mt-1">Admin Dashboard</p>
           </div>
 

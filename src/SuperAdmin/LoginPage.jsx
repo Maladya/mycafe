@@ -99,7 +99,7 @@ export default function SuperAdminLogin() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="superadmin@astakira.id"
+              placeholder="superadmin@MYCAFE.id"
               className="w-full px-4 py-3 bg-white/10 border-2 border-white/20 rounded-xl text-white placeholder-white/40 text-sm font-semibold outline-none focus:border-purple-400 focus:bg-white/20 transition-all backdrop-blur-sm"
             />
           </div>

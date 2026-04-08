@@ -97,8 +97,8 @@ export default function KasirLayout() {
                 <QrCode size={20} className="text-white" />
               </div>
               <div>
-                <h1 className="font-black text-lg leading-none">TERMINAL KASIR</h1>
-                <p className="text-gray-400 text-[10px]">ASTAKIRA POS</p>
+                <h1 className="font-black text-lg leading-none"></h1>
+                <p className="text-gray-400 text-[10px]">MYCAFE </p>
               </div>
             </div>
 

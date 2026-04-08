@@ -394,7 +394,7 @@ export function QRModal({ table, onClose }) {
 
     <!-- Footer -->
     <div class="footer">
-      <span class="footer-brand">ASTAKIRA POS</span>
+      <span class="footer-brand">MYCAFE</span>
       <div class="footer-dot"></div>
       <span class="footer-tag">Scan &amp; Order System</span>
     </div>

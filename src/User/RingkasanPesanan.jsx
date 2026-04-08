@@ -24,13 +24,13 @@ import {
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 
-const FINGERPRINT_KEY = "astakira_fingerprint";
+const FINGERPRINT_KEY = "MYCAFE_fingerprint";
 
-const TOKEN_KEY = "astakira_token";
+const TOKEN_KEY = "MYCAFE_token";
 
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
 
-const THEME_CACHE_KEY = "astakira_theme";
+const THEME_CACHE_KEY = "MYCAFE_theme";
 
 
 
@@ -252,7 +252,7 @@ export default function RingkasanPesanan() {
 
   const [copied,      setCopied]      = useState(false);
 
-  const [cafeName,    setCafeName]    = useState("ASTAKIRA");
+  const [cafeName,    setCafeName]    = useState("MYCAFE");
 
   const submitted = useRef(false); // guard double-submit
 
@@ -320,7 +320,7 @@ export default function RingkasanPesanan() {
 
         try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme)); } catch {}
 
-        setCafeName(raw?.nama_cafe ?? raw?.nama ?? raw?.name ?? "ASTAKIRA");
+        setCafeName(raw?.nama_cafe ?? raw?.nama ?? raw?.name ?? "MYCAFE");
 
       })
 

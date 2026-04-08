@@ -38,7 +38,7 @@ const initialMethods = [
   { id: "ewalet",        label: "E-Wallet Manual",  desc: "Tampilkan nomor GoPay / OVO / Dana untuk transfer manual.",            icon: "ewallet",  enabled: false, configurable: true  },
 ];
 
-const initialQris     = { nama_merchant: "ASTAKIRA Cafe", nomor_merchant: "", qris_image: null, feeType: "none", feeValue: "" };
+const initialQris     = { nama_merchant: "MYCAFE Cafe", nomor_merchant: "", qris_image: null, feeType: "none", feeValue: "" };
 const initialTransfer = { accounts: [{ id: 1, nama_bank: "BCA", nomor_bank: "", nama_pemilik: "" }] };
 const initialEwallet  = {
   gopay:  { nomor: "", atasNama: "" },
@@ -220,7 +220,7 @@ export default function Payment() {
     if (loading) return;
     if (autoEnabledRef.current) return;
 
-    const flagKey = "astakira_auto_enable_payments_v1";
+    const flagKey = "MYCAFE_auto_enable_payments_v1";
     let already = false;
     try {
       already = localStorage.getItem(flagKey) === "1";

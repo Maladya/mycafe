@@ -11,7 +11,7 @@ import ActionConfirmModal from "../components/ActionConfirmModal";
    Helpers yang sama persis dengan Home.jsx
    ──────────────────────────────────────────── */
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
-const TOKEN_KEY = "astakira_token";
+const TOKEN_KEY = "MYCAFE_token";
 const tokenManager = {
   get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "",
 };
@@ -56,7 +56,7 @@ function ha(hex, a) {
   } catch { return hex; }
 }
 
-const THEME_CACHE_KEY = "astakira_theme";
+const THEME_CACHE_KEY = "MYCAFE_theme";
 
 function applyThemeVars(theme) {
   const onP = "#ffffff";
@@ -123,7 +123,7 @@ export default function Pesanan() {
   const [showEmptyCartConfirm, setShowEmptyCartConfirm] = useState(false);
 
   const [themeReady, setThemeReady] = useState(false);
-  const [cafeName, setCafeName] = useState("ASTAKIRA");
+  const [cafeName, setCafeName] = useState("MYCAFE");
 
   /* ── Muat tema dari cache dulu, lalu fetch fresh ── */
   useEffect(() => {
@@ -144,7 +144,7 @@ export default function Pesanan() {
         const theme = parseTheme(raw?.tema_colors);
         applyThemeVars(theme);
         try { localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(theme)); } catch {}
-        setCafeName(raw?.nama_cafe ?? raw?.nama ?? raw?.name ?? "ASTAKIRA");
+        setCafeName(raw?.nama_cafe ?? raw?.nama ?? raw?.name ?? "MYCAFE");
       })
       .catch(() => {/* pakai cache */});
 

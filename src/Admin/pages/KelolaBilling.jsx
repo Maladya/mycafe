@@ -141,7 +141,7 @@ export default function Billing() {
 
   const autoActivateFreePlanIfNeeded = async ({ listPlans, me } = {}) => {
     const cafeId = getCafeIdForAuto();
-    const key = cafeId ? `astakira_auto_free_activated:${cafeId}` : "astakira_auto_free_activated";
+    const key = cafeId ? `MYCAFE_auto_free_activated:${cafeId}` : "MYCAFE_auto_free_activated";
     try {
       if (sessionStorage.getItem(key)) return;
     } catch {}
@@ -201,7 +201,7 @@ export default function Billing() {
       showToast("Mengecek status langganan...", "info");
       const me = await pollUntilActive();
       setSub(me);
-      try { sessionStorage.removeItem("astakira_pending_sub_checkout"); } catch {}
+      try { sessionStorage.removeItem("MYCAFE_pending_sub_checkout"); } catch {}
       showToast("Langganan sudah aktif!", "success");
       await refreshAll();
       navigate("/admin/dashboard", { replace: true });
@@ -317,7 +317,7 @@ export default function Billing() {
 
     // Kalau user balik dari redirect Midtrans, lakukan polling otomatis
     try {
-      const ts = Number(sessionStorage.getItem("astakira_pending_sub_checkout") || 0);
+      const ts = Number(sessionStorage.getItem("MYCAFE_pending_sub_checkout") || 0);
       if (ts && Date.now() - ts < 10 * 60 * 1000) {
         checkSubscriptionNow();
       }
@@ -495,7 +495,7 @@ export default function Billing() {
 
       // Default: Redirect flow (frontend tidak perlu Client Key)
       if (redirectUrl) {
-        try { sessionStorage.setItem("astakira_pending_sub_checkout", String(Date.now())); } catch {}
+        try { sessionStorage.setItem("MYCAFE_pending_sub_checkout", String(Date.now())); } catch {}
         window.location.href = redirectUrl;
         return;
       }
@@ -515,7 +515,7 @@ export default function Billing() {
             await pollUntilActive({ intervalMs: 2000, timeoutMs: 60000 });
             showToast("Langganan sudah aktif!", "success");
           } catch {}
-          try { sessionStorage.removeItem("astakira_pending_sub_checkout"); } catch {}
+          try { sessionStorage.removeItem("MYCAFE_pending_sub_checkout"); } catch {}
           await refreshAll();
         },
         onPending: () => showToast("Pembayaran pending. Silakan selesaikan pembayaran.", "info"),
@@ -546,7 +546,7 @@ export default function Billing() {
       {/* ── Header ── */}
       <div className="mb-8">
         <h1 className="text-2xl font-black text-gray-900 tracking-tight">Langganan</h1>
-        <p className="text-gray-400 text-sm mt-1">Kelola paket dan pembayaran ASTAKIRA kamu.</p>
+        <p className="text-gray-400 text-sm mt-1">Kelola paket dan pembayaran MYCAFE kamu.</p>
       </div>
 
       {loading && (

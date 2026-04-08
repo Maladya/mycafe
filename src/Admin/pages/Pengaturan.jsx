@@ -366,7 +366,7 @@ function HomePreview({ colors, cafeName }) {
 
           </div>
 
-          <div className="font-black text-gray-900" style={{ fontSize: 9 }}>{cafeName || "ASTAKIRA"}</div>
+          <div className="font-black text-gray-900" style={{ fontSize: 9 }}>{cafeName || "MYCAFE"}</div>
 
         </div>
 
@@ -1134,7 +1134,7 @@ export default function Pengaturan() {
 
         <h1 className="text-xl lg:text-2xl font-black text-gray-900">Pengaturan</h1>
 
-        <p className="text-gray-400 text-sm">Konfigurasi sistem ASTAKIRA</p>
+        <p className="text-gray-400 text-sm">Konfigurasi sistem MYCAFE</p>
 
       </div>
 
@@ -1234,7 +1234,7 @@ export default function Pengaturan() {
 
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Nama Kafe *</label>
 
-            <input value={s.cafeNama} onChange={e => set("cafeNama", e.target.value)} placeholder="ASTAKIRA"
+            <input value={s.cafeNama} onChange={e => set("cafeNama", e.target.value)} placeholder="MYCAFE"
 
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all" />
 
@@ -1264,7 +1264,7 @@ export default function Pengaturan() {
 
             <input value={s.cafeEmail} onChange={e => set("cafeEmail", e.target.value)}
 
-              placeholder="admin@astakira.id" type="email"
+              placeholder="admin@MYCAFE.id" type="email"
 
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all" />
 

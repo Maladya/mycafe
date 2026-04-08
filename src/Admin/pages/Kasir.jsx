@@ -13,7 +13,7 @@ import { Html5Qrcode } from "html5-qrcode";
 
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
-const THEME_CACHE_KEY = "astakira_admin_theme";
+const THEME_CACHE_KEY = "MYCAFE_admin_theme";
 
 
 
@@ -90,7 +90,7 @@ export default function Kasir() {
   const [loading, setLoading] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [paymentModal, setPaymentModal] = useState(null);
-  const [cafeInfo, setCafeInfo] = useState({ nama: "ASTAKIRA", alamat: "Ciakar, Tasikmalaya" });
+  const [cafeInfo, setCafeInfo] = useState({ nama: "MYCAFE", alamat: "Ciakar, Tasikmalaya" });
 
 
   // ─── PERBAIKAN 2: fetchCafeSettings — cek content-type sebelum .json() ───
@@ -121,7 +121,7 @@ export default function Kasir() {
         const cafe = data.data ?? data ?? null;
 
         setCafeInfo({
-          nama: cafe?.nama_cafe || "ASTAKIRA",
+          nama: cafe?.nama_cafe || "MYCAFE",
           alamat: cafe?.alamat || "Ciakar, Tasikmalaya",
           logo: cafe?.logo_cafe || null,
         });
@@ -310,7 +310,7 @@ export default function Kasir() {
       </head>
       <body>
         <div class="header">
-          <h2>${cafeInfo.nama?.toUpperCase() || 'ASTAKIRA'} CAFE</h2>
+          <h2>${cafeInfo.nama?.toUpperCase() || 'MYCAFE'} CAFE</h2>
           <p>${new Date().toLocaleString('id-ID')}</p>
           <p>Order: #${currentOrder.id || currentOrder.order_code}</p>
         </div>

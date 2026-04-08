@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
    Theme + API helpers
    ──────────────────────────────────────────── */
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
-const TOKEN_KEY = "astakira_token";
+const TOKEN_KEY = "MYCAFE_token";
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
 
 const fixImgUrl = (url) => {
@@ -53,7 +53,7 @@ function ha(hex, a) {
   } catch { return hex; }
 }
 
-const THEME_CACHE_KEY = "astakira_theme";
+const THEME_CACHE_KEY = "MYCAFE_theme";
 
 function applyThemeVars(theme) {
   const onP = "#ffffff";
@@ -433,7 +433,7 @@ export default function Home() {
   }, [cafeRaw]);
 
   const cafeProfile = useMemo(() => ({
-    nama:   cafeRaw?.nama_cafe  ?? cafeRaw?.nama    ?? cafeRaw?.name   ?? "ASTAKIRA",
+    nama:   cafeRaw?.nama_cafe  ?? cafeRaw?.nama    ?? cafeRaw?.name   ?? "MYCAFE",
     alamat: cafeRaw?.alamat     ?? cafeRaw?.address ?? cafeRaw?.lokasi ?? "Ciakar · Tasikmalaya",
     logo:   fixImgUrl(cafeRaw?.logo_cafe ?? cafeRaw?.logo ?? cafeRaw?.foto ?? ""),
     jam:    cafeRaw?.jam_buka   ?? "08:00 - 17:00",

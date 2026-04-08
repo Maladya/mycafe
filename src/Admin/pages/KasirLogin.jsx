@@ -10,7 +10,7 @@ export default function KasirLogin() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [cafeInfo, setCafeInfo] = useState({ nama: "ASTAKIRA", alamat: "Ciakar, Tasikmalaya" });
+  const [cafeInfo, setCafeInfo] = useState({ nama: "MYCAFE", alamat: "Ciakar, Tasikmalaya" });
 
   // Jika sudah login, redirect ke kasir
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function KasirLogin() {
         const data = await res.json();
         const cafe = data.data ?? data ?? null;
         setCafeInfo({
-          nama: cafe?.nama_cafe || "ASTAKIRA",
+          nama: cafe?.nama_cafe || "MYCAFE",
           alamat: cafe?.alamat || "Ciakar, Tasikmalaya",
         });
       }

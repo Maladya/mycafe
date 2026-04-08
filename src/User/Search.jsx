@@ -18,11 +18,11 @@ import {
 
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 
-const TOKEN_KEY = "astakira_token";
+const TOKEN_KEY = "MYCAFE_token";
 
-const DEVICE_KEY = "astakira_device_id";
+const DEVICE_KEY = "MYCAFE_device_id";
 
-const CLIENT_FINGERPRINT_KEY = "astakira_client_fingerprint";
+const CLIENT_FINGERPRINT_KEY = "MYCAFE_client_fingerprint";
 
 const VISITOR_COOKIE_KEY = "visitor_id";
 
@@ -146,7 +146,7 @@ function ha(hex, a) {
 
 
 
-const THEME_CACHE_KEY = "astakira_theme";
+const THEME_CACHE_KEY = "MYCAFE_theme";
 
 
 
@@ -1511,7 +1511,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
   const cafeProfile = useMemo(() => ({
 
-    nama: cafeRaw?.nama_cafe ?? cafeRaw?.nama ?? cafeRaw?.name ?? "ASTAKIRA",
+    nama: cafeRaw?.nama_cafe ?? cafeRaw?.nama ?? cafeRaw?.name ?? "MYCAFE",
 
   }), [cafeRaw]);
 

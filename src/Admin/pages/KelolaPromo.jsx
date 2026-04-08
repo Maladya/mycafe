@@ -341,7 +341,7 @@ export default function KelolaPromo() {
                 <input
                   value={form.code}
                   onChange={e => setF("code", e.target.value.toUpperCase())}
-                  placeholder="ASTAKIRA10"
+                  placeholder="MYCAFE10"
                   className={`w-full border-2 rounded-xl px-3 py-2.5 text-sm font-mono font-bold outline-none transition-all ${
                     !form.code.trim() ? "border-red-300 focus:border-red-500 bg-red-50" : "border-gray-200 focus:border-amber-500"
                   }`}
