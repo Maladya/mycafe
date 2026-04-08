@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Check, Shield, ChevronRight, CreditCard, Calendar, AlertCircle, Loader2, ExternalLink, RefreshCw } from "lucide-react";
+import { useAdmin } from "../adminContext";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 
@@ -44,6 +45,7 @@ function loadSnapScript(clientKey, snapJsUrl) {
 export default function Billing() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const adminCtx = useAdmin();
   const [plans, setPlans] = useState([]);
   const [sub, setSub] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -177,6 +179,10 @@ export default function Billing() {
       const confirmed = await pollUntilActive({ intervalMs: 2000, timeoutMs: 30000 });
       setSub(confirmed);
       showToast("Paket gratis aktif!", "success");
+      // Update subscription state di AdminPanel juga
+      if (adminCtx?.checkSubscription) {
+        await adminCtx.checkSubscription();
+      }
     } catch (e) {
       showToast(e?.message || "Gagal mengaktifkan paket gratis", "error");
     } finally {
@@ -203,6 +209,10 @@ export default function Billing() {
       setSub(me);
       try { sessionStorage.removeItem("MYCAFE_pending_sub_checkout"); } catch {}
       showToast("Langganan sudah aktif!", "success");
+      // Update subscription state di AdminPanel juga
+      if (adminCtx?.checkSubscription) {
+        await adminCtx.checkSubscription();
+      }
       await refreshAll();
       navigate("/admin/dashboard", { replace: true });
     } catch (e) {
@@ -514,6 +524,10 @@ export default function Billing() {
           try {
             await pollUntilActive({ intervalMs: 2000, timeoutMs: 60000 });
             showToast("Langganan sudah aktif!", "success");
+            // Update subscription state di AdminPanel juga
+            if (adminCtx?.checkSubscription) {
+              await adminCtx.checkSubscription();
+            }
           } catch {}
           try { sessionStorage.removeItem("MYCAFE_pending_sub_checkout"); } catch {}
           await refreshAll();

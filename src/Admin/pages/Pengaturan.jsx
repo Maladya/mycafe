@@ -8,12 +8,10 @@ import {
 
 } from "lucide-react";
 
-import { useAdmin } from "../AdminPanel";
-
+import { useAdmin } from "../adminContext";
 
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
-
 
 
 const authHeaders = (json = true) => ({
@@ -1424,61 +1422,35 @@ export default function Pengaturan() {
 
       </div>
 
-{/* ── 4. Notifikasi & Otomasi ────────────────────────────────────────── */}
-
+{/* ── 4. Pajak (Sementara Dinonaktifkan) ─────────────────────────────── */}
+      {/* 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-
         <SectionHeader
-
           icon={<Sliders size={16} className="text-white" />}
-
           iconClass="bg-gradient-to-br from-gray-700 to-gray-900"
-
           title="Pajak"
-
           subtitle="Atur persentase pajak untuk transaksi"
-
         >
-
           <SaveButton onClick={handleSavePajak} saving={sec.pajak.saving} saved={sec.pajak.saved} label="Simpan Pajak" />
-
         </SectionHeader>
-
-
-
         <div className="space-y-4">
-
           <div>
-
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Pajak (%)</label>
-
             <input
-
               type="number"
-
               min={0}
-
               max={100}
-
               step={0.1}
-
               value={s.pajakPersen}
-
               onChange={(e) => set("pajakPersen", e.target.value)}
-
               placeholder="10"
-
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-500 transition-all"
-
             />
-
             <p className="text-[11px] text-gray-400 mt-1">Contoh: 10 = 10% pajak</p>
-
           </div>
-
         </div>
-
       </div>
+      ── */}
 
       {/* ── 3. Ganti Password ──────────────────────────────────────────────── */}
 

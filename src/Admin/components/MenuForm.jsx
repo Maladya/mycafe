@@ -3,6 +3,7 @@ import {
   X, Image, Plus, Check, Trash2,
   Hash, Save, Upload, Loader2, Edit3, AlertCircle, Camera, ChevronDown, ChevronUp
 } from "lucide-react";
+import { Toast } from "./SharedComponents";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 
@@ -558,10 +559,15 @@ export default function MenuForm({ item, onSave, onCancel }) {
   const ensureMenuSaved = async () => {
     const existingId = item?.id ?? form.id;
     if (existingId) return Number(existingId);  // selalu kembalikan integer
-    if (!form.nama_menu?.trim()) { setVarErr("Nama menu wajib diisi sebelum menyimpan varian."); return null; }
-    if (!form.harga)            { setVarErr("Harga menu wajib diisi."); return null; }
-    if (!form.image_url?.trim()) { setVarErr("Gambar/URL menu wajib diisi."); return null; }
-    if (!form.id_kategori)      { setVarErr("Kategori wajib dipilih."); return null; }
+    if (!form.nama_menu?.trim()) { 
+      onSave?.({ __error: "Nama menu wajib diisi", __type: "error" }); 
+      return null; 
+    }
+    if (!form.harga) { 
+      onSave?.({ __error: "Harga wajib diisi", __type: "error" }); 
+      return null; 
+    }
+    if (!form.image_url?.trim()) { setUploadErr("Gambar wajib diisi"); return null; }
 
     try {
       const res  = await fetch(`${API_URL}/api/menu`, {
@@ -675,7 +681,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
           ...g,
           pilihan: g.pilihan.map(p => ({ ...p, isTemp: false })),
         })));
-        alert("Varian berhasil disimpan!");
+        // Toast notification akan muncul di komponen parent (KelolaMenu)
       }
     } catch {
       setVarErr("Terjadi kesalahan tak terduga saat menyimpan varian.");
@@ -686,8 +692,14 @@ export default function MenuForm({ item, onSave, onCancel }) {
 
   // ── Simpan menu utama ─────────────────────────────────────────────────────
   const handleSave = () => {
-    if (!form.nama_menu.trim()) { alert("Nama menu wajib diisi"); return; }
-    if (!form.harga)            { alert("Harga wajib diisi"); return; }
+    if (!form.nama_menu.trim()) { 
+      onSave?.({ __error: "Nama menu wajib diisi", __type: "error" }); 
+      return; 
+    }
+    if (!form.harga) { 
+      onSave?.({ __error: "Harga wajib diisi", __type: "error" }); 
+      return; 
+    }
     if (!form.image_url?.trim()) { setUploadErr("Gambar wajib diisi"); return; }
 
     const flatVariants = variantGroups

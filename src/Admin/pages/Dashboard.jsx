@@ -8,7 +8,7 @@ import {
   Tag,
   CreditCard,
 } from "lucide-react";
-import { useAdmin } from "../AdminPanel";
+import { useAdmin } from "../adminContext";
 import { isPromoActive } from "../data/constants";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");

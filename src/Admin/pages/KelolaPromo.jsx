@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Tag, Edit3, Trash2, Gift, Save, X, CalendarCheck, CalendarX, Calendar, Loader2 } from "lucide-react";
 import { todayStr, isPromoActive, getPromoStatus } from "../data/constants";
-import { useAdmin } from "../AdminPanel";
+import { useAdmin } from "../adminContext";
 import { ConfirmDialog } from "../components/SharedComponents";
 
 // FIX: IP diperbaiki dari .13 ke .3

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Search, Image, Edit3, Trash2, ChevronLeft, ChevronRight, X, Camera, Loader2 } from "lucide-react";
 import { getCatColor } from "../data/constants";
-import { useAdmin } from "../AdminPanel";
+import { useAdmin } from "../adminContext";
 import MenuForm from "../components/MenuForm";
 import { ConfirmDialog } from "../components/SharedComponents";
 
@@ -353,6 +353,11 @@ export default function KelolaMenu() {
   // ── Simpan Menu ─────────────────────────────────────────────────────────
   // ✅ FIX: gunakan item?.id bukan editItem untuk deteksi edit vs tambah baru
   const handleSave = async (item) => {
+    // Handle error dari MenuForm (validation error)
+    if (item?.__error) {
+      showToast(item.__error, item.__type || "error");
+      return;
+    }
     setSaving(true);
     try {
       const token  = localStorage.getItem("token");

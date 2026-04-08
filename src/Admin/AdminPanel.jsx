@@ -1,10 +1,11 @@
-import { useState, useEffect, createContext, useContext, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { LogOut, X, Shield } from "lucide-react";
 
 import { Toast } from "./components/SharedComponents";
 import { Sidebar, Header } from "./components/Sidebar";
 import MaintenanceBanner from "../components/MaintenanceBanner";
+import { AdminContext } from "./adminContext";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 const THEME_CACHE_KEY = "MYCAFE_admin_theme";
@@ -50,9 +51,6 @@ try {
   const cached = localStorage.getItem(THEME_CACHE_KEY);
   if (cached) applyThemeVars(JSON.parse(cached));
 } catch {}
-
-export const AdminContext = createContext(null);
-export const useAdmin = () => useContext(AdminContext);
 
 /* ── Logout Confirmation Modal ───────────────────────────────────── */
 function LogoutModal({ visible, onConfirm, onCancel }) {
@@ -197,7 +195,18 @@ export default function AdminPanel() {
 
   const isSubActive = (me) => {
     const st = String(me?.status ?? "").toLowerCase();
-    return st === "active" || Boolean(me?.is_active ?? me?.isActive);
+    const flagOk = st === "active" || Boolean(me?.is_active ?? me?.isActive);
+    if (!flagOk) return false;
+    // Cek juga active_until tidak expired
+    const until = me?.active_until ?? me?.activeUntil ?? me?.expired_at ?? me?.expiredAt;
+    if (!until) return true;
+    try {
+      const d = new Date(until);
+      if (Number.isNaN(d.getTime())) return true;
+      return d.getTime() > Date.now();
+    } catch {
+      return true;
+    }
   };
 
   const checkSubscription = async () => {
@@ -243,8 +252,21 @@ export default function AdminPanel() {
 
   useEffect(() => {
     checkSubscription();
+    // Polling interval untuk cek status langganan setiap 30 detik
+    const interval = setInterval(() => {
+      checkSubscription();
+    }, 30000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const path = location.pathname || "";
+    if (!path.startsWith("/admin")) return;
+    checkSubscription();
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   useEffect(() => {
     // Gating: jika langganan belum aktif, paksa ke halaman billing
@@ -349,6 +371,7 @@ export default function AdminPanel() {
       loading,
       showToast,
       fetchAll,
+      checkSubscription,
       apiUrl:     API_URL,
       authHeader: getAuthHeader(),
       cafeRaw,

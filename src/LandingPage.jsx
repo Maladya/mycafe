@@ -409,8 +409,8 @@ export default function LandingPage() {
         <div style={{ borderTop: "1px solid #fde68a", borderBottom: "1px solid #fde68a", background: "#fff8ec" }}>
           <div className="stat-grid" style={{ maxWidth: 1152, margin: "0 auto", padding: "0 20px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
             {[
-              { val: "2.000+", label: "Cafe Terdaftar" },
-              { val: "98%", label: "Kepuasan Pengguna" },
+              // { val: "2.000+", label: "Cafe Terdaftar" },
+              // { val: "98%", label: "Kepuasan Pengguna" },
               { val: "< 5 Mnt", label: "Setup Awal" },
               { val: "24/7", label: "Dukungan Teknis" },
             ].map((s, i, arr) => (

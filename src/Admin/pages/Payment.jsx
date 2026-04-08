@@ -3,7 +3,7 @@ import {
   QrCode, CreditCard, Banknote, Upload, AlertCircle, Save, Eye,
   Smartphone, Copy, CheckCheck, Info, Loader2
 } from "lucide-react";
-import { useAdmin } from "../AdminPanel";
+import { useAdmin } from "../adminContext";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 

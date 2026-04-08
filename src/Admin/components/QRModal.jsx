@@ -1,6 +1,6 @@
 import { X, QrCode, Loader2, RefreshCw, Download, Printer } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { useAdmin } from "../AdminPanel";
+import { useAdmin } from "../adminContext";
 import qrisLogo from "../../assets/qris.png";
 
 const PUBLIC_URL = (import.meta.env.VITE_PUBLIC_URL ?? window.location.origin).replace(/\/$/, "");

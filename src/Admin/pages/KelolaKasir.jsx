@@ -3,7 +3,7 @@ import {
   Users, Plus, Search, Edit2, Trash2, Loader2, 
   Eye, EyeOff, X, Check, UserPlus
 } from "lucide-react";
-import { useAdmin } from "../AdminPanel";
+import { useAdmin } from "../adminContext";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
 

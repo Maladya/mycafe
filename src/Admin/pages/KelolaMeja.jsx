@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from "react";
 
 import { Plus, Table2, Trash2, QrCode, Loader2, RefreshCw, Square, CheckSquare2, X } from "lucide-react";
 
-import { useAdmin } from "../AdminPanel";
+import { useAdmin } from "../adminContext";
 
 import { QRModal } from "../components/QRModal";
 
 import { ConfirmDialog } from "../components/SharedComponents";
-
 
 
 const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
