@@ -592,7 +592,7 @@ export default function LandingPage() {
                 <div style={{ marginBottom: 28 }}>
                   {[
                     { icon: <MapPin size={14} />, text: "Jawa Barat, Indonesia" },
-                    { icon: <Phone size={14} />, text: "+62 812-3456-7890" },
+                    { icon: <Phone size={14} />, text: "+62 853-2395-1221" },
                     { icon: <Mail size={14} />, text: "halo@mycafe-order.net" },
                   ].map(c => (
                     <div key={c.text} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13, color: "rgba(255,255,255,.45)", fontWeight: 600, marginBottom: 10 }}>
@@ -636,13 +636,13 @@ export default function LandingPage() {
                 ))}
 
                 {/* WA CTA */}
-                <div style={{ marginTop: 22, padding: "14px 16px", borderRadius: 14, background: "rgba(37,211,102,.08)", border: "1px solid rgba(37,211,102,.2)" }}>
+                {/* <div style={{ marginTop: 22, padding: "14px 16px", borderRadius: 14, background: "rgba(37,211,102,.08)", border: "1px solid rgba(37,211,102,.2)" }}>
                   <div style={{ fontSize: 12, fontWeight: 800, color: "#34d399", marginBottom: 5 }}>💬 Chat via WhatsApp</div>
                   <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.4)", fontWeight: 500, marginBottom: 10, lineHeight: 1.5 }}>Senin–Sabtu, 09.00–21.00 WIB</div>
                   <a href="https://wa.me/6281234567890" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 800, color: "#34d399", textDecoration: "none" }}>
                     Hubungi Sekarang <ArrowRight size={12} />
                   </a>
-                </div>
+                </div> */}
               </div>
             </div>
 
