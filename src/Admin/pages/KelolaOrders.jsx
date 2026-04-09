@@ -350,6 +350,45 @@ export default function KelolaOrders({
     }
   };
 
+  const handleMarkDiantar = async (orderId) => {
+    if (!orderId || updatingOrderId) return;
+    setUpdatingOrderId(String(orderId));
+
+    try {
+      const token = localStorage.getItem(tokenKey) ?? localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/api/orders/kasir/${encodeURIComponent(orderId)}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          delivery_status: "diantar",
+          status_pengantaran: "diantar",
+          is_delivered: true,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message ?? `HTTP ${res.status}`);
+      }
+
+      setOrders((prev) => prev.map((order) => (
+        String(order.id) === String(orderId)
+          ? { ...order, delivery_status: "diantar", status_pengantaran: "diantar", is_delivered: true }
+          : order
+      )));
+
+      showToast?.("Pesanan berhasil ditandai sudah diantar", "success");
+      fetchOrders(true);
+    } catch (err) {
+      showToast?.(err.message || "Gagal menandai pesanan sudah diantar", "error");
+    } finally {
+      setUpdatingOrderId("");
+    }
+  };
+
   const statusChip = (status) => {
     const s = String(status ?? "").trim().toLowerCase();
     if (["selesai", "done", "completed"].includes(s)) return { label: "Selesai", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
@@ -568,6 +607,21 @@ export default function KelolaOrders({
                       <button
                         type="button"
                         onClick={() => handleMarkSelesai(order.id)}
+                        disabled={!!updatingOrderId}
+                        className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 font-bold text-sm text-white bg-gradient-to-r from-emerald-500 to-green-500 shadow-sm hover:shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {updatingOrderId === String(order.id) ? (
+                          <><Loader2 size={15} className="animate-spin" /> Memproses...</>
+                        ) : (
+                          <><CheckCircle2 size={15} /> Tandai Selesai</>
+                        )}
+                      </button>
+                    )}
+
+                    {isKasirMode && effectiveTab === "siapDiantar" && isSelesai && !isSudahDiantar(order) && (
+                      <button
+                        type="button"
+                        onClick={() => handleMarkDiantar(order.id)}
                         disabled={!!updatingOrderId}
                         className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 font-bold text-sm text-white bg-gradient-to-r from-emerald-500 to-green-500 shadow-sm hover:shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                       >
