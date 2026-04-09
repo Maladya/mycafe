@@ -377,12 +377,69 @@ export default function MenuForm({ item, onSave, onCancel }) {
   const uploadMenuImage = (file) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) { setUploadErr("File harus berupa gambar"); return; }
-    if (file.size > 5 * 1024 * 1024)    { setUploadErr("Ukuran gambar max 5MB"); return; }
-    setUploadErr(""); setUploading(true);
-    const reader = new FileReader();
-    reader.onload  = (e) => { set("image_url", e.target.result); setPreviewUrl(e.target.result); setUploading(false); };
-    reader.onerror = ()  => { setUploadErr("Gagal membaca file"); setUploading(false); };
-    reader.readAsDataURL(file);
+    // Catatan:
+    // Server kadang punya limit body lebih kecil dari base64 full-size.
+    // Supaya tidak kena 413, kompres dulu sebelum dikirim ke backend.
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadErr("Ukuran gambar max 8MB. Silakan pilih gambar lebih kecil.");
+      return;
+    }
+
+    const MAX_W = 900;
+    const MAX_H = 900;
+    const QUALITY = 0.75; // untuk webp
+
+    const compressToWebp = (inputFile) => new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(inputFile);
+
+      img.onload = () => {
+        try {
+          URL.revokeObjectURL(objectUrl);
+
+          const iw = img.naturalWidth || img.width;
+          const ih = img.naturalHeight || img.height;
+          if (!iw || !ih) throw new Error("Invalid image dimensions");
+
+          const ratio = Math.min(1, MAX_W / iw, MAX_H / ih);
+          const cw = Math.max(1, Math.round(iw * ratio));
+          const ch = Math.max(1, Math.round(ih * ratio));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = cw;
+          canvas.height = ch;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas not supported");
+
+          ctx.drawImage(img, 0, 0, cw, ch);
+          const out = canvas.toDataURL("image/webp", QUALITY);
+          resolve(out);
+        } catch (e) {
+          try { URL.revokeObjectURL(objectUrl); } catch {}
+          reject(e);
+        }
+      };
+
+      img.onerror = () => {
+        try { URL.revokeObjectURL(objectUrl); } catch {}
+        reject(new Error("Gagal membaca file gambar"));
+      };
+
+      img.src = objectUrl;
+    });
+
+    setUploadErr("");
+    setUploading(true);
+    compressToWebp(file)
+      .then((dataUrl) => {
+        set("image_url", dataUrl);
+        setPreviewUrl(dataUrl);
+        setUploading(false);
+      })
+      .catch(() => {
+        setUploadErr("Gagal mengompres gambar. Coba gambar lain.");
+        setUploading(false);
+      });
   };
 
   const handleDrop = (e) => {
