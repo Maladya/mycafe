@@ -1,38 +1,172 @@
-# FE API Index
+# API Docs - Kasir Pengantaran Pesanan
 
-Daftar dokumentasi endpoint untuk tim frontend.
+Dokumentasi ini menjelaskan request dari frontend kasir untuk menandai pesanan pengantaran sebagai selesai.
+Backend menerima format payload FE pengantaran dan melakukan mapping ke status order internal.
 
-## Orders & Pembayaran
+## Endpoint
 
-- `docs/midtrans-checkout-api.md`  
-  Checkout Midtrans (create transaction), payload fingerprint/visitor, dan alur return.
+- **Method**: `PATCH`
+- **URL**: `/api/orders/kasir/:id/status`
+- **Auth**: Bearer token kasir/admin
 
-- `docs/riwayat-pembelian-api.md`  
-  Riwayat pembelian pelanggan per perangkat (`visitor_id`/`fingerprint`).
+Contoh:
 
-- `docs/kasir-pengantaran-api.md`  
-  Update status pengantaran kasir dengan payload FE (`delivery_status`, `status_pengantaran`, `is_delivered`).
+`PATCH /api/orders/kasir/ORD-MNR2H6IR-51SY/status`
 
-## Saldo & Pencairan
+## Body Request (JSON)
 
-- `docs/saldo-api.md`  
-  Saldo transaksi cafe (endpoint admin orders).
+Frontend mengirim payload berikut saat tombol **Tandai Selesai** diklik di tab *Siap Diantar*:
 
-- `docs/pencairan-balance-api.md`  
-  Saldo untuk halaman pencairan (`GET /api/withdrawals/balance`).
+```json
+{
+  "delivery_status": "diantar",
+  "status_pengantaran": "diantar",
+  "is_delivered": true
+}
+```
 
-- `docs/pencairan-api.md`  
-  Pengajuan pencairan admin cafe dan proses approve/reject oleh superadmin.
+## Mapping Payload FE -> Status Order Backend
 
-## Subscription
+Backend membaca field berikut (fallback):
 
-- `docs/subscription-plan-delete-api.md`  
-  Hapus paket langganan dengan fallback auto-deactivate jika paket masih dipakai.
+- `status`
+- `status_pengantaran`
+- `delivery_status`
+- `is_delivered`
+
+Aturan mapping:
+
+- `is_delivered = true` -> status order diset ke `selesai`
+- `delivery_status/status_pengantaran` bernilai `diantar` -> status order `selesai`
+- nilai seperti `pending` / `diproses` -> status order `proses`
+
+Status internal yang dipakai endpoint ini: `proses`, `selesai`, `siap`, `lunas`.
+
+## Aturan Tab Pengantaran (Penting)
+
+Backend sekarang memisahkan status pembayaran/order dan status pengantaran:
+
+- Pembayaran berhasil (tunai/online) boleh membuat order `status = selesai`, **tetapi belum otomatis `diantar`**.
+- Setelah pembayaran sukses, order masuk tab **Siap Diantar** (`delivery_status = "siap"`).
+- Order baru masuk tab **Sudah Diantar** jika kasir menekan tombol tandai selesai pengantaran (kirim `is_delivered=true` atau `delivery_status/status_pengantaran="diantar"`).
+
+## Response Sukses (contoh)
+
+Status: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Status pesanan diupdate ke 'selesai'",
+  "data": {
+    "id": "ORD-MNR2H6IR-51SY",
+    "status": "selesai",
+    "delivery_status": "diantar",
+    "status_pengantaran": "diantar",
+    "is_delivered": true
+  }
+}
+```
+
+## Response Gagal (contoh)
+
+### 401 Unauthorized
+
+```json
+{
+  "status": 401,
+  "message": "Unauthorized",
+  "data": null,
+  "success": false
+}
+```
+
+### 404 Not Found
+
+```json
+{
+  "status": 404,
+  "message": "Pesanan tidak ditemukan",
+  "data": null,
+  "success": false
+}
+```
+
+### 400 Bad Request
+
+Jika payload tidak bisa dipetakan ke status valid.
+
+```json
+{
+  "success": false,
+  "message": "Status tidak valid. Pilihan: proses, selesai, siap, lunas"
+}
+```
+
+### 500 Internal Server Error
+
+```json
+{
+  "success": false,
+  "message": "Gagal update status"
+}
+```
+
+## Catatan untuk FE
+
+1. Payload FE di bawah ini sudah valid dan kompatibel:
+
+```json
+{
+  "delivery_status": "diantar",
+  "status_pengantaran": "diantar",
+  "is_delivered": true
+}
+```
+
+2. FE tidak perlu kirim `status` bila sudah mengirim field pengantaran di atas.
+3. Setelah sukses, refresh list order agar card berpindah tab sesuai status terbaru.
+4. Backend sekarang juga menyimpan flag pengantaran di order (`delivery_status`, `is_delivered`) sehingga FE bisa memisahkan tab **Siap Diantar** vs **Sudah Diantar** langsung dari response order.
+5. Jangan langsung memindahkan ke tab **Sudah Diantar** hanya karena `status` order sudah `selesai`; gunakan indikator pengantaran (`delivery_status` / `is_delivered`) sebagai sumber kebenaran tab.
 
 ---
 
-## Catatan Integrasi FE
+## Kontrak Data List Order (Tambahan untuk BE)
 
-- Untuk endpoint protected, kirim `Authorization: Bearer <token>`.
-- Setelah aksi `PATCH/POST/DELETE`, selalu refetch list/summary agar UI sinkron dengan server.
-- Untuk flow pelanggan (riwayat + checkout online), pastikan `fingerprint` konsisten antar request.
+Agar pemisahan tab di FE konsisten, endpoint list kasir (mis. `GET /api/orders/admin`) sebaiknya mengirim field ini di setiap order:
+
+- `status` (contoh: `proses`, `selesai`)
+- `delivery_status` (contoh: `siap`, `diantar`)
+- `status_pengantaran` (opsional alias dari `delivery_status`)
+- `is_delivered` (`true/false`)
+
+Contoh item order dari list:
+
+```json
+{
+  "id": "ORD-MNR2H6IR-51SY",
+  "status": "selesai",
+  "delivery_status": "siap",
+  "status_pengantaran": "siap",
+  "is_delivered": false
+}
+```
+
+Setelah tombol **Tandai Selesai** ditekan, nilai minimal yang diharapkan FE saat refetch:
+
+```json
+{
+  "id": "ORD-MNR2H6IR-51SY",
+  "status": "selesai",
+  "delivery_status": "diantar",
+  "status_pengantaran": "diantar",
+  "is_delivered": true
+}
+```
+
+Dengan kontrak ini:
+
+- Tab **Siap Diantar** = `status = selesai` dan belum `diantar`.
+- Tab **Sudah Diantar** = `status = selesai` dan sudah `diantar`.
+- Status `proses` tidak perlu ditampilkan di halaman pengantaran.
+

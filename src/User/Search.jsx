@@ -1616,7 +1616,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
   const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) =>
 
-    navigate("/pesanan", { state: { cart: oc, items: oi, fromRiwayat: true, orderId } });
+    navigate("/pembayaran", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
 
 
 
@@ -1628,7 +1628,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
     updateCart(merged);
 
-    navigate("/pesanan", { state: { cart: merged, items: allMenuItems.filter(m => merged[m.id]), isReorder: true } });
+    navigate("/pembayaran", { state: { cart: merged, items: allMenuItems.filter(m => merged[m.id]), cafeId: CAFE_ID, mejaId: MEJA_ID, isReorder: true } });
 
   };
 
@@ -1686,7 +1686,10 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
   return (
 
-    <div className="min-h-screen max-w-md mx-auto" style={{ background: "var(--bg)" }}>
+    <div
+      className={`min-h-screen max-w-md mx-auto ${totalQty > 0 && !selectedItem ? "pb-32" : ""}`}
+      style={{ background: "var(--bg)" }}
+    >
 
 
 
@@ -2211,7 +2214,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
             <button
 
-              onClick={onCheckout || (() => navigate("/pesanan", { state: { cart, items: cartItems } }))}
+              onClick={onCheckout || (() => navigate("/pembayaran", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } }))}
 
               className="w-full rounded-3xl p-5 shadow-2xl hover:scale-[1.01] transition-all border"
 
@@ -2285,7 +2288,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
       {selectedItem && (
 
-        <MenuDetailSheet item={selectedItem} menuDatabase={menuDatabase}
+        <MenuDetailSheet item={selectedItem} menuDatabase={menuDatabase} cafeId={CAFE_ID}
 
           onClose={() => setSelectedItem(null)}
 
