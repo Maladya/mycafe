@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Eye, Edit, Trash2, CheckCircle, XCircle, Search } from "lucide-react";
 import DataTable from "../components/DataTable";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
 const UPLOADS_BASE_URL = (import.meta.env.VITE_UPLOADS_BASE_URL || `${API_URL}/uploads`).replace(/\/$/, "");
 
 export default function ManageCafes() {

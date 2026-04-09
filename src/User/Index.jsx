@@ -12,7 +12,7 @@ import { RiwayatPesananSheet } from "./Search";
 
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
-const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
+const BASE_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
 const TOKEN_KEY = "MYCAFE_token";
 const KNOWN_GROUPS_KEY = "known_variant_groups";
 
@@ -1090,17 +1090,17 @@ export default function Home() {
       setShowEmptyCartConfirm(true);
       return;
     }
-    navigate("/pesanan", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } });
+    navigate("/pembayaran", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } });
   };
 
   const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) =>
-    navigate("/pesanan", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
+    navigate("/pembayaran", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
 
   const handleReorder = ({ cart: rc }) => {
     const merged = { ...cart };
     Object.entries(rc).forEach(([id, qty]) => { merged[id] = (merged[id]||0)+qty; });
     setCart(merged);
-    navigate("/pesanan", { state: { cart: merged, items: Object.values(menuDatabase).filter(m => merged[m.id]), cafeId: CAFE_ID, mejaId: MEJA_ID, isReorder: true } });
+    navigate("/pembayaran", { state: { cart: merged, items: Object.values(menuDatabase).filter(m => merged[m.id]), cafeId: CAFE_ID, mejaId: MEJA_ID, isReorder: true } });
   };
 
   const handleCategoryClick = (catId) => {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Banknote, CheckCircle2, Landmark, Loader2, RefreshCw, Wallet } from "lucide-react";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
 
 const fmt = (n) => `Rp${Number(n || 0).toLocaleString("id-ID")}`;
 
@@ -314,13 +314,20 @@ export default function PencairanSaldo() {
     setSaldoLoading(true);
     setSaldoError("");
     try {
-      const res = await fetch(`${API_URL}/api/orders/admin/saldo?limit=50`, {
+      const res = await fetch(`${API_URL}/api/withdrawals/balance?limit=50`, {
         headers: authHeaders(),
       });
       const body = await res.json().catch(() => ({}));
 
       if (res.status === 401) {
         navigate("/login", { replace: true });
+        return;
+      }
+      if (res.status === 403) {
+        setSaldoError(body?.message || "Hanya admin cafe");
+        setTotalSaldo(0);
+        setTotalTransaksi(0);
+        setTransaksi([]);
         return;
       }
 

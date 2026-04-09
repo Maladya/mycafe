@@ -11,7 +11,7 @@ import {
 import { useAdmin } from "../adminContext";
 import { isPromoActive } from "../data/constants";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
 
 function DashboardReportLoader({ cafeRaw, label = "Memuat laporan..." }) {
   const cafeName = cafeRaw?.cafeNama || cafeRaw?.nama_cafe || cafeRaw?.nama || "Cafe";
@@ -96,8 +96,6 @@ export default function Dashboard() {
   // ── Ambil data dari AdminContext (sudah di-fetch di AdminPanel) ─────────
   const { orders, menuItems, promoCodes, tables, loading, fetchAll, cafeRaw } = useAdmin();
 
-  const [midtransBalance, setMidtransBalance] = useState({ total_amount: 0, total_orders: 0 });
-  
   // Laporan state
   const [period, setPeriod] = useState("hari");
   const [laporanData, setLaporanData] = useState(null);
@@ -140,35 +138,6 @@ export default function Dashboard() {
   useEffect(() => {
     fetchLaporan(period);
   }, [period]);
-
-  useEffect(() => {
-    const fetchMidtransBalance = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const url = `${API_URL}/api/orders/admin/midtrans-balance`;
-        const res = await fetch(url, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: token ? `Bearer ${token}` : "",
-          },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          console.error("fetch midtrans balance failed", { url, status: res.status, body: data });
-          return;
-        }
-        const payload = data?.data ?? data;
-        setMidtransBalance({
-          total_amount: Number(payload?.total_amount ?? payload?.totalAmount ?? 0),
-          total_orders: Number(payload?.total_orders ?? payload?.totalOrders ?? 0),
-        });
-      } catch (e) {
-        console.error("fetch midtrans balance error", e);
-      }
-    };
-
-    fetchMidtransBalance();
-  }, []);
 
   if (loading) {
     return (
@@ -220,13 +189,6 @@ export default function Dashboard() {
       value: activePromoCount,
       icon: <Tag size={20} />,
       color: "from-purple-500 to-pink-500",
-    },
-    {
-      label: "Saldo Midtrans",
-      value: fmtRupiah(midtransBalance.total_amount),
-      icon: <CreditCard size={20} />,
-      color: "from-amber-500 to-orange-500",
-      sub: `${midtransBalance.total_orders || 0} transaksi`,
     },
   ];
 
