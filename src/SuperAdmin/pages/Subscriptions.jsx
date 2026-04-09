@@ -366,7 +366,9 @@ export default function ManageSubscriptionPlans() {
 
   const handleDelete = async (row) => {
     if (!row?.id) return;
-    const ok = confirm(`Hapus paket "${row.name || row.nama || row.id}"?`);
+    const ok = confirm(
+      `Hapus paket "${row.name || row.nama || row.id}"?\n\nJika paket masih dipakai, backend akan menonaktifkan paket (bukan hapus permanen).`
+    );
     if (!ok) return;
 
     try {
@@ -376,8 +378,22 @@ export default function ManageSubscriptionPlans() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
-      showToast("Paket berhasil dihapus", "success");
-      fetchPlans();
+
+      const action = data?.data?.action ?? "";
+      if (action === "deactivated") {
+        const usedCafe = Number(data?.data?.usage?.cafe_subscriptions ?? 0);
+        const usedTx = Number(data?.data?.usage?.subscription_transactions ?? 0);
+        showToast(
+          `Paket sedang dipakai, jadi dinonaktifkan (${usedCafe} langganan, ${usedTx} transaksi).`,
+          "info"
+        );
+      } else if (action === "deleted") {
+        showToast("Paket berhasil dihapus permanen.", "success");
+      } else {
+        showToast(data?.message || "Berhasil memproses hapus paket.", "success");
+      }
+
+      await fetchPlans();
     } catch (e) {
       showToast(e?.message || "Gagal menghapus", "error");
     }
@@ -463,7 +479,8 @@ export default function ManageSubscriptionPlans() {
               handleDelete(row);
             }}
             className="w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all"
-            title="Hapus"
+            title="Hapus / Nonaktifkan"
+            aria-label="Hapus atau nonaktifkan paket"
           >
             <Trash2 size={16} />
           </button>
@@ -488,7 +505,9 @@ export default function ManageSubscriptionPlans() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-black text-gray-900">Paket Langganan</h2>
-          <p className="text-sm text-gray-500 mt-1">Kelola paket (nama, harga, durasi, fitur) untuk admin cafe</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Kelola paket (nama, harga, durasi, fitur) untuk admin cafe. Aksi hapus dapat berubah menjadi nonaktif bila paket masih dipakai.
+          </p>
         </div>
         <button
           onClick={() => {

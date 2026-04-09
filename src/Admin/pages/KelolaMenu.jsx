@@ -371,9 +371,16 @@ export default function KelolaMenu() {
           body: JSON.stringify(item),
         }
       );
-      const data = await res.json();
+      const rawText = await res.text();
+      let data = {};
+      try { data = rawText ? JSON.parse(rawText) : {}; } catch { data = { message: rawText }; }
+
       if (!res.ok || data.success === false) {
-        showToast(data.message ?? data.error ?? "Gagal menyimpan menu", "error");
+        if (res.status === 413) {
+          showToast("Gambar/menu terlalu besar untuk dikirim (413). Kompres/crop gambar lalu coba lagi.", "error");
+          return;
+        }
+        showToast(data.message ?? data.error ?? `Gagal menyimpan menu (HTTP ${res.status})`, "error");
         return;
       }
       await fetchMenu();

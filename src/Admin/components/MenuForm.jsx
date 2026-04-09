@@ -385,9 +385,11 @@ export default function MenuForm({ item, onSave, onCancel }) {
       return;
     }
 
-    const MAX_W = 900;
-    const MAX_H = 900;
-    const QUALITY = 0.75; // untuk webp
+    // Target lebih kecil supaya aman dari limit body server (413)
+    const MAX_W = 640;
+    const MAX_H = 640;
+    const QUALITY = 0.6; // untuk webp
+    const MAX_DATAURL_LEN = 350_000; // ~350KB base64 string length (perkiraan aman)
 
     const compressToWebp = (inputFile) => new Promise((resolve, reject) => {
       const img = new Image();
@@ -413,6 +415,10 @@ export default function MenuForm({ item, onSave, onCancel }) {
 
           ctx.drawImage(img, 0, 0, cw, ch);
           const out = canvas.toDataURL("image/webp", QUALITY);
+          if (out.length > MAX_DATAURL_LEN) {
+            reject(new Error("Gambar masih terlalu besar setelah kompres"));
+            return;
+          }
           resolve(out);
         } catch (e) {
           try { URL.revokeObjectURL(objectUrl); } catch {}
@@ -437,7 +443,7 @@ export default function MenuForm({ item, onSave, onCancel }) {
         setUploading(false);
       })
       .catch(() => {
-        setUploadErr("Gagal mengompres gambar. Coba gambar lain.");
+        setUploadErr("Gambar terlalu besar untuk dikirim. Coba pilih gambar lain / crop dulu.");
         setUploading(false);
       });
   };
