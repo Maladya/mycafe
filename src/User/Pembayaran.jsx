@@ -8,7 +8,30 @@ import ActionConfirmModal from "../components/ActionConfirmModal";
    ──────────────────────────────────────────── */
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "https://www.mycafe-order.net").replace(/\/$/, "");
 const TOKEN_KEY = "MYCAFE_token";
+const CLIENT_FINGERPRINT_KEY = "MYCAFE_client_fingerprint";
+const VISITOR_COOKIE_KEY = "visitor_id";
 const tokenManager = { get: () => localStorage.getItem(TOKEN_KEY) ?? import.meta.env.VITE_API_TOKEN ?? "" };
+
+function getCookie(key) {
+  try {
+    const nameEq = `${encodeURIComponent(key)}=`;
+    const parts = (document.cookie || "").split(";");
+    for (const part of parts) {
+      const v = part.trim();
+      if (v.startsWith(nameEq)) return decodeURIComponent(v.slice(nameEq.length));
+    }
+  } catch {}
+  return "";
+}
+
+/** Sama dengan GET riwayat pembelian — lihat docs/riwayat-pembelian-api.md */
+function getClientFingerprintForApi() {
+  return (
+    localStorage.getItem(CLIENT_FINGERPRINT_KEY) ||
+    localStorage.getItem("MYCAFE_fingerprint") ||
+    ""
+  );
+}
 
 /* ─────────────────────────────────────────────
    Theme helpers
@@ -66,9 +89,11 @@ const api = {
       return res.json();
     } finally { clearTimeout(timer); }
   },
-  post: async (path, body, timeoutMs = 10000) => {
+  post: async (path, body, options = {}) => {
+    const timeoutMs = typeof options === "number" ? options : (options.timeoutMs ?? 10000);
+    const extraHeaders = typeof options === "number" ? {} : (options.headers ?? {});
     const token = tokenManager.get();
-    const headers = { "Content-Type": "application/json" };
+    const headers = { "Content-Type": "application/json", ...extraHeaders };
     if (token) headers["Authorization"] = `Bearer ${token}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -81,7 +106,10 @@ const api = {
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody?.message ?? `HTTP ${res.status}`);
+        const msg = errBody?.message ?? errBody?.error ?? `HTTP ${res.status}`;
+        const err = new Error(msg);
+        if (errBody?.reason) err.reason = errBody.reason;
+        throw err;
       }
       return res.json();
     } finally { clearTimeout(timer); }
@@ -548,9 +576,14 @@ export default function Pembayaran() {
       const freshPajak        = Math.floor(freshSebelumPajak * (Number(pajakPersen) || 0) / 100);
       const freshTotal        = freshSebelumPajak + freshPajak;
 
+      const fingerprint = getClientFingerprintForApi();
+      const visitorId = getCookie(VISITOR_COOKIE_KEY);
+      const postHeaders = fingerprint ? { "x-fingerprint": fingerprint } : {};
+
       const payload = {
         cafe_id:      CAFE_ID,
         meja_id:      MEJA_ID,
+        meja:         MEJA_ID,
         nama:         form.nama.trim(),
         note:         note ?? "",
         promo_code:   appliedPromo?.code ?? null,
@@ -559,15 +592,19 @@ export default function Pembayaran() {
         pajak:        freshPajak,
         pajak_persen: Number(pajakPersen) || 0,
         total:        freshTotal,
+        ...(fingerprint ? { fingerprint } : {}),
+        ...(visitorId ? { visitor_id: visitorId } : {}),
         items: orderedItems.map(item => {
           const cartItem = cart[item.id] || {};
           const qty = cartItem.qty || 0;
           const variantsPrice = (cartItem.variants || []).reduce((vsum, v) => vsum + (v?.hargaVariant || 0), 0);
           return {
             id:       item.id,
+            menu_id:  item.id,
             name:     item.name,
             price:    item.price + variantsPrice,
             quantity: qty,
+            qty,
             subtotal: (item.price + variantsPrice) * qty,
             variants: cartItem.variants || [],
             catatan:  cartItem.catatan || "",
@@ -575,10 +612,16 @@ export default function Pembayaran() {
         }),
       };
 
-      const res = await api.post("api/midtrans/create", payload);
+      const res = await api.post("api/midtrans/create", payload, { headers: postHeaders });
       const snapToken = res?.snap_token ?? res?.data?.snap_token;
+      const redirectUrl = res?.redirect_url ?? res?.data?.redirect_url;
       const clientKey = res?.client_key ?? res?.data?.client_key ?? snapClientKey;
       const resOrderId = res?.order_id ?? res?.data?.order_id;
+
+      if (redirectUrl && !snapToken) {
+        window.location.href = redirectUrl;
+        return;
+      }
 
       if (!snapToken) throw new Error("snap_token tidak ditemukan di respons backend");
 

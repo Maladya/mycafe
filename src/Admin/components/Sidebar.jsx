@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, UtensilsCrossed, ClipboardList, Table2,
   Settings, LogOut, Tag, Coffee, X, Menu, Bell,
-  CreditCard, Wallet, Users
+  CreditCard, Wallet, Users, Landmark
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
@@ -16,6 +16,7 @@ export function Sidebar({ activePage, setActivePage, sidebarOpen, setSidebarOpen
     { id:"tables",     label:"Meja",        icon:<Table2 size={18}/> },
     { id:"promo",      label:"Promo",       icon:<Tag size={18}/>,             badge:(promoCodes ?? []).filter(p=>isPromoActive(p)).length||null },
     { id:"payment",    label:"Pembayaran",  icon:<Wallet size={18}/> },
+    { id:"pencairan-saldo", label:"Pencairan", icon:<Landmark size={18}/> },
     { id:"billing",    label:"Langganan",   icon:<CreditCard size={18}/> },
     { id:"pengaturan", label:"Pengaturan",  icon:<Settings size={18}/> },
   ];
@@ -145,6 +146,7 @@ export function Header({ activePage, setSidebarOpen, orders, setActivePage, cafe
     tables:     "Meja",
     promo:      "Promo",
     payment:    "Pembayaran",
+    "pencairan-saldo": "Pencairan Saldo",
     pengaturan: "Pengaturan",
     billing:    "Langganan",
   };

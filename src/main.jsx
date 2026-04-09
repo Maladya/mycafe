@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import {
@@ -25,6 +25,7 @@ import SubscriptionTransactions from "./SuperAdmin/pages/SubscriptionTransaction
 import Reports from "./SuperAdmin/pages/Reports.jsx";
 import Analytics from "./SuperAdmin/pages/Analytics.jsx";
 import SuperAdminSettings from "./SuperAdmin/pages/Settings.jsx";
+import SuperAdminPencairan from "./SuperAdmin/pages/PencairanWithdrawals.jsx";
 
 // ── Admin Layout ──────────────────────────────────────────────────────────────
 import AdminPanel from "./Admin/AdminPanel.jsx";
@@ -40,6 +41,7 @@ import Pengaturan   from "./Admin/pages/Pengaturan.jsx";
 import Billing      from "./Admin/pages/KelolaBilling.jsx";
 import Kasir        from "./Admin/pages/Kasir.jsx";
 import KelolaKasir  from "./Admin/pages/KelolaKasir.jsx";
+import PencairanSaldo from "./Admin/pages/PencairanSaldo.jsx";
 import KasirLayout  from "./Admin/KasirLayout.jsx";
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -90,6 +92,7 @@ const navLabels = {
   tables:     "Meja",
   promo:      "Promo",
   payment:    "Pembayaran",
+  "pencairan-saldo": "Pencairan Saldo",
   pengaturan: "Pengaturan",
   billing:    "Langganan",
 };
@@ -116,6 +119,7 @@ const router = createBrowserRouter([
           { path: "/superadmin/subscription-transactions", element: <SubscriptionTransactions /> },
           { path: "/superadmin/reports", element: <Reports /> },
           { path: "/superadmin/analytics", element: <Analytics /> },
+          { path: "/superadmin/pencairan", element: <SuperAdminPencairan /> },
           { path: "/superadmin/settings", element: <SuperAdminSettings /> },
         ],
       },
@@ -136,6 +140,7 @@ const router = createBrowserRouter([
           { path: "/admin/promo",      element: <KelolaPromo /> },
           { path: "/admin/laporan",    element: <Navigate to="/admin/dashboard" replace /> },
           { path: "/admin/payment",    element: <Payment /> },
+          { path: "/admin/pencairan-saldo", element: <PencairanSaldo /> },
           { path: "/admin/pengaturan", element: <Pengaturan /> },
           { path: "/admin/billing",    element: <Billing /> },
           { path: "/admin/kasir-users", element: <KelolaKasir /> },
@@ -156,9 +161,8 @@ const router = createBrowserRouter([
                     tokenKey="kasir_token"
                     endpointPath="/api/orders/admin"
                     statusMode="active"
-                    allowMarkSelesai
                     pageTitle="Kelola Pesanan Kasir"
-                    pageSubtitle="Pantau pesanan aktif dan selesaikan langsung dari terminal kasir"
+                    pageSubtitle="Pantau pesanan yang sedang diproses dari terminal kasir"
                   />
                 ),
               },

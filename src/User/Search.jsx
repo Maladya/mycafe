@@ -200,17 +200,20 @@ try {
 
 const api = {
 
-  get: async (path) => {
+  get: async (path, options = {}) => {
 
     const token = tokenManager.get();
 
-    const headers = { "Content-Type": "application/json" };
+    const headers = { "Content-Type": "application/json", ...(options.headers ?? {}) };
 
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
     const res = await fetch(`${BASE_URL}/${path}`, { headers });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.message ?? errBody?.error ?? `HTTP ${res.status}`);
+    }
 
     return res.json();
 
@@ -372,7 +375,7 @@ function buildCartFromOrder(orderItems, db) {
 
   orderItems.forEach(o => {
 
-    const nama = (o.name ?? o.nama ?? "").toLowerCase();
+    const nama = (o.name ?? o.nama_produk ?? o.nama ?? "").toLowerCase();
 
     const found = all.find(m => m.name.toLowerCase() === nama);
 
@@ -858,18 +861,24 @@ export function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, on
     () => {
       if (!cafeId) return Promise.resolve([]);
       const visitorId = getCookie(VISITOR_COOKIE_KEY);
-      const clientFingerprint = localStorage.getItem(CLIENT_FINGERPRINT_KEY);
-      if (!visitorId || !clientFingerprint) return Promise.resolve([]);
+      const clientFingerprint =
+        localStorage.getItem(CLIENT_FINGERPRINT_KEY) ||
+        localStorage.getItem("MYCAFE_fingerprint") ||
+        "";
       const qs = new URLSearchParams();
       qs.set("cafe_id", String(cafeId));
       qs.set("meja_id", String(mejaId ?? ""));
       qs.set("meja", String(mejaId ?? ""));
+      qs.set("limit", "50");
       if (visitorId) qs.set("visitor_id", visitorId);
       if (clientFingerprint) qs.set("fingerprint", clientFingerprint);
-      return api.get(`api/client/riwayat-pembelian?${qs.toString()}`).then(r => r.data ?? r.orders ?? r);
+      const headers = clientFingerprint ? { "x-fingerprint": clientFingerprint } : {};
+      return api
+        .get(`api/client/riwayat-pembelian?${qs.toString()}`, { headers })
+        .then((r) => r.data ?? r.orders ?? r);
     },
 
-    [cafeId]
+    [cafeId, mejaId]
 
   );
 
@@ -879,16 +888,17 @@ export function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, on
   }, []);
 
   const orders = (ordersRaw ?? []).map(o => ({
-    id:       o.id,
+    id:       o.id ?? o.order_id,
     status:   o.status,
     waktu:    o.waktu    ?? o.created_at ?? o.tanggal ?? "",
     estimasi: o.estimasi ?? o.eta        ?? "15 mnt",
+    totalSemuaItem: Number(o.total_semua_item ?? o.total_semua ?? 0),
     items: (o.items ?? o.detail ?? o.order_items ?? []).map(i => ({
-      name:    i.name   ?? i.nama    ?? i.nama_menu ?? "",
+      name:    i.name ?? i.nama_produk ?? i.nama ?? i.nama_menu ?? "",
       variant: i.variant ?? i.varian ?? "",
       qty:     Number(i.qty ?? i.jumlah ?? 1),
-      price:   Number(i.price ?? i.harga ?? 0),
-      image:   fixImgUrl(i.image ?? i.foto ?? i.gambar ?? ""),
+      price:   Number(i.price ?? i.harga_produk ?? i.harga ?? 0),
+      image:   fixImgUrl(i.image ?? i.gambar_produk ?? i.foto ?? i.gambar ?? ""),
     })),
   }));
 
@@ -1087,7 +1097,10 @@ export function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, on
 
                       <p className="text-xs text-gray-500">Total:</p>
 
-                      <p className="font-extrabold text-gray-900 text-sm">Rp{getTotal(order.items).toLocaleString()}</p>
+                      <p className="font-extrabold text-gray-900 text-sm">
+                        Rp
+                        {(order.totalSemuaItem > 0 ? order.totalSemuaItem : getTotal(order.items)).toLocaleString()}
+                      </p>
 
                     </div>
 
