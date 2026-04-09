@@ -4,7 +4,7 @@ import SuperAdminSidebar from "./components/Sidebar";
 import SuperAdminHeader from "./components/Header";
 import Toast from "./components/Toast";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net";
 
 export const SuperAdminContext = createContext(null);
 export const useSuperAdmin = () => useContext(SuperAdminContext);

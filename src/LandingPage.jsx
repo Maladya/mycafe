@@ -7,7 +7,7 @@ import {
   MapPin, Phone, Mail, Star, Zap, Coffee, TrendingUp
 } from "lucide-react";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net").replace(/\/$/, "");
 
 /* ─── helpers ─────────────────────────────────────────────────────────── */
 function formatRupiah(num) {

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, Eye, EyeOff, Loader2, Lock } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://192.168.1.5:3000";
+const API_URL = import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net";
 
 export default function SuperAdminLogin() {
   const navigate = useNavigate();
