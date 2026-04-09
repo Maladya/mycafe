@@ -1,96 +1,38 @@
-# API Docs - Kasir Pengantaran Pesanan
+# FE API Index
 
-Dokumentasi ini menjelaskan request dari frontend kasir untuk mengubah pesanan dari tab **Siap Diantar** menjadi **Sudah Diantar**.
+Daftar dokumentasi endpoint untuk tim frontend.
 
-## Endpoint
+## Orders & Pembayaran
 
-- **Method**: `PATCH`
-- **URL**: `/api/orders/kasir/:id/status`
-- **Auth**: Bearer token kasir/admin
+- `docs/midtrans-checkout-api.md`  
+  Checkout Midtrans (create transaction), payload fingerprint/visitor, dan alur return.
 
-Contoh:
+- `docs/riwayat-pembelian-api.md`  
+  Riwayat pembelian pelanggan per perangkat (`visitor_id`/`fingerprint`).
 
-`PATCH /api/orders/kasir/ORD-MNR2H6IR-51SY/status`
+- `docs/kasir-pengantaran-api.md`  
+  Update status pengantaran kasir dengan payload FE (`delivery_status`, `status_pengantaran`, `is_delivered`).
 
-## Body Request (JSON)
+## Saldo & Pencairan
 
-Frontend mengirim payload berikut saat tombol **Tandai Selesai** diklik di tab *Siap Diantar*:
+- `docs/saldo-api.md`  
+  Saldo transaksi cafe (endpoint admin orders).
 
-```json
-{
-  "delivery_status": "diantar",
-  "status_pengantaran": "diantar",
-  "is_delivered": true
-}
-```
+- `docs/pencairan-balance-api.md`  
+  Saldo untuk halaman pencairan (`GET /api/withdrawals/balance`).
 
-## Tujuan Perubahan
+- `docs/pencairan-api.md`  
+  Pengajuan pencairan admin cafe dan proses approve/reject oleh superadmin.
 
-- Order tetap dianggap **selesai** (status pesanan utama sudah selesai).
-- Flag pengantaran diset supaya order berpindah dari tab:
-  - **Siap Diantar** -> **Sudah Diantar**
+## Subscription
 
-## Response Sukses (contoh)
+- `docs/subscription-plan-delete-api.md`  
+  Hapus paket langganan dengan fallback auto-deactivate jika paket masih dipakai.
 
-Status: `200 OK`
+---
 
-```json
-{
-  "status": 200,
-  "message": "Status pesanan berhasil diperbarui",
-  "data": {
-    "id": "ORD-MNR2H6IR-51SY",
-    "delivery_status": "diantar",
-    "status_pengantaran": "diantar",
-    "is_delivered": true
-  },
-  "success": true
-}
-```
+## Catatan Integrasi FE
 
-## Response Gagal (contoh)
-
-### 401 Unauthorized
-
-```json
-{
-  "status": 401,
-  "message": "Unauthorized",
-  "data": null,
-  "success": false
-}
-```
-
-### 404 Not Found
-
-```json
-{
-  "status": 404,
-  "message": "Pesanan tidak ditemukan",
-  "data": null,
-  "success": false
-}
-```
-
-### 500 Internal Server Error
-
-```json
-{
-  "status": 500,
-  "message": "Gagal memperbarui status pengantaran",
-  "data": null,
-  "success": false
-}
-```
-
-## Catatan Implementasi Backend
-
-1. Backend menerima field pengantaran di endpoint kasir status:
-   - `delivery_status`
-   - `status_pengantaran`
-   - `is_delivered`
-2. Jika backend sudah punya field canonical sendiri, backend boleh mapping field di atas ke field internal.
-3. Agar kompatibel dengan frontend saat ini, simpan minimal salah satu indikator:
-   - `is_delivered = true`, atau
-   - `delivery_status/status_pengantaran` bernilai `diantar`.
-
+- Untuk endpoint protected, kirim `Authorization: Bearer <token>`.
+- Setelah aksi `PATCH/POST/DELETE`, selalu refetch list/summary agar UI sinkron dengan server.
+- Untuk flow pelanggan (riwayat + checkout online), pastikan `fingerprint` konsisten antar request.

@@ -127,6 +127,8 @@ function normalizeOrder(o) {
     note: o.note ?? o.catatan ?? o.keterangan ?? "",
     status: o.status ?? "baru",
     paymentMethod: o.payment_method ?? o.paymentMethod ?? "",
+    deliveryStatus: o.delivery_status ?? o.deliveryStatus ?? o.status_pengantaran ?? o.antar_status ?? "",
+    isDelivered: o.is_delivered ?? o.isDelivered ?? false,
     itemNotes,
     items,
   };
@@ -191,13 +193,10 @@ export default function KelolaOrders({
   const isProsesStatus = (s) => ["proses", "process", "processing"].includes(String(s ?? "").trim().toLowerCase());
   const isSudahDiantar = (o) => {
     const deliveryStatus = String(
-      o?.delivery_status ??
       o?.deliveryStatus ??
-      o?.status_pengantaran ??
-      o?.antar_status ??
       ""
     ).trim().toLowerCase();
-    const deliveredFlag = o?.is_delivered ?? o?.isDelivered;
+    const deliveredFlag = o?.isDelivered;
     if (deliveredFlag === true || deliveredFlag === 1 || deliveredFlag === "1") return true;
     return ["diantar", "sudah_diantar", "delivered", "antar_selesai", "completed"].includes(deliveryStatus);
   };
@@ -376,7 +375,7 @@ export default function KelolaOrders({
 
       setOrders((prev) => prev.map((order) => (
         String(order.id) === String(orderId)
-          ? { ...order, delivery_status: "diantar", status_pengantaran: "diantar", is_delivered: true }
+          ? { ...order, deliveryStatus: "diantar", isDelivered: true }
           : order
       )));
 
@@ -633,10 +632,10 @@ export default function KelolaOrders({
                       </button>
                     )}
 
-                    {isSelesai && (
+                    {isKasirMode && effectiveTab === "sudahDiantar" && isSelesai && isSudahDiantar(order) && (
                       <div className="flex items-center justify-center gap-1.5 py-2 rounded-2xl bg-emerald-50 border border-emerald-100">
                         <CheckCheck size={14} className="text-emerald-500" />
-                        <span className="text-xs font-bold text-emerald-600">Pesanan Selesai</span>
+                        <span className="text-xs font-bold text-emerald-600">Sudah Diantar</span>
                       </div>
                     )}
                   </div>
