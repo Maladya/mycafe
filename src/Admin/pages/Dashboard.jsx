@@ -5,11 +5,9 @@ import {
   UtensilsCrossed,
   RefreshCw,
   Table2,
-  Tag,
   CreditCard,
 } from "lucide-react";
 import { useAdmin } from "../adminContext";
-import { isPromoActive } from "../data/constants";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net").replace(/\/$/, "");
 
@@ -94,7 +92,7 @@ function DashboardReportLoader({ cafeRaw, label = "Memuat laporan..." }) {
 export default function Dashboard() {
   const navigate = useNavigate();
   // ── Ambil data dari AdminContext (sudah di-fetch di AdminPanel) ─────────
-  const { orders, menuItems, promoCodes, tables, loading, fetchAll, cafeRaw } = useAdmin();
+  const { orders, menuItems, tables, loading, fetchAll, cafeRaw } = useAdmin();
 
   // Laporan state
   const [period, setPeriod] = useState("hari");
@@ -167,8 +165,6 @@ export default function Dashboard() {
   const maxSold = Math.max(...topMenus.map(m => m.sold ?? 0), 1);
 
   const totalTables = (tables ?? []).length;
-  const activePromoCount = (promoCodes ?? []).filter(p => isPromoActive(p)).length;
-
   const fmtRupiah = (n) => `Rp${Number(n || 0).toLocaleString("id-ID")}`;
 
   const stats = [
@@ -183,12 +179,6 @@ export default function Dashboard() {
       value: totalTables,
       icon: <Table2 size={20} />,
       color: "from-teal-500 to-emerald-600",
-    },
-    {
-      label: "Total Promo",
-      value: activePromoCount,
-      icon: <Tag size={20} />,
-      color: "from-purple-500 to-pink-500",
     },
   ];
 

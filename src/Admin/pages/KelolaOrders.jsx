@@ -152,7 +152,9 @@ export default function KelolaOrders({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [updatingOrderId, setUpdatingOrderId] = useState("");
-  const [filterTab, setFilterTab] = useState(statusMode === "completed" ? "selesai" : "aktif");
+  const [filterTab, setFilterTab] = useState(
+    isKasirMode ? "siapDiantar" : (statusMode === "completed" ? "selesai" : "aktif")
+  );
 
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -186,15 +188,38 @@ export default function KelolaOrders({
   }, [fetchOrders]);
 
   const isSelesaiStatus = (s) => ["selesai", "done", "completed"].includes(String(s ?? "").trim().toLowerCase());
+  const isProsesStatus = (s) => ["proses", "process", "processing"].includes(String(s ?? "").trim().toLowerCase());
+  const isSudahDiantar = (o) => {
+    const deliveryStatus = String(
+      o?.delivery_status ??
+      o?.deliveryStatus ??
+      o?.status_pengantaran ??
+      o?.antar_status ??
+      ""
+    ).trim().toLowerCase();
+    const deliveredFlag = o?.is_delivered ?? o?.isDelivered;
+    if (deliveredFlag === true || deliveredFlag === 1 || deliveredFlag === "1") return true;
+    return ["diantar", "sudah_diantar", "delivered", "antar_selesai", "completed"].includes(deliveryStatus);
+  };
 
-  const totalAktif = orders.filter((o) => !isSelesaiStatus(o.status)).length;
-  const totalSelesai = orders.filter((o) => isSelesaiStatus(o.status)).length;
+  const nonProsesOrders = orders.filter((o) => !isProsesStatus(o.status));
+  const totalAktif = nonProsesOrders.filter((o) => !isSelesaiStatus(o.status)).length;
+  const totalSelesai = nonProsesOrders.filter((o) => isSelesaiStatus(o.status)).length;
+  const selesaiForKasir = nonProsesOrders.filter((o) => isSelesaiStatus(o.status));
+  const totalSiapDiantar = selesaiForKasir.filter((o) => !isSudahDiantar(o)).length;
+  const totalSudahDiantar = selesaiForKasir.filter((o) => isSudahDiantar(o)).length;
 
-  const effectiveTab = statusMode === "completed" ? "selesai" : filterTab;
+  const effectiveTab = isKasirMode
+    ? filterTab
+    : (statusMode === "completed" ? "selesai" : filterTab);
 
-  const tabFiltered = orders.filter((o) => (
-    effectiveTab === "aktif" ? !isSelesaiStatus(o.status) : isSelesaiStatus(o.status)
-  ));
+  const tabFiltered = isKasirMode
+    ? selesaiForKasir.filter((o) => (
+      effectiveTab === "sudahDiantar" ? isSudahDiantar(o) : !isSudahDiantar(o)
+    ))
+    : nonProsesOrders.filter((o) => (
+      effectiveTab === "aktif" ? !isSelesaiStatus(o.status) : isSelesaiStatus(o.status)
+    ));
 
   const filtered = tabFiltered.filter((o) => {
     const q = search.trim().toLowerCase();
@@ -380,10 +405,16 @@ export default function KelolaOrders({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          {[
-            { icon: Clock, label: "Aktif", value: totalAktif, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
-            { icon: CheckCheck, label: "Selesai", value: totalSelesai, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
-          ].map(({ icon: Icon, label, value, color, bg, border }) => (
+          {(isKasirMode
+            ? [
+                { icon: Clock, label: "Siap Diantar", value: totalSiapDiantar, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+                { icon: CheckCheck, label: "Sudah Diantar", value: totalSudahDiantar, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
+              ]
+            : [
+                { icon: Clock, label: "Aktif", value: totalAktif, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+                { icon: CheckCheck, label: "Selesai", value: totalSelesai, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
+              ]
+          ).map(({ icon: Icon, label, value, color, bg, border }) => (
             <div key={label} className={`rounded-2xl border ${border} ${bg} px-4 py-3 flex items-center gap-3 shadow-sm`}>
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center bg-white shadow-sm border ${border}`}>
                 <Icon size={16} className={color} />
@@ -398,10 +429,16 @@ export default function KelolaOrders({
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex border-b border-gray-100">
-            {[
-              { id: "aktif", label: "Pesanan Aktif", count: totalAktif },
-              { id: "selesai", label: "Sudah Selesai", count: totalSelesai },
-            ].map((tab) => (
+            {(isKasirMode
+              ? [
+                  { id: "siapDiantar", label: "Siap Diantar", count: totalSiapDiantar },
+                  { id: "sudahDiantar", label: "Sudah Diantar", count: totalSudahDiantar },
+                ]
+              : [
+                  { id: "aktif", label: "Pesanan Aktif", count: totalAktif },
+                  { id: "selesai", label: "Sudah Selesai", count: totalSelesai },
+                ]
+            ).map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -559,10 +596,18 @@ export default function KelolaOrders({
                   <ClipboardList size={28} className="opacity-40" />
                 </div>
                 <p className="font-bold text-gray-500">
-                  {search.trim() ? "Pesanan tidak ditemukan" : (effectiveTab === "aktif" ? "Belum ada pesanan aktif" : "Belum ada pesanan selesai")}
+                  {search.trim()
+                    ? "Pesanan tidak ditemukan"
+                    : isKasirMode
+                      ? (effectiveTab === "siapDiantar" ? "Belum ada pesanan siap diantar" : "Belum ada pesanan sudah diantar")
+                      : (effectiveTab === "aktif" ? "Belum ada pesanan aktif" : "Belum ada pesanan selesai")}
                 </p>
                 <p className="text-sm text-gray-400 mt-1">
-                  {search.trim() ? "Coba kata kunci lain" : (effectiveTab === "aktif" ? "Pesanan baru akan muncul otomatis" : "Pesanan selesai akan muncul di sini")}
+                  {search.trim()
+                    ? "Coba kata kunci lain"
+                    : isKasirMode
+                      ? (effectiveTab === "siapDiantar" ? "Status proses tidak ditampilkan di halaman ini" : "Pesanan yang sudah diantar akan muncul di sini")
+                      : (effectiveTab === "aktif" ? "Pesanan baru akan muncul otomatis" : "Pesanan selesai akan muncul di sini")}
                 </p>
               </div>
             )}
