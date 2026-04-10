@@ -23,8 +23,6 @@ export default function Kasir() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSubmitting, setCreateSubmitting] = useState(false);
-  const [createPayPickerOpen, setCreatePayPickerOpen] = useState(false);
-  const [createPayMethod, setCreatePayMethod] = useState("kasir");
   const [kasirCafeId, setKasirCafeId] = useState("");
   const [menuSource, setMenuSource] = useState([]);
   const [menuLoading, setMenuLoading] = useState(false);
@@ -86,7 +84,6 @@ export default function Kasir() {
 
   const closeCreateModal = () => {
     if (createSubmitting) return;
-    setCreatePayPickerOpen(false);
     setShowCreateModal(false);
   };
 
@@ -130,8 +127,48 @@ export default function Kasir() {
     return (menuSource || []).filter((m) => String(m?.name || "").toLowerCase().includes(q));
   }, [menuSource, menuQuery]);
 
-  const addMenuToDraft = useCallback((menuItem) => {
+  const fetchMenuDetailForKasir = useCallback(async (menuId) => {
+    const cid = String(kasirCafeId || "").trim();
+    const mid = String(menuId || "").trim();
+    if (!cid || !mid) return null;
+
+    const token = localStorage.getItem("kasir_token") || localStorage.getItem("token") || "";
+
+    const res = await fetch(`${API_URL}/api/menu/user/${encodeURIComponent(cid)}/${encodeURIComponent(mid)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+    return data?.data ?? data?.menu ?? data;
+  }, [kasirCafeId]);
+
+  const addMenuToDraft = useCallback(async (menuItem) => {
     if (!menuItem) return;
+
+    let detail = null;
+    try {
+      detail = await fetchMenuDetailForKasir(menuItem.id);
+    } catch {
+      detail = null;
+    }
+
+    const variantRaw = detail?.variants ?? detail?.varian ?? detail?.variant ?? detail?.varian_menu ?? [];
+    const variantList = Array.isArray(variantRaw) ? variantRaw : [];
+    const normalizedVariants = variantList.map((v) => ({
+      id: v.id ?? v.id_variant ?? v.variant_id ?? v.variantId,
+      label: v.label ?? v.nama ?? v.name ?? "",
+      namaGroup: v.nama_group ?? v.nama_grup ?? v.namaGroup ?? v.group ?? "Varian",
+      hargaVariant: Number(v.harga_variant ?? v.hargaVariant ?? v.extra_price ?? 0),
+    })).filter((v) => v.id != null && v.label);
+
+    const byGroup = normalizedVariants.reduce((acc, v) => {
+      const g = String(v.namaGroup || "Varian");
+      acc[g] = acc[g] ? [...acc[g], v] : [v];
+      return acc;
+    }, {});
+
+    const groups = Object.entries(byGroup).map(([namaGroup, options]) => ({ namaGroup, options }));
+
     setCreateDraft((prev) => {
       const items = Array.isArray(prev.items) ? [...prev.items] : [];
       const idx = items.findIndex((it) => String(it.menuId) === String(menuItem.id));
@@ -146,12 +183,13 @@ export default function Kasir() {
           price: Number(menuItem.price || 0),
           qty: 1,
           note: "",
-          variantGroups: [],
+          variantGroups: groups,
+          selectedVariants: {},
         });
       }
       return { ...prev, items };
     });
-  }, []);
+  }, [fetchMenuDetailForKasir]);
 
   const addCreateItem = useCallback(() => {
     setCreateDraft((prev) => ({
@@ -182,7 +220,9 @@ export default function Kasir() {
     (createDraft.items || []).reduce((sum, it) => {
       const qty = Number(it?.qty || 0);
       const price = Number(it?.price || 0);
-      return sum + (qty * price);
+      const selected = it?.selectedVariants && typeof it.selectedVariants === "object" ? it.selectedVariants : {};
+      const extra = Object.values(selected).reduce((s, v) => s + Number(v?.hargaVariant || 0), 0);
+      return sum + (qty * (price + extra));
     }, 0)
   ), [createDraft.items]);
 
@@ -271,7 +311,7 @@ export default function Kasir() {
     try { window.print(); } catch {}
   }, []);
 
-  const handleSubmitCreatePreview = async (selectedPaymentMethod) => {
+  const handleSubmitCreatePreview = async () => {
     const tableNumber = String(createDraft.tableNumber || "").trim();
     const validItems = (createDraft.items || []).filter((i) => {
       const qty = Number(i.qty || 0);
@@ -285,17 +325,26 @@ export default function Kasir() {
       return;
     }
 
-    // ... (no changes)
-
     setCreateSubmitting(true);
     try {
-      const resolvedPaymentMethod = String(selectedPaymentMethod || createPayMethod || "kasir");
       const payload = {
         table_number: tableNumber,
         customer_name: String(createDraft.customerName || "").trim(),
         note: String(createDraft.note || "").trim(),
-        payment_method: resolvedPaymentMethod,
+        payment_method: "kasir",
         items: validItems.map((i) => {
+          const selected = i?.selectedVariants && typeof i.selectedVariants === "object" ? i.selectedVariants : {};
+          const pickedVariants = Object.entries(selected).map(([namaGroup, v]) => ({
+            id: v?.id,
+            id_variant: v?.id,
+            variant_id: v?.id,
+            nama_group: namaGroup,
+            namaGroup,
+            label: v?.label,
+            harga_variant: Number(v?.hargaVariant || 0),
+            hargaVariant: Number(v?.hargaVariant || 0),
+          })).filter((v) => v.id != null);
+
           const row = {
             menu_id: i.menuId || undefined,
             name: i.menuId ? undefined : String(i.name || "").trim(),
@@ -303,6 +352,8 @@ export default function Kasir() {
 
             price: Number(i.price || 0),
             note: String(i.note || "").trim(),
+            variants: pickedVariants,
+            variant_ids: pickedVariants.map((v) => v.id),
           };
           const groups = i.variantGroups || [];
           if (i.menuId && groups.length > 0) {
@@ -319,8 +370,6 @@ export default function Kasir() {
 
       setCurrentOrder(normalizedCreated);
       setShowCreateModal(false);
-      setCreatePayPickerOpen(false);
-      setCreatePayMethod("kasir");
       setCreateDraft({
         tableNumber: "",
         customerName: "",
@@ -710,92 +759,13 @@ export default function Kasir() {
                 </button>
                 <button
                   disabled={createSubmitting}
-                  onClick={() => setCreatePayPickerOpen(true)}
+                  onClick={handleSubmitCreatePreview}
                   className="px-4 py-2.5 rounded-xl text-white font-bold text-sm bg-gradient-to-r from-amber-500 to-orange-500 shadow-md hover:shadow-lg disabled:opacity-60 inline-flex items-center gap-1.5"
                 >
-                  {createSubmitting ? <><Loader2 size={14} className="animate-spin" /> Memproses...</> : "Bayar"}
+                  {createSubmitting ? <><Loader2 size={14} className="animate-spin" /> Memproses...</> : "Simpan Pesanan"}
                 </button>
               </div>
             </div>
-
-            {createPayPickerOpen && (
-              <div
-                className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[2px] p-3 sm:p-4 flex items-end sm:items-center justify-center"
-                onClick={() => { if (!createSubmitting) setCreatePayPickerOpen(false); }}
-              >
-                <div
-                  className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-100 overflow-hidden animate-slideUp"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="font-black text-gray-900">Metode Pembayaran</p>
-                      <p className="text-[11px] text-gray-400">Pilih metode untuk pesanan ini</p>
-                    </div>
-                    <button
-                      disabled={createSubmitting}
-                      onClick={() => setCreatePayPickerOpen(false)}
-                      className="w-8 h-8 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-
-                  <div className="p-4 space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setCreatePayMethod("online")}
-                        className={`rounded-2xl p-4 border-2 transition-all bg-white ${createPayMethod === "online" ? "border-amber-500 bg-amber-50/40" : "border-gray-200"}`}
-                      >
-                        <div className="flex flex-col items-center gap-2.5">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${createPayMethod === "online" ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gray-100 text-gray-600"}`}>
-                            <CreditCard size={22} />
-                          </div>
-                          <div className="text-center">
-                            <p className={`font-black text-sm ${createPayMethod === "online" ? "text-amber-700" : "text-gray-900"}`}>Online</p>
-                            <p className="text-[10px] text-gray-400">Oleh mitra</p>
-                          </div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCreatePayMethod("kasir")}
-                        className={`rounded-2xl p-4 border-2 transition-all bg-white ${createPayMethod === "kasir" ? "border-amber-500 bg-amber-50/40" : "border-gray-200"}`}
-                      >
-                        <div className="flex flex-col items-center gap-2.5">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${createPayMethod === "kasir" ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gray-100 text-gray-600"}`}>
-                            <Wallet size={22} />
-                          </div>
-                          <div className="text-center">
-                            <p className={`font-black text-sm ${createPayMethod === "kasir" ? "text-amber-700" : "text-gray-900"}`}>Tunai</p>
-                            <p className="text-[10px] text-gray-400">Bayar langsung</p>
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <button
-                        disabled={createSubmitting}
-                        onClick={() => setCreatePayPickerOpen(false)}
-                        className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        disabled={createSubmitting}
-                        onClick={() => handleSubmitCreatePreview(createPayMethod)}
-                        className="px-4 py-2.5 rounded-xl text-white font-bold text-sm bg-gradient-to-r from-amber-500 to-orange-500 shadow-md hover:shadow-lg disabled:opacity-60 inline-flex items-center gap-1.5"
-                      >
-                        {createSubmitting ? <><Loader2 size={14} className="animate-spin" /> Memproses...</> : "Konfirmasi Bayar"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -814,6 +784,18 @@ function KasirCreateLineItem({ item, index, updateCreateItem, onRemove, formatRu
   const name = String(item?.name || "");
   const price = Number(item?.price || 0);
   const note = String(item?.note || "");
+
+  const groups = Array.isArray(item?.variantGroups) ? item.variantGroups : [];
+  const selected = item?.selectedVariants && typeof item.selectedVariants === "object" ? item.selectedVariants : {};
+
+  const handlePick = (namaGroup, opt) => {
+    updateCreateItem(index, (prev) => {
+      const nextSelected = { ...(prev?.selectedVariants && typeof prev.selectedVariants === "object" ? prev.selectedVariants : {}) };
+      if (opt) nextSelected[namaGroup] = opt;
+      else delete nextSelected[namaGroup];
+      return { selectedVariants: nextSelected };
+    });
+  };
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-3 space-y-2">
@@ -885,6 +867,53 @@ function KasirCreateLineItem({ item, index, updateCreateItem, onRemove, formatRu
           placeholder="Opsional"
         />
       </label>
+
+      {groups.length > 0 && (
+        <div className="pt-1 space-y-2">
+          {groups.map((g) => {
+            const namaGroup = String(g?.namaGroup || "Varian");
+            const options = Array.isArray(g?.options) ? g.options : [];
+            const pickedId = selected?.[namaGroup]?.id;
+
+            if (options.length === 0) return null;
+
+            return (
+              <div key={namaGroup} className="rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden">
+                <div className="px-3.5 pt-3 pb-2">
+                  <p className="text-[11px] font-black text-gray-900 uppercase tracking-wide">{namaGroup}</p>
+                  <p className="text-[10px] font-semibold text-amber-700 mt-0.5">Harus dipilih maks. 1</p>
+                </div>
+                <div className="px-2 pb-2 space-y-1">
+                  {options.map((opt, oi) => {
+                    const id = opt?.id ?? oi;
+                    const isSelected = String(pickedId) === String(id);
+                    const extra = Number(opt?.hargaVariant || 0);
+
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => handlePick(namaGroup, { id: opt.id, label: opt.label, namaGroup, hargaVariant: extra })}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white border border-gray-100 hover:border-amber-300 transition-all"
+                      >
+                        <span className="text-sm font-semibold text-gray-800 text-left">
+                          {opt.label}
+                          {extra > 0 && <span className="ml-2 text-xs font-black text-amber-700">(+{formatRupiah(extra)})</span>}
+                        </span>
+                        <span
+                          className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? "bg-amber-500 border-amber-500" : "bg-white border-gray-300"}`}
+                        >
+                          {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
