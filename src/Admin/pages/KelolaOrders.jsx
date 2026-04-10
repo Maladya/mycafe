@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardList, MessageSquare, RefreshCw, AlertCircle, Search, ChevronDown, ChevronUp, CheckCircle2, Loader2, ArrowLeft, Clock, CheckCheck } from "lucide-react";
+import { ClipboardList, MessageSquare, RefreshCw, AlertCircle, Search, ChevronDown, ChevronUp, CheckCircle2, Loader2, ArrowLeft, Clock, CheckCheck, Plus, X } from "lucide-react";
 
 import { useKasir } from "../KasirLayout.jsx";
 
@@ -82,6 +82,143 @@ function OrderItemsList({ itemList, itemNotes }) {
 const API_URL = (import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net").replace(/\/$/, "");
 const POLL_INTERVAL = 15000;
 
+function CreateOrderPreviewModal({ open, draft, onClose, onChangeDraft, onSubmit }) {
+  if (!open) return null;
+
+  const items = Array.isArray(draft.items) ? draft.items : [];
+
+  const setItem = (index, next) => {
+    const cloned = [...items];
+    cloned[index] = { ...cloned[index], ...next };
+    onChangeDraft({ ...draft, items: cloned });
+  };
+
+  const removeItem = (index) => {
+    const cloned = items.filter((_, i) => i !== index);
+    onChangeDraft({ ...draft, items: cloned.length ? cloned : [{ name: "", qty: 1, price: 0, note: "" }] });
+  };
+
+  const addItem = () => {
+    onChangeDraft({ ...draft, items: [...items, { name: "", qty: 1, price: 0, note: "" }] });
+  };
+
+  const total = items.reduce((sum, i) => sum + (Number(i.qty || 0) * Number(i.price || 0)), 0);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[1px] p-4 flex items-center justify-center" onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white rounded-2xl border border-gray-100 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-black text-gray-900">Buat Pesanan (Preview UI)</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Form ini untuk tampilan dulu, belum kirim ke backend.</p>
+          </div>
+          <button type="button" onClick={onClose} className="w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 flex items-center justify-center">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="text-xs font-semibold text-gray-600 space-y-1">
+              <span>No Meja</span>
+              <input
+                value={draft.tableNumber}
+                onChange={(e) => onChangeDraft({ ...draft, tableNumber: e.target.value })}
+                placeholder="Contoh: 12"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white"
+              />
+            </label>
+            <label className="text-xs font-semibold text-gray-600 space-y-1">
+              <span>Nama Pelanggan (opsional)</span>
+              <input
+                value={draft.customerName}
+                onChange={(e) => onChangeDraft({ ...draft, customerName: e.target.value })}
+                placeholder="Contoh: Budi"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white"
+              />
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-gray-700">Item Pesanan</p>
+              <button type="button" onClick={addItem} className="text-xs font-bold text-amber-700 hover:text-amber-800">
+                + Tambah Item
+              </button>
+            </div>
+
+            {items.map((item, idx) => (
+              <div key={idx} className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold text-gray-500">Item {idx + 1}</p>
+                  <button type="button" onClick={() => removeItem(idx)} className="text-[11px] font-bold text-red-500 hover:text-red-600">
+                    Hapus
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    value={item.name}
+                    onChange={(e) => setItem(idx, { name: e.target.value })}
+                    placeholder="Nama menu"
+                    className="sm:col-span-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    value={item.qty}
+                    onChange={(e) => setItem(idx, { qty: Math.max(1, Number(e.target.value || 1)) })}
+                    placeholder="Qty"
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.price}
+                    onChange={(e) => setItem(idx, { price: Math.max(0, Number(e.target.value || 0)) })}
+                    placeholder="Harga satuan"
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                  <input
+                    value={item.note}
+                    onChange={(e) => setItem(idx, { note: e.target.value })}
+                    placeholder="Catatan item (opsional)"
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <label className="block text-xs font-semibold text-gray-600 space-y-1">
+            <span>Catatan Order (opsional)</span>
+            <textarea
+              value={draft.orderNote}
+              onChange={(e) => onChangeDraft({ ...draft, orderNote: e.target.value })}
+              rows={3}
+              placeholder="Contoh: tanpa es, cepat ya"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none resize-none focus:border-amber-400 focus:bg-white"
+            />
+          </label>
+        </div>
+
+        <div className="sticky bottom-0 z-10 bg-white border-t border-gray-100 px-4 py-3 flex items-center justify-between">
+          <p className="text-sm font-bold text-gray-900">Total Preview: Rp{total.toLocaleString("id-ID")}</p>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose} className="px-3.5 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
+              Batal
+            </button>
+            <button type="button" onClick={onSubmit} className="px-3.5 py-2 text-xs font-bold rounded-xl text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:shadow-md">
+              Simpan Pesanan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function parseDateFlexible(raw) {
   if (!raw) return null;
   if (raw instanceof Date) return raw;
@@ -154,6 +291,13 @@ export default function KelolaOrders({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [updatingOrderId, setUpdatingOrderId] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newOrderDraft, setNewOrderDraft] = useState({
+    tableNumber: "",
+    customerName: "",
+    orderNote: "",
+    items: [{ name: "", qty: 1, price: 0, note: "" }],
+  });
   const [filterTab, setFilterTab] = useState(
     isKasirMode ? "siapDiantar" : (statusMode === "completed" ? "selesai" : "aktif")
   );
@@ -397,6 +541,11 @@ export default function KelolaOrders({
     return { label: status ?? "-", cls: "bg-gray-50 text-gray-600 border-gray-200" };
   };
 
+  const handleSubmitCreateOrder = () => {
+    showToast?.("UI buat pesanan sudah siap. Tinggal sambungkan endpoint backend.", "success");
+    setShowCreateModal(false);
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-gray-50">
       <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-5">
@@ -420,6 +569,17 @@ export default function KelolaOrders({
           </div>
 
           <div className="flex items-center gap-2.5">
+            {isKasirMode && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="h-9 px-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 shadow-sm hover:shadow-md transition-all flex items-center gap-1.5"
+              >
+                <Plus size={14} />
+                Buat Pesanan
+              </button>
+            )}
+
             {lastSync && !loading && (
               <span className="hidden sm:block text-xs text-gray-400 bg-white border border-gray-100 rounded-xl px-3 py-1.5">
                 Sync {formatSync(lastSync)}
@@ -706,6 +866,13 @@ export default function KelolaOrders({
           .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         `}</style>
       </div>
+      <CreateOrderPreviewModal
+        open={showCreateModal}
+        draft={newOrderDraft}
+        onClose={() => setShowCreateModal(false)}
+        onChangeDraft={setNewOrderDraft}
+        onSubmit={handleSubmitCreateOrder}
+      />
     </div>
   );
 }

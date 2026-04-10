@@ -13,6 +13,9 @@ Daftar dokumentasi endpoint untuk tim frontend.
 - `docs/kasir-pengantaran-api.md`  
   Update status pengantaran kasir dengan payload FE (`delivery_status`, `status_pengantaran`, `is_delivered`).
 
+- `docs/kasir-buat-pesanan-api.md`  
+  Kontrak endpoint kasir untuk membuat pesanan langsung dari terminal kasir.
+
 ## Saldo & Pencairan
 
 - `docs/saldo-api.md`  
@@ -49,6 +52,8 @@ Daftar dokumentasi endpoint untuk tim frontend.
   Ambil riwayat pembelian pelanggan per perangkat.
 - `PATCH /api/orders/kasir/:id/status`  
   Update status pengantaran kasir (`delivery_status`, `status_pengantaran`, `is_delivered`).
+- `POST /api/orders/kasir`  
+  Buat pesanan baru dari terminal kasir.
 
 ### Saldo & Pencairan
 
