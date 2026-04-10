@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -10,7 +10,7 @@ import {
 
 import { Html5Qrcode } from "html5-qrcode";
 
-// ... (no changes)
+const API_URL = (import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net").replace(/\/$/, "");
 
 export default function Kasir() {
   const navigate = useNavigate();
@@ -20,6 +20,7 @@ export default function Kasir() {
   const [loading, setLoading] = useState(false);
   const [currentOrder, setCurrentOrder] = useState(null);
   const [paymentModal, setPaymentModal] = useState(null);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createPayPickerOpen, setCreatePayPickerOpen] = useState(false);
@@ -29,6 +30,46 @@ export default function Kasir() {
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState(null);
   const [menuQuery, setMenuQuery] = useState("");
+
+  const showToast = useCallback((msg, type = "info") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const formatRupiah = useCallback((n) => `Rp${Number(n || 0).toLocaleString("id-ID")}`, []);
+
+  const formatWaktu = useCallback((raw) => {
+    if (!raw) return "";
+    try {
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return String(raw);
+      return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
+    } catch {
+      return String(raw);
+    }
+  }, []);
+
+  const getOrderTotal = useCallback((order) => {
+    if (!order) return 0;
+    const direct = order.total_bayar ?? order.total ?? order.grand_total ?? order.totalAmount;
+    if (direct != null) return Number(direct || 0);
+    const subtotal = Number(order.items_total ?? order.subtotal ?? 0);
+    const tax = Number(order.tax ?? 0);
+    const discount = Number(order.discount ?? 0);
+    return Math.max(0, subtotal + tax - discount);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("kasir_user") || localStorage.getItem("user");
+      if (!raw) return;
+      const u = JSON.parse(raw);
+      const cid = u?.cafe_id ?? u?.cafeId ?? u?.cafe?.id ?? u?.cafe?.cafe_id ?? "";
+      if (cid) setKasirCafeId(String(cid));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const [createDraft, setCreateDraft] = useState({
     tableNumber: "",
@@ -49,7 +90,186 @@ export default function Kasir() {
     setShowCreateModal(false);
   };
 
-  // ... (no changes)
+  const fetchMenuForKasir = useCallback(async () => {
+    if (!kasirCafeId) return;
+    setMenuLoading(true);
+    setMenuError(null);
+    try {
+      const token = localStorage.getItem("kasir_token") || localStorage.getItem("token") || "";
+      const res = await fetch(`${API_URL}/api/menu/user/${encodeURIComponent(kasirCafeId)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+      const rows = data?.data ?? data?.menu ?? data ?? [];
+      const normalized = Array.isArray(rows) ? rows.map((m) => ({
+        id: m.id ?? m.menu_id ?? m.menuId,
+        name: m.nama_menu ?? m.name ?? m.nama ?? "",
+        price: Number(m.harga ?? m.price ?? 0),
+        raw: m,
+      })).filter((m) => m.id != null && m.name) : [];
+      setMenuSource(normalized);
+    } catch (err) {
+      setMenuError(err?.message || "Gagal memuat menu");
+      setMenuSource([]);
+    } finally {
+      setMenuLoading(false);
+    }
+  }, [kasirCafeId]);
+
+  useEffect(() => {
+    if (!showCreateModal) return;
+    if (!kasirCafeId) return;
+    if (menuSource.length > 0 || menuLoading) return;
+    fetchMenuForKasir();
+  }, [showCreateModal, kasirCafeId, menuSource.length, menuLoading, fetchMenuForKasir]);
+
+  const filteredMenuSource = useMemo(() => {
+    const q = String(menuQuery || "").trim().toLowerCase();
+    if (!q) return menuSource;
+    return (menuSource || []).filter((m) => String(m?.name || "").toLowerCase().includes(q));
+  }, [menuSource, menuQuery]);
+
+  const addMenuToDraft = useCallback((menuItem) => {
+    if (!menuItem) return;
+    setCreateDraft((prev) => {
+      const items = Array.isArray(prev.items) ? [...prev.items] : [];
+      const idx = items.findIndex((it) => String(it.menuId) === String(menuItem.id));
+      if (idx >= 0) {
+        const next = { ...items[idx] };
+        next.qty = Number(next.qty || 0) + 1;
+        items[idx] = next;
+      } else {
+        items.push({
+          menuId: menuItem.id,
+          name: menuItem.name,
+          price: Number(menuItem.price || 0),
+          qty: 1,
+          note: "",
+          variantGroups: [],
+        });
+      }
+      return { ...prev, items };
+    });
+  }, []);
+
+  const addCreateItem = useCallback(() => {
+    setCreateDraft((prev) => ({
+      ...prev,
+      items: [...(prev.items || []), { menuId: "", name: "", price: 0, qty: 1, note: "", variantGroups: [] }],
+    }));
+  }, []);
+
+  const updateCreateItem = useCallback((index, patch) => {
+    setCreateDraft((prev) => {
+      const items = [...(prev.items || [])];
+      if (index < 0 || index >= items.length) return prev;
+      items[index] = { ...items[index], ...(typeof patch === "function" ? patch(items[index]) : patch) };
+      return { ...prev, items };
+    });
+  }, []);
+
+  const removeCreateItem = useCallback((index) => {
+    setCreateDraft((prev) => {
+      const items = [...(prev.items || [])];
+      if (index < 0 || index >= items.length) return prev;
+      items.splice(index, 1);
+      return { ...prev, items };
+    });
+  }, []);
+
+  const createPreviewTotal = useMemo(() => (
+    (createDraft.items || []).reduce((sum, it) => {
+      const qty = Number(it?.qty || 0);
+      const price = Number(it?.price || 0);
+      return sum + (qty * price);
+    }, 0)
+  ), [createDraft.items]);
+
+  const handleSearch = useCallback(async (overrideCode) => {
+    const code = String(overrideCode ?? searchInput ?? "").trim();
+    if (!code) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("kasir_token") || localStorage.getItem("token") || "";
+      if (!token) throw new Error("Token kasir tidak ditemukan");
+
+      // endpoint fallback: coba beberapa path yang umum dipakai backend
+      const candidates = [
+        `${API_URL}/api/orders/admin/${encodeURIComponent(code)}`,
+        `${API_URL}/api/orders/${encodeURIComponent(code)}`,
+        `${API_URL}/api/orders/kasir/${encodeURIComponent(code)}`,
+      ];
+
+      let data = null;
+      let ok = false;
+      for (const url of candidates) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        // eslint-disable-next-line no-await-in-loop
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) {
+          ok = true;
+          data = json;
+          break;
+        }
+      }
+
+      if (!ok) throw new Error("Pesanan tidak ditemukan");
+
+      const order = data?.data ?? data?.order ?? data;
+      setCurrentOrder(order);
+    } catch (err) {
+      setCurrentOrder(null);
+      showToast(err?.message || "Gagal mencari pesanan", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [searchInput, showToast]);
+
+  const handleSimulatedScan = useCallback((decodedText) => {
+    const code = String(decodedText || "").trim();
+    if (!code) return;
+    setSearchInput(code);
+    setScanning(false);
+    handleSearch(code);
+  }, [handleSearch]);
+
+  const processPayment = useCallback(async (method) => {
+    if (!paymentModal) return;
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("kasir_token") || localStorage.getItem("token") || "";
+      if (!token) throw new Error("Token kasir tidak ditemukan");
+
+      const orderId = paymentModal.id ?? paymentModal.order_id ?? paymentModal.orderId;
+      if (!orderId) throw new Error("Order ID tidak ditemukan");
+
+      const res = await fetch(`${API_URL}/api/orders/kasir/${encodeURIComponent(orderId)}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: "selesai", payment_method: method || "kasir" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error(data?.message || `HTTP ${res.status}`);
+
+      const updated = data?.data ?? data?.order ?? { ...paymentModal, status: "selesai" };
+      setCurrentOrder(updated);
+      setPaymentModal(null);
+      showToast("Pembayaran berhasil", "success");
+    } catch (err) {
+      showToast(err?.message || "Gagal memproses pembayaran", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [paymentModal, showToast]);
+
+  const handlePrint = useCallback(() => {
+    try { window.print(); } catch {}
+  }, []);
 
   const handleSubmitCreatePreview = async (selectedPaymentMethod) => {
     const tableNumber = String(createDraft.tableNumber || "").trim();
@@ -95,6 +315,8 @@ export default function Kasir() {
 
       // ... (no changes)
 
+      const normalizedCreated = payload;
+
       setCurrentOrder(normalizedCreated);
       setShowCreateModal(false);
       setCreatePayPickerOpen(false);
@@ -128,6 +350,7 @@ export default function Kasir() {
               {/* <p className="text-gray-400 text-[10px]">{cafeInfo.nama?.toUpperCase()} POS</p> */}
             </div>
           </div>
+
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-xs text-gray-400">{new Date().toLocaleDateString("id-ID")}</p>
@@ -586,6 +809,85 @@ export default function Kasir() {
   );
 }
 
+function KasirCreateLineItem({ item, index, updateCreateItem, onRemove, formatRupiah }) {
+  const qty = Number(item?.qty || 0);
+  const name = String(item?.name || "");
+  const price = Number(item?.price || 0);
+  const note = String(item?.note || "");
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold text-gray-500 uppercase">Item {index + 1}</p>
+          <p className="text-sm font-black text-gray-900 truncate">{name || "Item"}</p>
+          <p className="text-xs font-semibold text-amber-700">{formatRupiah(price)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onRemove?.(index)}
+          className="w-8 h-8 rounded-xl bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 flex items-center justify-center"
+          title="Hapus"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label className="space-y-1">
+          <span className="text-[10px] font-bold text-gray-500 uppercase">Nama</span>
+          <input
+            value={name}
+            onChange={(e) => updateCreateItem(index, { name: e.target.value })}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-400 focus:bg-white"
+            placeholder="Nama menu"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] font-bold text-gray-500 uppercase">Harga</span>
+          <input
+            type="number"
+            value={Number.isFinite(price) ? price : 0}
+            onChange={(e) => updateCreateItem(index, { price: Number(e.target.value || 0) })}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold outline-none focus:border-amber-400 focus:bg-white"
+            placeholder="0"
+          />
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold text-gray-600">Qty</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => updateCreateItem(index, (prev) => ({ qty: Math.max(0, Number(prev?.qty || 0) - 1) }))}
+            className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center"
+          >
+            <Minus size={15} />
+          </button>
+          <span className="min-w-[40px] text-center font-black text-gray-900">{qty}</span>
+          <button
+            type="button"
+            onClick={() => updateCreateItem(index, (prev) => ({ qty: Number(prev?.qty || 0) + 1 }))}
+            className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center"
+          >
+            <Plus size={15} />
+          </button>
+        </div>
+      </div>
+
+      <label className="space-y-1 block">
+        <span className="text-[10px] font-bold text-gray-500 uppercase">Catatan</span>
+        <input
+          value={note}
+          onChange={(e) => updateCreateItem(index, { note: e.target.value })}
+          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white"
+          placeholder="Opsional"
+        />
+      </label>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QR SCAN MODAL
