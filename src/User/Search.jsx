@@ -12,6 +12,8 @@ import {
 
 } from "lucide-react";
 
+import ActionConfirmModal from "../components/ActionConfirmModal";
+
 
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -369,6 +371,40 @@ function buildCategorySections(cats, db) {
 
 
 
+function cartLineQty(cart, id) {
+
+  const v = cart?.[id];
+
+  if (v == null) return 0;
+
+  return typeof v === "number" ? v : (v?.qty ?? 0);
+
+}
+
+
+
+function normalizeCartLine(c) {
+
+  if (c == null) return { qty: 0, variants: [], catatan: "", currentPrice: 0 };
+
+  if (typeof c === "number") return { qty: c, variants: [], catatan: "", currentPrice: 0 };
+
+  return {
+
+    qty: c.qty ?? 0,
+
+    variants: c.variants || [],
+
+    catatan: c.catatan || "",
+
+    currentPrice: c.currentPrice || 0,
+
+  };
+
+}
+
+
+
 function buildCartFromOrder(orderItems, db) {
 
   const cart = {}, all = Object.values(db);
@@ -379,7 +415,15 @@ function buildCartFromOrder(orderItems, db) {
 
     const found = all.find(m => m.name.toLowerCase() === nama);
 
-    if (found) cart[found.id] = (cart[found.id] || 0) + (o.qty ?? o.jumlah ?? 1);
+    if (found) {
+
+      const add = (o.qty ?? o.jumlah ?? 1);
+
+      const prev = normalizeCartLine(cart[found.id]);
+
+      cart[found.id] = { ...prev, qty: prev.qty + add };
+
+    }
 
   });
 
@@ -507,7 +551,21 @@ function MenuDetailSheet({ item, menuDatabase, onClose, onAddToCart, onOpenItem 
 
     setAddedToCart(true);
 
-    onAddToCart(item.id, qty, currentPrice);
+    const pickedVariants = hasVariants && item.variants?.length
+
+      ? (() => {
+
+          const v = item.variants[selectedVariant] || item.variants[0];
+
+          const extra = Math.max(0, Number(v?.price ?? 0) - Number(item.price ?? 0));
+
+          return [{ namaGroup: "Varian", id: String(selectedVariant), label: v?.label ?? "", hargaVariant: extra }];
+
+        })()
+
+      : [];
+
+    onAddToCart(item.id, qty, currentPrice, { variants: pickedVariants, catatan: "" });
 
     setTimeout(() => { setAddedToCart(false); onClose(); }, 1200);
 
@@ -1164,7 +1222,7 @@ export function RiwayatPesananSheet({ menuDatabase, mejaId, cafeId, cafeName, on
 
 // ── LihatSemuaPopup ───────────────────────────────────────────────────────────
 
-function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose, menuDatabase }) {
+export function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose, menuDatabase }) {
 
   const sectionItems = section.items.map(id => menuDatabase[id]).filter(Boolean);
 
@@ -1224,7 +1282,7 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
 
             {sectionItems.map(item => {
 
-              const qty = cart[item.id] || 0;
+              const qty = cartLineQty(cart, item.id);
 
               return (
 
@@ -1318,7 +1376,7 @@ function LihatSemuaPopup({ section, cart, onAdd, onRemove, onItemClick, onClose,
 
 function SearchMenuCard({ item, index, cart, onAdd, onRemove, onClick }) {
 
-  const qty  = cart[item.id] || 0;
+  const qty  = cartLineQty(cart, item.id);
 
   const isHot = item.badge === "Best Seller" || item.badge === "Favorit";
 
@@ -1476,7 +1534,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
   const [lihatSemuaSection, setLihatSemuaSection] = useState(null);
 
-  const [showRiwayat, setShowRiwayat]             = useState(false);
+  const [pendingReplace, setPendingReplace]       = useState(null);
 
   const [internalCart, setInternalCart]           = useState(externalCart || {});
 
@@ -1588,49 +1646,131 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
   };
 
-  const addItem    = (id) => updateCart(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+  const addItem = (id) => updateCart(prev => {
 
-  const removeItem = (id) => updateCart(prev => {
+    const base = normalizeCartLine(prev[id]);
 
-    const u = { ...prev };
+    return {
 
-    if (u[id] > 1) u[id]--; else delete u[id];
+      ...prev,
 
-    return u;
+      [id]: {
+
+        ...base,
+
+        qty: (base.qty || 0) + 1,
+
+      },
+
+    };
 
   });
 
-  const handleSheetAdd = (id, qty) => updateCart(prev => ({ ...prev, [id]: (prev[id] || 0) + qty }));
+  const removeItem = (id) => updateCart(prev => {
 
+    const base = normalizeCartLine(prev[id]);
 
+    if (base.qty > 1) {
 
-  const totalQty   = Object.values(cart).reduce((a, b) => a + b, 0);
+      return { ...prev, [id]: { ...base, qty: base.qty - 1 } };
 
-  const totalPrice = allMenuItems.reduce((sum, item) => sum + (cart[item.id] || 0) * item.price, 0);
+    }
 
-  const cartItems  = allMenuItems.filter(m => cart[m.id]);
+    const { [id]: _removed, ...rest } = prev;
 
+    return rest;
 
+  });
 
-  // ── Riwayat handlers ─────────────────────────────────────────────────────
+  const handleSheetAdd = (id, qty, currentPrice, { variants, catatan }) => {
 
-  const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) =>
+    updateCart(prev => {
 
-    navigate("/pembayaran", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
+      const existing = prev?.[id] ?? null;
 
+      const nextVariants = variants || [];
 
+      const nextCatatan = catatan || "";
 
-  const handleReorder = ({ cart: rc }) => {
+      const existingVariantSig = JSON.stringify((normalizeCartLine(existing).variants || []).map(v => ({
 
-    const merged = { ...cart };
+        idVariant: v?.idVariant ?? v?.id,
 
-    Object.entries(rc).forEach(([id, qty]) => { merged[id] = (merged[id] || 0) + qty; });
+        namaGroup: v?.namaGroup,
 
-    updateCart(merged);
+        label: v?.label,
 
-    navigate("/pembayaran", { state: { cart: merged, items: allMenuItems.filter(m => merged[m.id]), cafeId: CAFE_ID, mejaId: MEJA_ID, isReorder: true } });
+        hargaVariant: v?.hargaVariant ?? 0,
+
+      })));
+
+      const nextVariantSig = JSON.stringify(nextVariants.map(v => ({
+
+        idVariant: v?.idVariant ?? v?.id,
+
+        namaGroup: v?.namaGroup,
+
+        label: v?.label,
+
+        hargaVariant: v?.hargaVariant ?? 0,
+
+      })));
+
+      const exNorm = normalizeCartLine(existing);
+
+      const willReplace = exNorm.qty > 0 && ((existingVariantSig !== nextVariantSig) || String(exNorm.catatan || "") !== String(nextCatatan));
+
+      if (willReplace) {
+
+        setPendingReplace({ id, qty, currentPrice, variants: nextVariants, catatan: nextCatatan });
+
+        return prev;
+
+      }
+
+      return {
+
+        ...prev,
+
+        [id]: {
+
+          qty: (normalizeCartLine(prev[id]).qty || 0) + qty,
+
+          variants: nextVariants,
+
+          catatan: nextCatatan,
+
+          currentPrice: currentPrice || 0,
+
+        },
+
+      };
+
+    });
 
   };
+
+
+
+  const totalQty = Object.values(cart).reduce((a, b) => a + (typeof b === "number" ? b : (b?.qty || 0)), 0);
+
+  const totalPrice = Object.entries(cart).reduce((sum, [id, line]) => {
+
+    const menuItem = menuDatabase[id];
+
+    if (!menuItem) return sum;
+
+    const qty = typeof line === "number" ? line : (line?.qty || 0);
+
+    const basePrice = menuItem.price || 0;
+
+    const variantsPrice = (typeof line === "object" && line?.variants ? line.variants : []).reduce((vsum, v) => vsum + (v?.hargaVariant || 0), 0);
+
+    return sum + qty * (basePrice + variantsPrice);
+
+  }, 0);
+
+  const cartItems = allMenuItems.filter(m => cartLineQty(cart, m.id) > 0);
 
 
 
@@ -1747,20 +1887,6 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
           </div>
 
-
-
-          <button onClick={() => setShowRiwayat(true)}
-
-            className="flex-shrink-0 flex items-center gap-1.5 rounded-xl px-3 h-10 shadow-md hover:shadow-lg transition-all relative"
-
-            style={{ background: "var(--grad)" }}>
-
-            <ShoppingBag size={15} style={{ color: "var(--on-p)" }} />
-
-            <span className="text-xs font-bold" style={{ color: "var(--on-p)" }}>Riwayat</span>
-
-          </button>
-
         </div>
 
 
@@ -1871,8 +1997,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
                       </div>
 
-                      <span className="text-[11px] font-semibold whitespace-nowrap"
-                        style={{ color: "white" }}>
+                      <span className="text-[11px] font-semibold whitespace-nowrap text-gray-900">
                         {cat.label}
                       </span>
 
@@ -2262,20 +2387,6 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
 
 
-      {showRiwayat && (
-
-        <RiwayatPesananSheet menuDatabase={menuDatabase} mejaId={MEJA_ID} cafeId={CAFE_ID}
-
-          cafeName={cafeProfile.nama}
-
-          onClose={() => setShowRiwayat(false)}
-
-          onNavigateToPesanan={handleNavigateToPesanan}
-
-          onReorder={handleReorder} />
-
-      )}
-
       {lihatSemuaSection && (
 
         <LihatSemuaPopup section={lihatSemuaSection} cart={cart} menuDatabase={menuDatabase}
@@ -2297,6 +2408,54 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
           onOpenItem={item => setSelectedItem(item)} />
 
       )}
+
+
+
+      <ActionConfirmModal
+
+        open={!!pendingReplace}
+
+        icon="🧾"
+
+        title="Ganti pilihan varian?"
+
+        message="Menu ini sudah ada di keranjang. Jika kamu lanjut, varian/catatan sebelumnya akan diganti mengikuti pilihan terbaru."
+
+        cancelText="Batal"
+
+        confirmText="Ganti"
+
+        onCancel={() => setPendingReplace(null)}
+
+        onConfirm={() => {
+
+          const p = pendingReplace;
+
+          if (!p) return;
+
+          updateCart(prev => ({
+
+            ...prev,
+
+            [p.id]: {
+
+              qty: (normalizeCartLine(prev[p.id]).qty || 0) + (p.qty || 0),
+
+              variants: p.variants || [],
+
+              catatan: p.catatan || "",
+
+              currentPrice: p.currentPrice || 0,
+
+            },
+
+          }));
+
+          setPendingReplace(null);
+
+        }}
+
+      />
 
 
 
