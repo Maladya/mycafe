@@ -567,7 +567,9 @@ export default function Kasir() {
                 </div>
               </div>
             )}
-
+          </div>
+        </div>
+      )}
       <style>{`
         @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .animate-slideInRight { animation: slideInRight 0.3s cubic-bezier(0.16,1,0.3,1); }
@@ -577,7 +579,6 @@ export default function Kasir() {
     </div>
   );
 }
-
 
 
 // ─────────────────────────────────────────────────────────────────────────────
