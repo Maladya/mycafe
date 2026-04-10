@@ -836,6 +836,12 @@ export default function Home() {
   const MEJA_ID = searchParams.get("table")   ?? "1";
   const CAFE_ID = searchParams.get("cafe_id") ?? "";
 
+  const cartStorageKey = useMemo(() => {
+    const cid = String(CAFE_ID || "").trim();
+    const mid = String(MEJA_ID || "").trim();
+    return cid && mid ? `MYCAFE_cart_${cid}_${mid}` : "";
+  }, [CAFE_ID, MEJA_ID]);
+
   const initClientOnceRef = useRef(false);
 
   useEffect(() => {
@@ -894,7 +900,18 @@ export default function Home() {
   const [tableValidating, setTableValidating]     = useState(false);
   const [tableOk, setTableOk]                     = useState(null);
   const [validateKey, setValidateKey]             = useState(0);
-  const [cart, setCart]                           = useState(locationState?.existingCart ?? {});
+  const [cart, setCart]                           = useState(() => {
+    const fromNav = locationState?.existingCart;
+    if (fromNav && typeof fromNav === "object") return fromNav;
+    try {
+      if (!cartStorageKey) return {};
+      const raw = localStorage.getItem(cartStorageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
 
   const [showEmptyCartConfirm, setShowEmptyCartConfirm] = useState(false);
   const [pendingReplace, setPendingReplace] = useState(null);
@@ -962,6 +979,29 @@ export default function Home() {
       </div>
     );
   }
+
+  useEffect(() => {
+    if (locationState?.existingCart) return;
+    try {
+      if (!cartStorageKey) return;
+      const raw = localStorage.getItem(cartStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") setCart(parsed);
+    } catch {
+      // ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartStorageKey]);
+
+  useEffect(() => {
+    try {
+      if (!cartStorageKey) return;
+      localStorage.setItem(cartStorageKey, JSON.stringify(cart || {}));
+    } catch {
+      // ignore
+    }
+  }, [cart, cartStorageKey]);
 
   if (tableValidating || cafeLoading) {
     return (

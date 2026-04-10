@@ -569,17 +569,6 @@ export default function KelolaOrders({
           </div>
 
           <div className="flex items-center gap-2.5">
-            {isKasirMode && (
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(true)}
-                className="h-9 px-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 shadow-sm hover:shadow-md transition-all flex items-center gap-1.5"
-              >
-                <Plus size={14} />
-                Buat Pesanan
-              </button>
-            )}
-
             {lastSync && !loading && (
               <span className="hidden sm:block text-xs text-gray-400 bg-white border border-gray-100 rounded-xl px-3 py-1.5">
                 Sync {formatSync(lastSync)}

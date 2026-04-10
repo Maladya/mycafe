@@ -37,6 +37,12 @@ export default function Kasir() {
     items: [],
   });
 
+  const handleLogout = () => {
+    localStorage.removeItem("kasir_token");
+    localStorage.removeItem("kasir_user");
+    navigate("/login", { replace: true });
+  };
+
   const closeCreateModal = () => {
     if (createSubmitting) return;
     setCreatePayPickerOpen(false);

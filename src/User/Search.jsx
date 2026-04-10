@@ -1520,6 +1520,12 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
   const CAFE_ID = searchParams.get("cafe_id") ?? "";
 
+  const cartStorageKey = useMemo(() => {
+    const cid = String(CAFE_ID || "").trim();
+    const mid = String(MEJA_ID || "").trim();
+    return cid && mid ? `MYCAFE_cart_${cid}_${mid}` : "";
+  }, [CAFE_ID, MEJA_ID]);
+
 
 
   const [query, setQuery]                         = useState("");
@@ -1536,7 +1542,17 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
   const [pendingReplace, setPendingReplace]       = useState(null);
 
-  const [internalCart, setInternalCart]           = useState(externalCart || {});
+  const [internalCart, setInternalCart]           = useState(() => {
+    if (externalCart && typeof externalCart === "object") return externalCart;
+    try {
+      if (!cartStorageKey) return {};
+      const raw = localStorage.getItem(cartStorageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
 
 
 
@@ -1547,6 +1563,30 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 100); }, []);
+
+  useEffect(() => {
+    if (externalCart) return;
+    try {
+      if (!cartStorageKey) return;
+      const raw = localStorage.getItem(cartStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") setInternalCart(parsed);
+    } catch {
+      // ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartStorageKey]);
+
+  useEffect(() => {
+    if (externalCart) return;
+    try {
+      if (!cartStorageKey) return;
+      localStorage.setItem(cartStorageKey, JSON.stringify(internalCart || {}));
+    } catch {
+      // ignore
+    }
+  }, [internalCart, cartStorageKey, externalCart]);
 
 
 
