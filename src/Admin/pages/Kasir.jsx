@@ -329,12 +329,18 @@ export default function Kasir() {
       setCurrentOrder(updated);
       setPaymentModal(null);
       showToast("Pembayaran berhasil", "success");
+
+      try {
+        await handleSearch(String(orderId));
+      } catch {
+        // ignore
+      }
     } catch (err) {
       showToast(err?.message || "Gagal memproses pembayaran", "error");
     } finally {
       setLoading(false);
     }
-  }, [paymentModal, showToast]);
+  }, [paymentModal, showToast, handleSearch]);
 
   const handlePrint = useCallback(() => {
     try { window.print(); } catch {}
