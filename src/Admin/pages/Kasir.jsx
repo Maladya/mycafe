@@ -327,6 +327,9 @@ export default function Kasir() {
 
     setCreateSubmitting(true);
     try {
+      const token = localStorage.getItem("kasir_token") || localStorage.getItem("token") || "";
+      if (!token) throw new Error("Token kasir tidak ditemukan");
+
       const payload = {
         table_number: tableNumber,
         customer_name: String(createDraft.customerName || "").trim(),
@@ -364,11 +367,48 @@ export default function Kasir() {
         }),
       };
 
-      // ... (no changes)
+      const candidates = [
+        `${API_URL}/api/orders/kasir`,
+        `${API_URL}/api/orders/admin`,
+        `${API_URL}/api/orders`,
+      ];
 
-      const normalizedCreated = payload;
+      let createdRes = null;
+      let createdOk = false;
+      for (const url of candidates) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        // eslint-disable-next-line no-await-in-loop
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.success !== false) {
+          createdOk = true;
+          createdRes = data;
+          break;
+        }
+      }
 
-      setCurrentOrder(normalizedCreated);
+      if (!createdOk) throw new Error("Gagal membuat pesanan");
+
+      const createdOrder = createdRes?.data ?? createdRes?.order ?? createdRes;
+      setCurrentOrder(createdOrder);
+
+      const createdCode = createdOrder?.id ?? createdOrder?.order_code ?? createdOrder?.orderId ?? createdOrder?.order_id;
+      if (createdCode) {
+        try {
+          setSearchInput(String(createdCode));
+          await handleSearch(String(createdCode));
+        } catch {
+          // ignore
+        }
+      }
+
       setShowCreateModal(false);
       setCreateDraft({
         tableNumber: "",
@@ -388,6 +428,7 @@ export default function Kasir() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg, #f9fafb)", color: "var(--tx, #111827)" }}>
+      // ... (no changes)
       <header className="bg-gradient-to-r from-gray-800 to-gray-900 text-white sticky top-0 z-20 shadow-lg">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
