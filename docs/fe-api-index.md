@@ -1,5 +1,7 @@
 # FE API Index
 
+> Update sinkron dari backend: create order kasir berbasis `menu_id`, Midtrans error bisa format ringkas `{ error, reason }`, delete subscription punya mode `deactivated`.
+
 Daftar dokumentasi endpoint untuk tim frontend.
 
 ## Orders & Pembayaran
@@ -14,7 +16,7 @@ Daftar dokumentasi endpoint untuk tim frontend.
   Update status pengantaran kasir dengan payload FE (`delivery_status`, `status_pengantaran`, `is_delivered`).
 
 - `docs/kasir-buat-pesanan-api.md`  
-  Kontrak endpoint kasir untuk membuat pesanan langsung dari terminal kasir.
+  Kontrak endpoint kasir untuk membuat pesanan langsung dari terminal kasir (berbasis `menu_id`).
 
 ## Saldo & Pencairan
 
@@ -39,6 +41,7 @@ Daftar dokumentasi endpoint untuk tim frontend.
 - Untuk endpoint protected, kirim `Authorization: Bearer <token>`.
 - Setelah aksi `PATCH/POST/DELETE`, selalu refetch list/summary agar UI sinkron dengan server.
 - Untuk flow pelanggan (riwayat + checkout online), pastikan `fingerprint` konsisten antar request.
+- Jika menemukan endpoint lama yang return format `{ error: ... }`, normalisasi dulu di FE service layer agar tetap konsisten ke model UI (`message`, `success`).
 
 ---
 
@@ -53,7 +56,9 @@ Daftar dokumentasi endpoint untuk tim frontend.
 - `PATCH /api/orders/kasir/:id/status`  
   Update status pengantaran kasir (`delivery_status`, `status_pengantaran`, `is_delivered`).
 - `POST /api/orders/kasir`  
-  Buat pesanan baru dari terminal kasir.
+  Buat pesanan baru dari terminal kasir (item berbasis `menu_id`).
+
+Catatan: pembayaran sukses (tunai/online) **tidak otomatis** membuat order masuk tab **Sudah Diantar**. Gunakan indikator pengantaran (`delivery_status`/`is_delivered`) dan panggil endpoint patch saat kasir menekan tombol tandai selesai pengantaran.
 
 ### Saldo & Pencairan
 
@@ -73,4 +78,4 @@ Daftar dokumentasi endpoint untuk tim frontend.
 ### Subscription
 
 - `DELETE /api/subscriptions/superadmin/plans/:id`  
-  Hapus paket langganan (atau auto nonaktif jika masih dipakai).
+  Hapus paket langganan (atau auto nonaktif jika masih dipakai, `action=deactivated`).

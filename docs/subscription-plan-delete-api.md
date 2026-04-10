@@ -2,6 +2,8 @@
 
 Dokumentasi ini untuk halaman superadmin saat menghapus paket langganan.
 
+> Update dari BE: delete plan sekarang memakai strategi aman — plan yang masih dipakai akan di-**deactivate**, bukan hard delete.
+
 ## Endpoint
 
 - **Method**: `DELETE`
@@ -19,6 +21,11 @@ Saat tombol hapus diklik, backend akan cek apakah paket masih dipakai:
 - Jika **tidak dipakai** → paket dihapus permanen (`action: "deleted"`).
 - Jika **masih dipakai** (dipakai di `cafe_subscriptions` / `subscription_transactions`) → paket **tidak dihapus**, tapi otomatis **dinonaktifkan** (`is_active = 0`) dengan `action: "deactivated"`.
 
+Kontrak action:
+
+- `deleted` = data dihapus permanen
+- `deactivated` = data tetap ada, namun status nonaktif
+
 ## Response Sukses
 
 ### A) Paket berhasil dihapus permanen
@@ -32,7 +39,8 @@ Status: `200 OK`
   "data": {
     "id": 3,
     "action": "deleted"
-  }
+  },
+  "success": true
 }
 ```
 
@@ -51,7 +59,8 @@ Status: `200 OK`
       "cafe_subscriptions": 2,
       "subscription_transactions": 10
     }
-  }
+  },
+  "success": true
 }
 ```
 
@@ -63,7 +72,8 @@ Status: `200 OK`
 {
   "status": 400,
   "message": "id tidak valid",
-  "data": null
+  "data": null,
+  "success": false
 }
 ```
 
@@ -73,7 +83,8 @@ Status: `200 OK`
 {
   "status": 404,
   "message": "Paket tidak ditemukan",
-  "data": null
+  "data": null,
+  "success": false
 }
 ```
 
@@ -83,7 +94,8 @@ Status: `200 OK`
 {
   "status": 500,
   "message": "Gagal hapus paket langganan",
-  "data": null
+  "data": null,
+  "success": false
 }
 ```
 
@@ -93,3 +105,4 @@ Status: `200 OK`
   - `deleted` -> hilang permanen dari list (setelah refetch).
   - `deactivated` -> tampilkan sebagai nonaktif (`is_active = 0`), bukan error.
 - Setelah request sukses (`200`), lakukan refetch list plan agar status terbaru langsung tampil di UI.
+- Jika `usage` ada di response (`data.usage`), tampilkan sebagai informasi ke user agar jelas kenapa plan tidak terhapus permanen.

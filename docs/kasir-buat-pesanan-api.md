@@ -1,6 +1,8 @@
 # API Docs - Kasir Buat Pesanan
 
-Dokumentasi ini untuk kebutuhan fitur kasir membuat pesanan langsung dari halaman kasir.
+> Update dari BE: item create order saat ini **berbasis menu** (`menu_id`), belum mode item manual.
+
+Dokumentasi ini untuk fitur kasir membuat pesanan langsung dari halaman kasir.
 
 ## Endpoint
 
@@ -14,31 +16,46 @@ Contoh:
 
 ## Body Request (JSON)
 
+Backend saat ini menerima item berbasis menu (`menu_id`).
+
 ```json
 {
-  "table_number": "12",
+  "table_number": 12,
   "customer_name": "Budi",
   "note": "Tanpa es",
+  "payment_method": "kasir",
   "items": [
     {
       "menu_id": 101,
       "qty": 2,
-      "note": "Pedas level 2",
-      "variants": [
-        { "variant_id": 9001, "qty": 2 }
-      ]
+      "note": "Pedas level 2"
     }
-  ],
-  "payment_method": "kasir"
+  ]
 }
 ```
 
-## Validasi Minimum (Backend)
+## Field yang Didukung (Kontrak BE Saat Ini)
 
-- `table_number` wajib.
-- `items` wajib, minimal 1 item.
-- Tiap item wajib punya `menu_id` dan `qty >= 1`.
-- Jika `variants` dikirim, `variant_id` harus valid untuk `menu_id` terkait.
+- `table_number` atau `meja` (wajib)
+- `customer_name` atau `nama` (opsional)
+- `note` (opsional)
+- `payment_method` (opsional, default `kasir`)
+- `items` (wajib, minimal 1 item)
+  - `menu_id` atau `id`
+  - `qty` atau `quantity`
+  - `note` / `catatan` (opsional)
+
+### Catatan Penting
+
+- Untuk menghindari mismatch harga, backend menghitung total berdasarkan data menu di server.
+- FE boleh kirim field tambahan, tapi backend hanya memproses field yang dikenali.
+
+## Validasi Backend
+
+- Meja wajib diisi.
+- `items` minimal 1.
+- `menu_id` harus valid pada cafe kasir yang login.
+- `qty` harus angka > 0.
 
 ## Response Sukses (contoh)
 
@@ -46,20 +63,22 @@ Status: `201 Created`
 
 ```json
 {
-  "success": true,
-  "message": "Pesanan berhasil dibuat",
+  "status": 201,
+  "message": "Pesanan kasir berhasil dibuat",
   "data": {
     "id": "ORD-KSR001",
     "status": "selesai",
     "delivery_status": "siap",
+    "status_pengantaran": "siap",
     "is_delivered": false,
-    "table_number": "12",
-    "customer_name": "Budi",
+    "meja": 12,
+    "nama": "Budi",
     "total": 46000,
     "items": [
       { "menu_id": 101, "name": "Ayam Geprek", "qty": 2, "price": 23000 }
     ]
-  }
+  },
+  "success": true
 }
 ```
 
@@ -69,8 +88,10 @@ Status: `201 Created`
 
 ```json
 {
-  "success": false,
-  "message": "items minimal 1"
+  "status": 400,
+  "message": "items minimal 1",
+  "data": null,
+  "success": false
 }
 ```
 
@@ -78,8 +99,10 @@ Status: `201 Created`
 
 ```json
 {
-  "success": false,
-  "message": "Unauthorized"
+  "status": 401,
+  "message": "Unauthorized",
+  "data": null,
+  "success": false
 }
 ```
 
@@ -87,16 +110,19 @@ Status: `201 Created`
 
 ```json
 {
-  "success": false,
-  "message": "menu_id tidak valid"
+  "status": 422,
+  "message": "menu_id tidak valid: 101",
+  "data": null,
+  "success": false
 }
 ```
 
 ## Catatan Integrasi FE
 
-1. Setelah `POST` sukses, FE kasir perlu refetch list `GET /api/orders/admin` agar order baru langsung muncul.
-2. Untuk tab pengantaran kasir saat ini, order yang baru dibuat idealnya memiliki:
-   - `status = selesai`
+1. Setelah `POST` sukses, langsung refetch list kasir (mis. `GET /api/orders/kasir?status=aktif`) agar order baru muncul.
+2. Order kasir baru dibuat dengan:
+   - `status = selesai` (pembayaran dianggap sukses)
    - `delivery_status = siap`
    - `is_delivered = false`
-3. Jika backend memakai nama field lain (misalnya `meja`, `nama_pelanggan`, `order_items`), FE bisa menyesuaikan mapping saat integrasi final.
+3. Pindah ke tab **Sudah Diantar** hanya setelah update pengantaran (`PATCH /api/orders/kasir/:id/status` dengan `is_delivered=true` atau `delivery_status="diantar"`).
+4. Jika FE masih menyediakan item manual pada UI, sementara backend belum support, FE harus memblok submit item tanpa `menu_id`.

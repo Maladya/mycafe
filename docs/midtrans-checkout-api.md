@@ -2,6 +2,8 @@
 
 Dokumentasi ini dipakai FE untuk membuat transaksi Snap Midtrans dan memastikan order tercatat di **`riwayat_pembelian`** (supaya tampil di halaman riwayat seperti pembayaran kasir).
 
+> Update dari BE: endpoint utama tetap `POST /api/midtrans/create` (alias `/api/midtrans/create-payment`) dengan format error yang bisa berupa `{ error, reason }`.
+
 ## Endpoint
 
 - **Method**: `POST`
@@ -9,14 +11,14 @@ Dokumentasi ini dipakai FE untuk membuat transaksi Snap Midtrans dan memastikan 
 - **Auth**: Tidak wajib JWT
 - **Middleware**: **`clientIdentity`** — baca cookie `visitor_id` dan/atau header **`x-fingerprint`** / body `fingerprint`
 
-## Header yang Disarankan
+## Request Headers
 
 | Header | Keterangan |
 |--------|------------|
 | `Content-Type` | `application/json` |
 | `x-fingerprint` | String ID perangkat (wajib konsisten dengan pemanggilan `GET /api/client/riwayat-pembelian`) |
 
-## Body — dua skenario
+## Request Body (2 skenario)
 
 ### A. Snap untuk order yang sudah ada
 
@@ -62,7 +64,7 @@ Contoh minimal:
 
 ## Response Sukses
 
-Status: `200 OK` (bentuk JSON dari controller)
+Status: umumnya `200 OK` (bentuk JSON dari controller)
 
 ```json
 {
@@ -76,6 +78,8 @@ Status: `200 OK` (bentuk JSON dari controller)
 ```
 
 Gunakan `snap_token` di frontend Snap.js atau buka `redirect_url` sesuai integrasi yang dipakai.
+
+Catatan: beberapa deploy BE bisa mengembalikan wrapper (`status/message/data/success`), jadi FE sebaiknya tetap normalisasi response.
 
 ## Response Gagal (contoh)
 
@@ -104,6 +108,8 @@ Gunakan `snap_token` di frontend Snap.js atau buka `redirect_url` sesuai integra
 }
 ```
 
+> Catatan: beberapa endpoint Midtrans di backend ini masih mengembalikan format error ringkas (`error`, `reason`) dan belum selalu memakai wrapper `status/message/data/success`.
+
 ## Endpoint Terkait
 
 | Method | URL | Keterangan |
@@ -116,3 +122,4 @@ Gunakan `snap_token` di frontend Snap.js atau buka `redirect_url` sesuai integra
 
 - **Satu fingerprint per perangkat** untuk alur: buat order / checkout Midtrans → lihat **`GET /api/client/riwayat-pembelian`**. Tanpa fingerprint/visitor, baris **`riwayat_pembelian`** bisa kosong dan order online tidak muncul di riwayat (meskipun **`order_payments`** sudah `paid`).
 - Setelah pembayaran sukses, user akan diarahkan ke **`FRONTEND_BASE_URL`** lewat `GET /api/midtrans/return`; pastikan domain API dan FE mengizinkan cookie **`visitor_id`** jika memakai flow cookie.
+- Saat handle error, prioritaskan baca `message`, lalu fallback ke `error` agar kompatibel lintas versi response backend.
