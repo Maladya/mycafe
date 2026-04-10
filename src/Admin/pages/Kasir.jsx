@@ -360,7 +360,7 @@ export default function Kasir() {
           };
           const groups = i.variantGroups || [];
           if (i.menuId && groups.length > 0) {
-            // ... (no changes)
+            
           }
 
           return row;
@@ -424,11 +424,11 @@ export default function Kasir() {
     }
   };
 
-  // ... (no changes)
+  
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg, #f9fafb)", color: "var(--tx, #111827)" }}>
-      // ... (no changes)
+      
       <header className="bg-gradient-to-r from-gray-800 to-gray-900 text-white sticky top-0 z-20 shadow-lg">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
