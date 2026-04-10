@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -12,7 +12,31 @@ import { Html5Qrcode } from "html5-qrcode";
 
 
 
-const API_URL = import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net";
+const API_URL = (import.meta.env.VITE_API_URL ?? "https://api.mycafe-order.net").replace(/\/$/, "");
+
+/** Jangan pakai user.id — itu ID akun kasir, bukan cafe. */
+function resolveCafeIdFromStoredUser(user) {
+  if (!user || typeof user !== "object") return "";
+  const v =
+    user.cafe_id ??
+    user.cafeId ??
+    user.id_cafe ??
+    user.idCafe ??
+    user?.cafe?.id ??
+    user?.cafe?.cafe_id;
+  return v != null && String(v).trim() !== "" ? String(v).trim() : "";
+}
+
+function extractMenuArrayFromPayload(payload) {
+  if (!payload) return [];
+  const top = payload?.data ?? payload;
+  if (Array.isArray(top)) return top;
+  if (Array.isArray(top?.data)) return top.data;
+  if (Array.isArray(top?.menu)) return top.menu;
+  if (Array.isArray(top?.items)) return top.items;
+  if (Array.isArray(payload?.menu)) return payload.menu;
+  return [];
+}
 const THEME_CACHE_KEY = "MYCAFE_admin_theme";
 
 
@@ -95,6 +119,7 @@ export default function Kasir() {
   const [kasirCafeId, setKasirCafeId] = useState("");
   const [menuSource, setMenuSource] = useState([]);
   const [menuLoading, setMenuLoading] = useState(false);
+  const [menuError, setMenuError] = useState(null);
   const [menuQuery, setMenuQuery] = useState("");
   const [createDraft, setCreateDraft] = useState({
     tableNumber: "",
@@ -109,15 +134,29 @@ export default function Kasir() {
   useEffect(() => {
     const fetchCafeSettings = async () => {
       try {
-        const user = JSON.parse(localStorage.getItem("kasir_user") || "{}");
-        // Coba semua kemungkinan field untuk cafeId
-        const cafeId = user?.cafe_id ?? user?.cafeId ?? user?.id ?? "";
-        setKasirCafeId(String(cafeId || ""));
+        let user = {};
+        try {
+          user = JSON.parse(localStorage.getItem("kasir_user") || "{}");
+        } catch {
+          user = {};
+        }
+        let cafeId = resolveCafeIdFromStoredUser(user);
+        if (!cafeId) {
+          try {
+            const alt = JSON.parse(localStorage.getItem("user") || "{}");
+            cafeId = resolveCafeIdFromStoredUser(alt);
+          } catch {
+            /* ignore */
+          }
+        }
+        setKasirCafeId(cafeId);
 
         if (!cafeId) {
           console.warn("No cafe ID found in kasir user data:", user);
+          setMenuError("Cafe tidak terdeteksi dari akun. Logout lalu login ulang sebagai kasir.");
           return; // Skip tanpa crash
         }
+        setMenuError(null);
 
         const res = await fetch(`${API_URL}/api/cafe/${cafeId}`, {
           headers: authHeaders(),
@@ -157,39 +196,57 @@ export default function Kasir() {
     fetchCafeSettings();
   }, []);
 
-  useEffect(() => {
-    const fetchMenuForKasir = async () => {
-      if (!kasirCafeId) return;
-      setMenuLoading(true);
-      try {
-        const res = await fetch(`${API_URL}/api/menu/user/${encodeURIComponent(kasirCafeId)}`, {
-          headers: authHeaders(),
-        });
-        const ct = res.headers.get("content-type") || "";
-        const payload = ct.includes("application/json") ? await res.json().catch(() => ({})) : {};
-        if (!res.ok) throw new Error(payload?.message || `HTTP ${res.status}`);
-        const raw = payload?.data ?? payload?.menu ?? payload ?? [];
-        const normalized = (Array.isArray(raw) ? raw : []).map((m) => ({
-          id: m.id,
-          name: m.name ?? m.nama_menu ?? m.nama ?? "",
-          price: Number(m.price ?? m.harga ?? 0),
-          image: m.image_url ?? m.image ?? m.foto ?? m.gambar ?? "",
-        })).filter((m) => m.id && m.name);
-        setMenuSource(normalized);
-      } catch (err) {
-        console.warn("Failed to fetch kasir menu list:", err?.message || err);
-      } finally {
-        setMenuLoading(false);
+  const fetchMenuForKasir = useCallback(async () => {
+    if (!kasirCafeId) {
+      setMenuSource([]);
+      return;
+    }
+    setMenuLoading(true);
+    setMenuError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/menu/user/${encodeURIComponent(kasirCafeId)}`, {
+        headers: authHeaders(),
+      });
+      const ct = res.headers.get("content-type") || "";
+      const payload = ct.includes("application/json") ? await res.json().catch(() => ({})) : {};
+      if (!res.ok) {
+        const msg = payload?.message ?? payload?.error ?? `HTTP ${res.status}`;
+        throw new Error(msg);
       }
-    };
-
-    fetchMenuForKasir();
+      const raw = extractMenuArrayFromPayload(payload);
+      const normalized = raw.map((m) => ({
+        id: m.id ?? m.menu_id ?? m.id_menu,
+        name: m.name ?? m.nama_menu ?? m.nama ?? "",
+        price: Number(m.price ?? m.harga ?? 0),
+        image: m.image_url ?? m.image ?? m.foto ?? m.gambar ?? "",
+      })).filter((m) => m.id != null && m.id !== "" && String(m.name).trim() !== "");
+      setMenuSource(normalized);
+      if (normalized.length === 0) {
+        setMenuError("Menu kosong dari server. Pastikan menu sudah diisi di admin.");
+      }
+    } catch (err) {
+      const msg = err?.message || "Gagal memuat menu";
+      console.warn("Failed to fetch kasir menu list:", msg);
+      setMenuSource([]);
+      setMenuError(msg);
+    } finally {
+      setMenuLoading(false);
+    }
   }, [kasirCafeId]);
+
+  useEffect(() => {
+    fetchMenuForKasir();
+  }, [fetchMenuForKasir]);
+
+  useEffect(() => {
+    if (showCreateModal && kasirCafeId) fetchMenuForKasir();
+  }, [showCreateModal, kasirCafeId, fetchMenuForKasir]);
 
   const normalizePaymentDetail = (payload) => payload?.data ?? payload;
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("kasir_token");
     localStorage.removeItem("kasir_user");
     navigate("/login", { replace: true });
   };
@@ -801,10 +858,29 @@ export default function Kasir() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-black text-gray-800">Pilih Dari Menu</p>
-                  <span className="text-[11px] font-semibold text-gray-400">{filteredMenuSource.length} menu</span>
+                  <span className="text-[11px] font-semibold text-gray-400 whitespace-nowrap">
+                    {menuQuery.trim()
+                      ? `${filteredMenuSource.length}/${menuSource.length}`
+                      : menuSource.length}{" "}
+                    menu
+                  </span>
                 </div>
+                {menuError && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span>{menuError}</span>
+                    {kasirCafeId ? (
+                      <button
+                        type="button"
+                        onClick={() => fetchMenuForKasir()}
+                        className="shrink-0 text-[11px] font-bold text-amber-800 underline"
+                      >
+                        Muat ulang
+                      </button>
+                    ) : null}
+                  </div>
+                )}
                 <div className="relative">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -818,7 +894,11 @@ export default function Kasir() {
                   {menuLoading ? (
                     <p className="text-xs text-gray-400 px-2 py-2">Memuat menu...</p>
                   ) : filteredMenuSource.length === 0 ? (
-                    <p className="text-xs text-gray-400 px-2 py-2">Menu tidak ditemukan</p>
+                    <p className="text-xs text-gray-400 px-2 py-2">
+                      {menuSource.length === 0
+                        ? (menuError ? "Lihat pesan di atas." : "Belum ada data menu. Tunggu sebentar atau tap Muat ulang.")
+                        : "Menu tidak ditemukan untuk kata kunci ini"}
+                    </p>
                   ) : (
                     filteredMenuSource.slice(0, 40).map((menuItem) => (
                       <button
