@@ -1130,17 +1130,17 @@ export default function Home() {
       setShowEmptyCartConfirm(true);
       return;
     }
-    navigate("/pembayaran", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } });
+    navigate("/pesanan", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } });
   };
 
   const handleNavigateToPesanan = ({ cart: oc, items: oi, orderId }) =>
-    navigate("/pembayaran", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
+    navigate("/pesanan", { state: { cart: oc, items: oi, cafeId: CAFE_ID, mejaId: MEJA_ID, fromRiwayat: true, orderId } });
 
   const handleReorder = ({ cart: rc }) => {
     const merged = { ...cart };
     Object.entries(rc).forEach(([id, qty]) => { merged[id] = (merged[id]||0)+qty; });
     setCart(merged);
-    navigate("/pembayaran", { state: { cart: merged, items: Object.values(menuDatabase).filter(m => merged[m.id]), cafeId: CAFE_ID, mejaId: MEJA_ID, isReorder: true } });
+    navigate("/pesanan", { state: { cart: merged, items: Object.values(menuDatabase).filter(m => merged[m.id]), cafeId: CAFE_ID, mejaId: MEJA_ID, isReorder: true } });
   };
 
   const handleCategoryClick = (catId) => {

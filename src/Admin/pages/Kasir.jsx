@@ -226,8 +226,37 @@ export default function Kasir() {
     }, 0)
   ), [createDraft.items]);
 
+  const normalizeOrderCode = useCallback((raw) => {
+    const input = String(raw ?? "").trim();
+    if (!input) return "";
+
+    let v = input;
+
+    try {
+      const url = new URL(v);
+      const qp = url.searchParams.get("order")
+        || url.searchParams.get("order_code")
+        || url.searchParams.get("code")
+        || url.searchParams.get("id");
+      if (qp) v = qp;
+      else {
+        const parts = url.pathname.split("/").filter(Boolean);
+        if (parts.length) v = parts[parts.length - 1];
+      }
+    } catch {
+      // not a URL
+    }
+
+    v = v.replace(/^\s*order\s*[:=\-]\s*/i, "");
+    v = v.replace(/^\s*ORDER\s*[:=\-]\s*/i, "");
+    v = v.replace(/^\s*kode\s*[:=\-]\s*/i, "");
+    v = v.replace(/^\s*qr\s*[:=\-]\s*/i, "");
+
+    return String(v).trim();
+  }, []);
+
   const handleSearch = useCallback(async (overrideCode) => {
-    const code = String(overrideCode ?? searchInput ?? "").trim();
+    const code = normalizeOrderCode(overrideCode ?? searchInput ?? "");
     if (!code) return;
     setLoading(true);
     try {
@@ -265,15 +294,15 @@ export default function Kasir() {
     } finally {
       setLoading(false);
     }
-  }, [searchInput, showToast]);
+  }, [searchInput, showToast, normalizeOrderCode]);
 
   const handleSimulatedScan = useCallback((decodedText) => {
-    const code = String(decodedText || "").trim();
+    const code = normalizeOrderCode(decodedText || "");
     if (!code) return;
     setSearchInput(code);
     setScanning(false);
     handleSearch(code);
-  }, [handleSearch]);
+  }, [handleSearch, normalizeOrderCode]);
 
   const processPayment = useCallback(async (method) => {
     if (!paymentModal) return;

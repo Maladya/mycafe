@@ -2379,7 +2379,7 @@ export default function SearchPage({ cart: externalCart, onCartUpdate, onCheckou
 
             <button
 
-              onClick={onCheckout || (() => navigate("/pembayaran", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } }))}
+              onClick={onCheckout || (() => navigate("/pesanan", { state: { cart, items: cartItems, cafeId: CAFE_ID, mejaId: MEJA_ID } }))}
 
               className="w-full rounded-3xl p-5 shadow-2xl hover:scale-[1.01] transition-all border"
 
