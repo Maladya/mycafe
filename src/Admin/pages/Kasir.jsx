@@ -37,6 +37,28 @@ function extractMenuArrayFromPayload(payload) {
   if (Array.isArray(payload?.menu)) return payload.menu;
   return [];
 }
+
+/** Kelompok varian seperti response detail menu user (nama_group + list pilihan). */
+function buildVariantGroupsFromRawVariants(variantList) {
+  if (!Array.isArray(variantList) || variantList.length === 0) return [];
+  const byGroup = new Map();
+  for (const v of variantList) {
+    const g = String(v.nama_group ?? v.nama_grup ?? v.namaGroup ?? v.group ?? "Pilihan").trim() || "Pilihan";
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push({
+      id: v.id,
+      label: v.label ?? v.nama ?? "",
+      hargaVariant: Number(v.harga_variant ?? v.hargaVariant ?? 0),
+    });
+  }
+  return [...byGroup.entries()].map(([namaGroup, variants]) => ({ namaGroup, variants }));
+}
+
+function sumVariantExtra(selectedMap) {
+  if (!selectedMap || typeof selectedMap !== "object") return 0;
+  return Object.values(selectedMap).reduce((s, v) => s + Number(v?.hargaVariant ?? 0), 0);
+}
+
 const THEME_CACHE_KEY = "MYCAFE_admin_theme";
 
 
@@ -104,7 +126,179 @@ function parseDateFlexible(raw) {
   return isNaN(dt.getTime()) ? null : dt;
 }
 
+function KasirCreateLineItem({ item, index, kasirCafeId, apiBase, updateCreateItem, onRemove, formatRupiah }) {
+  const [detailLoading, setDetailLoading] = useState(false);
 
+  useEffect(() => {
+    if (!item.menuId || !kasirCafeId || item.detailFetched) return;
+    let alive = true;
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const token = localStorage.getItem("kasir_token") || localStorage.getItem("token") || "";
+        const res = await fetch(
+          `${apiBase}/api/menu/user/${encodeURIComponent(kasirCafeId)}/${encodeURIComponent(item.menuId)}`,
+          { headers: { "Content-Type": "application/json", Authorization: token ? `Bearer ${token}` : "" } }
+        );
+        const ct = res.headers.get("content-type") || "";
+        const payload = ct.includes("application/json") ? await res.json().catch(() => ({})) : {};
+        if (!res.ok) throw new Error(payload?.message ?? payload?.error ?? `HTTP ${res.status}`);
+        const raw = payload?.data ?? payload?.menu ?? payload;
+        const list = raw?.variants ?? raw?.varian ?? [];
+        const groups = buildVariantGroupsFromRawVariants(list);
+        const bp = Number(raw?.harga ?? raw?.price ?? item.price ?? 0);
+        const sel = item.selectedVariants || {};
+        if (!alive) return;
+        updateCreateItem(index, {
+          detailFetched: true,
+          variantGroups: groups,
+          basePrice: bp,
+          name: raw?.nama_menu ?? raw?.name ?? item.name,
+          price: bp + sumVariantExtra(sel),
+          detailError: null,
+        });
+      } catch (e) {
+        if (!alive) return;
+        updateCreateItem(index, {
+          detailFetched: true,
+          variantGroups: [],
+          detailError: e?.message || "Gagal memuat varian",
+        });
+      } finally {
+        if (alive) setDetailLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [item.menuId, kasirCafeId, item.detailFetched, index, apiBase, updateCreateItem]);
+
+  const hasVariants = Array.isArray(item.variantGroups) && item.variantGroups.length > 0;
+  const base = Number(item.basePrice ?? item.price ?? 0);
+
+  const handleSelectVariant = (namaGroup, variantObj, currentlySelected) => {
+    const next = { ...(item.selectedVariants || {}) };
+    if (currentlySelected) delete next[namaGroup];
+    else next[namaGroup] = { id: variantObj.id, label: variantObj.label, hargaVariant: variantObj.hargaVariant, namaGroup };
+    const bpNum = Number(item.basePrice ?? item.price ?? 0);
+    updateCreateItem(index, { selectedVariants: next, price: bpNum + sumVariantExtra(next) });
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-3 space-y-2.5 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-1.5">
+          <span className="w-5 h-5 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-black flex items-center justify-center">{index + 1}</span>
+          <p className="text-[11px] font-bold text-gray-500">ITEM</p>
+        </div>
+        <button type="button" onClick={() => onRemove(index)} className="text-[11px] font-bold text-red-500 hover:text-red-600">Hapus</button>
+      </div>
+      <input
+        value={item.name}
+        onChange={(e) => updateCreateItem(index, { name: e.target.value })}
+        placeholder="Nama menu"
+        disabled={!!item.menuId}
+        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white disabled:opacity-80 disabled:cursor-not-allowed"
+      />
+      {item.menuId && detailLoading && (
+        <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+          <Loader2 size={12} className="animate-spin" /> Memuat varian menu...
+        </p>
+      )}
+      {item.detailError && (
+        <p className="text-[11px] text-red-500">{item.detailError}</p>
+      )}
+      {hasVariants && (
+        <div className="rounded-xl border border-amber-100 bg-amber-50/40 overflow-hidden">
+          {item.variantGroups.map((g) => (
+            <div key={g.namaGroup} className="border-b border-amber-100 last:border-0">
+              <div className="px-3 pt-2 pb-1">
+                <p className="text-xs font-extrabold text-gray-900 uppercase tracking-wide">{g.namaGroup}</p>
+                <p className="text-[10px] font-semibold text-amber-700">Harus dipilih maks. 1</p>
+              </div>
+              <div className="h-px bg-amber-100/80 mx-3" />
+              {g.variants.map((v, vidx) => {
+                const sel = item.selectedVariants?.[g.namaGroup];
+                const isSelected = sel && String(sel.id) === String(v.id);
+                return (
+                  <div key={String(v.id) + vidx}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectVariant(g.namaGroup, v, isSelected)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-white/80 transition-colors"
+                    >
+                      <span className="text-sm font-semibold text-gray-800">
+                        {v.label}
+                        {v.hargaVariant > 0 && (
+                          <span className="ml-2 font-bold text-amber-700">(+ {formatRupiah(v.hargaVariant).replace(/^Rp/, "Rp ")})</span>
+                        )}
+                      </span>
+                      <div
+                        className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                          isSelected ? "bg-amber-500 border-amber-500" : "bg-white border-gray-300"
+                        }`}
+                      >
+                        {isSelected && <Check size={13} className="text-white" strokeWidth={3} />}
+                      </div>
+                    </button>
+                    {vidx < g.variants.length - 1 && <div className="h-px mx-3 bg-amber-100/80" />}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-500">Qty</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => updateCreateItem(index, { qty: Math.max(1, Number(item.qty || 1) - 1) })}
+              className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600"
+            >
+              <Minus size={13} />
+            </button>
+            <span className="w-6 text-center text-sm font-black text-gray-900">{Math.max(1, Number(item.qty || 1))}</span>
+            <button
+              type="button"
+              onClick={() => updateCreateItem(index, { qty: Math.max(1, Number(item.qty || 1) + 1) })}
+              className="w-7 h-7 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center text-white"
+            >
+              <Plus size={13} />
+            </button>
+          </div>
+        </div>
+        <input
+          type="number"
+          min="0"
+          value={item.price}
+          onChange={(e) => updateCreateItem(index, { price: Math.max(0, Number(e.target.value || 0)) })}
+          placeholder="Harga"
+          readOnly={!!item.menuId && hasVariants}
+          className={`w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400 ${
+            item.menuId && hasVariants ? "bg-gray-100 text-gray-700 cursor-not-allowed" : "bg-gray-50 focus:bg-white"
+          }`}
+        />
+      </div>
+      <input
+        value={item.note}
+        onChange={(e) => updateCreateItem(index, { note: e.target.value })}
+        placeholder="Catatan item (opsional)"
+        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white"
+      />
+      <div className="text-right">
+        <span className="text-xs font-bold text-amber-700">
+          {formatRupiah(Math.max(1, Number(item.qty || 1)) * Number(item.price || 0))}
+        </span>
+        {hasVariants && (
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            Harga satuan: {formatRupiah(base)} + varian {formatRupiah(sumVariantExtra(item.selectedVariants || {}))}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Kasir() {
   const navigate = useNavigate();
@@ -386,13 +580,13 @@ export default function Kasir() {
     return m.name.toLowerCase().includes(q);
   });
 
-  const updateCreateItem = (index, patch) => {
+  const updateCreateItem = useCallback((index, patch) => {
     setCreateDraft((prev) => {
       const nextItems = [...(prev.items || [])];
       nextItems[index] = { ...nextItems[index], ...patch };
       return { ...prev, items: nextItems };
     });
-  };
+  }, []);
 
   const addCreateItem = () => {
     setCreateDraft((prev) => ({
@@ -429,6 +623,22 @@ export default function Kasir() {
       return;
     }
 
+    for (const i of validItems) {
+      if (i.menuId && i.detailFetched !== true) {
+        showToast(`Tunggu sebentar — detail menu "${String(i.name || "").trim() || "item"}" masih dimuat`, "error");
+        return;
+      }
+      const groups = i.variantGroups || [];
+      if (groups.length > 0) {
+        for (const g of groups) {
+          if (!i.selectedVariants?.[g.namaGroup]) {
+            showToast(`Pilih varian untuk "${String(i.name || "item").trim()}" (${g.namaGroup})`, "error");
+            return;
+          }
+        }
+      }
+    }
+
     setCreateSubmitting(true);
     try {
       const payload = {
@@ -436,13 +646,21 @@ export default function Kasir() {
         customer_name: String(createDraft.customerName || "").trim(),
         note: String(createDraft.note || "").trim(),
         payment_method: "kasir",
-        items: validItems.map((i) => ({
-          menu_id: i.menuId || undefined,
-          name: i.menuId ? undefined : String(i.name || "").trim(),
-          qty: Number(i.qty || 1),
-          price: Number(i.price || 0),
-          note: String(i.note || "").trim(),
-        })),
+        items: validItems.map((i) => {
+          const row = {
+            menu_id: i.menuId || undefined,
+            name: i.menuId ? undefined : String(i.name || "").trim(),
+            qty: Number(i.qty || 1),
+            price: Number(i.price || 0),
+            note: String(i.note || "").trim(),
+          };
+          const groups = i.variantGroups || [];
+          if (i.menuId && groups.length > 0) {
+            const variants = Object.values(i.selectedVariants || {});
+            if (variants.length > 0) return { ...row, variants };
+          }
+          return row;
+        }),
       };
 
       const res = await fetch(`${API_URL}/api/orders/kasir`, {
@@ -494,23 +712,24 @@ export default function Kasir() {
 
   const addMenuToDraft = (menuItem) => {
     if (!menuItem?.id) return;
-    setCreateDraft((prev) => {
-      const items = [...(prev.items || [])];
-      const idx = items.findIndex((i) => String(i.menuId || "") === String(menuItem.id));
-      if (idx >= 0) {
-        const currentQty = Math.max(1, Number(items[idx].qty || 1));
-        items[idx] = { ...items[idx], qty: currentQty + 1 };
-      } else {
-        items.push({
+    const listPrice = Number(menuItem.price || 0);
+    setCreateDraft((prev) => ({
+      ...prev,
+      items: [
+        ...(prev.items || []),
+        {
           menuId: menuItem.id,
           name: menuItem.name,
           qty: 1,
-          price: Number(menuItem.price || 0),
+          price: listPrice,
+          basePrice: listPrice,
           note: "",
-        });
-      }
-      return { ...prev, items };
-    });
+          detailFetched: false,
+          variantGroups: [],
+          selectedVariants: {},
+        },
+      ],
+    }));
     showToast(`${menuItem.name} ditambahkan`, "success");
   };
 
@@ -935,62 +1154,16 @@ export default function Kasir() {
                 )}
 
                 {(createDraft.items || []).map((item, idx) => (
-                  <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-3 space-y-2.5 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="inline-flex items-center gap-1.5">
-                        <span className="w-5 h-5 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-black flex items-center justify-center">{idx + 1}</span>
-                        <p className="text-[11px] font-bold text-gray-500">ITEM</p>
-                      </div>
-                      <button onClick={() => removeCreateItem(idx)} className="text-[11px] font-bold text-red-500 hover:text-red-600">Hapus</button>
-                    </div>
-                    <input
-                      value={item.name}
-                      onChange={(e) => updateCreateItem(idx, { name: e.target.value })}
-                      placeholder="Nama menu"
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white"
-                    />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-500">Qty</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => updateCreateItem(idx, { qty: Math.max(1, Number(item.qty || 1) - 1) })}
-                            className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600"
-                          >
-                            <Minus size={13} />
-                          </button>
-                          <span className="w-6 text-center text-sm font-black text-gray-900">{Math.max(1, Number(item.qty || 1))}</span>
-                          <button
-                            type="button"
-                            onClick={() => updateCreateItem(idx, { qty: Math.max(1, Number(item.qty || 1) + 1) })}
-                            className="w-7 h-7 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center text-white"
-                          >
-                            <Plus size={13} />
-                          </button>
-                        </div>
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.price}
-                        onChange={(e) => updateCreateItem(idx, { price: Math.max(0, Number(e.target.value || 0)) })}
-                        placeholder="Harga"
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white"
-                      />
-                    </div>
-                    <input
-                      value={item.note}
-                      onChange={(e) => updateCreateItem(idx, { note: e.target.value })}
-                      placeholder="Catatan item (opsional)"
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:bg-white"
-                    />
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-amber-700">
-                        {formatRupiah(Math.max(1, Number(item.qty || 1)) * Number(item.price || 0))}
-                      </span>
-                    </div>
-                  </div>
+                  <KasirCreateLineItem
+                    key={idx}
+                    item={item}
+                    index={idx}
+                    kasirCafeId={kasirCafeId}
+                    apiBase={API_URL}
+                    updateCreateItem={updateCreateItem}
+                    onRemove={removeCreateItem}
+                    formatRupiah={formatRupiah}
+                  />
                 ))}
               </div>
 
